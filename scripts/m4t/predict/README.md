@@ -1,6 +1,6 @@
 # Inference with SeamlessM4T models
 
-SeamlessM4T models currenlty support five tasks:
+SeamlessM4T models currently support five tasks:
 - Speech-to-speech translation (S2ST)
 - Speech-to-text translation (S2TT)
 - Text-to-speech translation (T2ST)
@@ -39,9 +39,9 @@ python scripts/m4t/predict/predict.py <input_text> t2st <tgt_lang> --src_lang <s
 python scripts/m4t/predict/predict.py <path_to_input_audio> asr <tgt_lang>
 ```
 
-## Inference breadown
+## Inference breakdown
 
-Inference calls for the `Translator` object instanciated with a Multitasking UnitY model with the options:
+Inference calls for the `Translator` object instantiated with a Multitasking UnitY model with the options:
 - `multitask_unity_large`
 - `multitask_unity_medium`
 
