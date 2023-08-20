@@ -44,7 +44,7 @@ torchrun \
  ./scripts/m4t/finetune/finetune.py \
    --train_dataset '<PATH TO TRAIN MANIFEST>' \
    --eval_dataset '<PATH TO EVAL MANIFEST>' \
-   --model_name multitask_unity_large \
+   --model_name seamlessM4T_large \
    --save_model_to /tmp/checkpoint.pt
 ```
 
