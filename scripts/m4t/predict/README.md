@@ -103,7 +103,7 @@ translated_text, _, _ = translator.predict(<input_text>, "t2tt", <tgt_lang>, src
 Note that `<src_lang>` must be specified for T2TT
 
 ## Supported languages
-Listed below, is the list of languages supported by SeamlessM4T models.
+Listed below, are the languages supported by SeamlessM4T models.
 The `source` column specifies whether a language is supported as source speech (`Sp`) and/or source text (`Tx`).
 The `target` column specifies whether a language is supported as target speech (`Sp`) and/or target text (`Tx`).
 
