@@ -13,7 +13,7 @@ UnitY-Small-S2T is a pruned version of UnitY-Small without 2nd pass unit decodin
 
 ## Inference
 To use exported model, users don't need seamless_communication or fairseq2 dependency.
-```
+```python
 import torchaudio
 import torch
 audio_input, _ = torchaudio.load(TEST_AUDIO_PATH) # Load waveform using torchaudio
@@ -28,47 +28,29 @@ print(f"{lang}:{text}")
 torchaudio.save(f"{OUTPUT_FOLDER}/{lang}.wav", waveform.unsqueeze(0), sample_rate=16000) # Save output waveform to local file
 ```
 
+
 Also running the exported model doesn't need python runtime. For example, you could load this model in C++ following [this tutorial](https://pytorch.org/tutorials/advanced/cpp_export.html), or building your own on-device applications similar to [this example](https://github.com/pytorch/ios-demo-app/tree/master/SpeechRecognition)
+
+
 ## Metrics
-### S2TT BLEU on FLEURS
-Eng-X
-| TGT_LANG  | BLEU |
-|---------|----------------------|
-| fra|?|
-| hin|?|
-| por|?|
-| spa|?|
-
-X-Eng
-| SRC_LANG  | BLEU |
-|---------|----------------------|
-| fra|?|
-| hin|?|
-| por|?|
-| spa|?|
-
-### S2ST BLEU on FLEURS
-Eng-X
-| TGT_LANG  | BLEU |
-|---------|----------------------|
-| fra|?|
-| hin|?|
-| por|?|
-| spa|?|
-
-X-Eng
-| SRC_LANG  | BLEU |
-|---------|----------------------|
-| fra|?|
-| hin|?|
-| por|?|
-| spa|?|
+### S2TT BLEU / S2ST ASR-BLEU on FLEURS
+For ASR-BLEU, we follow the same protocal as Large/Medium models: Use Whisper-large-v2 for eng-X and Whisper-medium for X-eng when evaluating ASR BLEU. 
+| Direction  | 1st-pass BLEU (S2TT) | 2nd-pass ASR-BLEU (S2ST)
+|---------|----------------------|----------------------|
+| eng-hin|10.43|15.06|
+| eng-por|21.54|17.35|
+| eng-rus|7.88|5.11|
+| eng-spa|12.78|11.75|
+| hin-eng|12.92|10.50|
+| por-eng|22.99|24.81|
+| rus-eng|18.24|18.24|
+| spa-eng|14.37|14.85|
 
 ### ASR WER on FLEURS
 | LANG  | WER |
 |---------|----------------------|
-| eng|?|
-| fra|?|
-| hin|?|
-| por|?|
-| spa|?|
+| eng|27.3|
+| hin|41.5|
+| por|25.2|
+| rus|33.0|
+| spa|18.0|
