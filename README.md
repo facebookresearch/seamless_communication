@@ -61,8 +61,8 @@ BLASER 2.0 is our latest model-based evaluation metric for multimodal translatio
 ## SeamlessM4T models
 | Model Name | #params | checkpoint |  metrics |
 | - | - | - | - |
-| SeamlessM4T-Large | 2.3B |[model](https://dl.fbaipublicfiles.com/seamlessM4T/models/large/seamlessM4T_large.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless_aug/metrics/SeamlessM4t_Large.zip) |
-| SeamlessM4T-Medium | 1.2B |[model](https://dl.fbaipublicfiles.com/seamlessM4T/models/medium/seamlessM4T_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless_aug/metrics/SeamlessM4t_Medium.zip) |
+| SeamlessM4T-Large | 2.3B |[model](https://dl.fbaipublicfiles.com/seamless_aug/models/large/seamlessM4T_large.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless_aug/metrics/SeamlessM4t_Large.zip) |
+| SeamlessM4T-Medium | 1.2B |[model](https://dl.fbaipublicfiles.com/seamless_aug/models/medium/seamlessM4T_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless_aug/metrics/SeamlessM4t_Medium.zip) |
 
 We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T-Medium reported in the paper (as averages) in the `metrics` files above.
 
