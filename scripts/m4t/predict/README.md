@@ -12,11 +12,11 @@ SeamlessM4T models currently support five tasks:
 ## Quick start:
 Inference is run with the CLI, from the root directory of the repository.
 
-The model can be specified with `--model_name` `multitask_unity_large` or `multitask_unity_medium`:
+The model can be specified with `--model_name` `seamlessM4T_large` or `seamlessM4T_medium`:
 
 **S2ST**:
 ```bash
-python scripts/m4t/predict/predict.py <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio> --model_name multitask_unity_large
+python scripts/m4t/predict/predict.py <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
 ```
 
 **S2TT**:
@@ -42,8 +42,8 @@ python scripts/m4t/predict/predict.py <path_to_input_audio> asr <tgt_lang>
 ## Inference breakdown
 
 Inference calls for the `Translator` object instantiated with a Multitasking UnitY model with the options:
-- `multitask_unity_large`
-- `multitask_unity_medium`
+- `seamlessM4T_large`
+- `seamlessM4T_medium`
 
 and a vocoder `vocoder_36langs`
 
@@ -54,7 +54,7 @@ from seamless_communication.models.inference import Translator
 
 
 # Initialize a Translator object with a multitask model, vocoder on the GPU.
-translator = Translator("multitask_unity_large", "vocoder_36langs", torch.device("cuda:0"))
+translator = Translator("seamlessM4T_large", "vocoder_36langs", torch.device("cuda:0"))
 ```
 
 Now `predict()` can be used to run inference as many times on any of the supported tasks.

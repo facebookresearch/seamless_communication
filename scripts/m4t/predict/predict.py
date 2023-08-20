@@ -36,7 +36,7 @@ def main():
         default=None,
     )
     parser.add_argument(
-        "--model_name", type=str, help="Model name", default="multitask_unity_large"
+        "--model_name", type=str, help="Model name", default="seamlessM4T_large"
     )
     parser.add_argument(
         "--vocoder_name", type=str, help="Vocoder name", default="vocoder_36langs"
