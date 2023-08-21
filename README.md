@@ -66,6 +66,7 @@ BLASER 2.0 is our latest model-based evaluation metric for multimodal translatio
 
 We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T-Medium reported in the paper (as averages) in the `metrics` files above.
 
+
 ## Evaluating SeamlessM4T models
 To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/eval_README.md).
 
@@ -75,6 +76,9 @@ Please check out [README under scripts/m4t/finetune](scripts/m4t/finetune/README
 
 ## On-device models
 Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/on_device_README.md)
+
+## Data
+We open-source metadata for reconstructing the dataset we used for training our models. You can find the data and how to rebuild the dataset [here](data/seamless_communication/README.md).
 
 # Citation
 If you use SeamlessM4T in your work or any models/datasets/artifacts published in SeamlessM4T, please cite :
