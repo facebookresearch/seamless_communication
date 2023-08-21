@@ -16,10 +16,13 @@ import torch
 import trainer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 
-from seamless_communication.models.unity import (UnitTokenizer, UnitYModel,
-                                                 load_unity_model,
-                                                 load_unity_text_tokenizer,
-                                                 load_unity_unit_tokenizer)
+from seamless_communication.models.unity import (
+    UnitTokenizer,
+    UnitYModel,
+    load_unity_model,
+    load_unity_text_tokenizer,
+    load_unity_unit_tokenizer,
+)
 
 logging.basicConfig(
     level=logging.INFO,

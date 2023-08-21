@@ -1,11 +1,11 @@
 ![](seamlessM4T.png)
 # SeamlessM4T
-SeamlessM4T is designed to provide high quality translation, allowing people from different linguistic communities to communicate effortlessly through speech and text. 
+SeamlessM4T is designed to provide high quality translation, allowing people from different linguistic communities to communicate effortlessly through speech and text.
 
 SeamlessM4T covers:
 - 📥 101 languages for speech input
 - ⌨️   96 Languages for text input/output
-- 🗣️  35 languages for speech output. 
+- 🗣️  35 languages for speech output.
 
 This unified model enables multiple tasks without relying on multiple separate models:
 - Speech-to-speech translation (S2ST)
@@ -14,23 +14,23 @@ This unified model enables multiple tasks without relying on multiple separate m
 - Text-to-text translation (T2TT)
 - Automatic speech recognition (ASR)
 
-Links: 
-- [Blog](https://ai.meta.com/blog/seamless-m4t) 
-- [Paper]() 
-- [Demo](https://ai.meta.com/resources/models-and-libraries/seamless-communication/) 
+Links:
+- [Blog](https://ai.meta.com/blog/seamless-m4t)
+- [Paper]()
+- [Demo](https://ai.meta.com/resources/models-and-libraries/seamless-communication/)
 - [Huggingface Space](https://huggingface.co/spaces/facebook/seamless_m4t)
 
-# Quick Start  
-## Installation 
+# Quick Start
+## Installation
 
 ```
 pip install --extra-index-url https://test.pypi.org/simple/ fairseq2==0.1.0rc0
 pip install .
 ```
 
-## Running inference 
+## Running inference
 
-Here’s an example of using the CLI from the root directory to run inference. 
+Here’s an example of using the CLI from the root directory to run inference.
 
 S2ST task:
 ```bash
@@ -45,12 +45,12 @@ Please refer to the [evaluation README](scripts/m4t/predict) for detailed instru
 
 # Libraries
 
-Seamless Communication depends on 3 libraries developed by Meta. 
+Seamless Communication depends on 3 libraries developed by Meta.
 
 ## [fairseq2](https://github.com/facebookresearch/fairseq2)
 fairseq2 is our next-generation open-source library of sequence modeling components that provides researchers and developers with building blocks for machine translation, language modeling, and other sequence generation tasks. All SeamlessM4T models in this repository are powered by fairseq2.
 
-## [stopes](https://github.com/facebookresearch/stopes) 
+## [stopes](https://github.com/facebookresearch/stopes)
 As part of the seamless communication project, we've extended the stopes library. Version 1 provided a text-text mining tool to build training dataset for translation models. Version 2 has been extended thanks to SONAR to support tasks around training large speech translation models. In particular, we provide tools to read/write the fairseq audiozip datasets and a new mining pipeline that can do speech-speech, text-speech, speech-text and text-text mining, all based on the new SONAR embedding space.
 
 ## [BLASER 2.0](https://github.com/facebookresearch/SONAR)
@@ -66,14 +66,14 @@ BLASER 2.0 is our latest model-based evaluation metric for multimodal translatio
 
 We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T-Medium reported in the paper (as averages) in the `metrics` files above.
 
-## Evaluating SeamlessM4T models 
+## Evaluating SeamlessM4T models
 To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/eval_README.md).
 
-## Finetuning SeamlessM4T models 
+## Finetuning SeamlessM4T models
 
 TODO
 
-## On-device models 
+## On-device models
 Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/on_device_README.md)
 
 # Citation

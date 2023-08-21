@@ -34,7 +34,7 @@ Also running the exported model doesn't need python runtime. For example, you co
 
 ## Metrics
 ### S2TT BLEU / S2ST ASR-BLEU on FLEURS
-For ASR-BLEU, we follow the same protocal as Large/Medium models: Use Whisper-large-v2 for eng-X and Whisper-medium for X-eng when evaluating ASR BLEU. 
+For ASR-BLEU, we follow the same protocal as Large/Medium models: Use Whisper-large-v2 for eng-X and Whisper-medium for X-eng when evaluating ASR BLEU.
 | Direction  | 1st-pass BLEU (S2TT) | 2nd-pass ASR-BLEU (S2ST)
 |---------|----------------------|----------------------|
 | eng-hin|10.43|15.06|

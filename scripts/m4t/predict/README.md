@@ -211,4 +211,3 @@ The `target` column specifies whether a language is supported as target speech (
 | zlm  | Colloquial Malay       | Latn       | Sp     | \--    |
 | zsm  | Standard Malay         | Latn       | Tx     | Tx     |
 | zul  | Zulu                   | Latn       | Sp, Tx | Tx     |
-
