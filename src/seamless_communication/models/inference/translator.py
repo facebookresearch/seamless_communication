@@ -93,6 +93,17 @@ class Translator(nn.Module):
         model.eval()
         return model
 
+    @staticmethod
+    def load_model_for_inference(
+        load_model_fn: Any,
+        model_name_or_card: Union[str, AssetCard],
+        device: Device,
+        dtype: DataType,
+    ) -> nn.Module:
+        model = load_model_fn(model_name_or_card, device=device, dtype=dtype)
+        model.eval()
+        return model
+
     @classmethod
     def get_prediction(
         cls,
