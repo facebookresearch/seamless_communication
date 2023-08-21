@@ -7,7 +7,7 @@
 name: vocoder_36langs
 model_type: vocoder_code_hifigan
 model_arch: base
-checkpoint: "https://dl.fbaipublicfiles.com/seamless_aug/models/vocoder/vocoder_36langs.pt"
+checkpoint: "https://huggingface.co/facebook/seamless-m4t-vocoder/resolve/main/vocoder_36langs.pt"
 model_config: {
     "lang_spkr_idx_map": {
         "multilingual": {

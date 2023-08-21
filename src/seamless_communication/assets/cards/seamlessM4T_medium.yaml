@@ -7,7 +7,7 @@
 name: seamlessM4T_medium
 base: unity_nllb-200
 model_arch: medium
-checkpoint: "https://dl.fbaipublicfiles.com/seamless_aug/models/medium_unity/multitask_unity_medium.pt"
+checkpoint: "https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/multitask_unity_medium.pt"
 num_units: 10000
 unit_langs:
   - arb
