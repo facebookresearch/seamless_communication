@@ -48,8 +48,8 @@ def init_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model_name",
         type=str,
-        default="multitask_unity_medium",
-        help="Base model name (`multitask_unity_medium`, `multitask_unity_large`)",
+        default="seamlessM4T_medium",
+        help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
     )
     parser.add_argument(
         "--save_model_to",
