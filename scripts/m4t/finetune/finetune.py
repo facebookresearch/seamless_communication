@@ -16,10 +16,13 @@ import torch
 import trainer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 
-from seamless_communication.models.unity import (UnitTokenizer, UnitYModel,
-                                                 load_unity_model,
-                                                 load_unity_text_tokenizer,
-                                                 load_unity_unit_tokenizer)
+from seamless_communication.models.unity import (
+    UnitTokenizer,
+    UnitYModel,
+    load_unity_model,
+    load_unity_text_tokenizer,
+    load_unity_unit_tokenizer,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,8 +51,8 @@ def init_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model_name",
         type=str,
-        default="multitask_unity_medium",
-        help="Base model name (`multitask_unity_medium`, `multitask_unity_large`)",
+        default="seamlessM4T_medium",
+        help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
     )
     parser.add_argument(
         "--save_model_to",

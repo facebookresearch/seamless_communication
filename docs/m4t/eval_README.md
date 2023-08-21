@@ -22,7 +22,7 @@ import whisper
 model = whisper.load_model('medium.en')
 model = whisper.load_model('large-v2')
 ```
-To reproduce the whisper transcriptions and thereby the ASR-BLEU scores, greedy decoding is used with a preset temperature value of 0. Target language information is also passed to the whisper model. 
+To reproduce the whisper transcriptions and thereby the ASR-BLEU scores, greedy decoding is used with a preset temperature value of 0. Target language information is also passed to the whisper model.
 
 ```python
 prediction = model.transcribe(<AUDIO_PATH>, language=<LANGUAGE>, temperature=0, beam_size=1)["text"]

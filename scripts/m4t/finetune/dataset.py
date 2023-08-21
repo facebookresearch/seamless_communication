@@ -16,8 +16,9 @@ from pathlib import Path
 from stopes.hub import load_config
 from stopes.speech.tokenizers import SpeechTokenizer, SpeechTokenizerConfig
 
-from seamless_communication.datasets.hugginface import \
-    Speech2SpeechFleursDatasetBuilder
+from seamless_communication.datasets.huggingface import (
+    Speech2SpeechFleursDatasetBuilder,
+)
 
 logging.basicConfig(
     level=logging.INFO,

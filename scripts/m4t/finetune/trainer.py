@@ -56,7 +56,7 @@ class FinetuneParams:
     """ Get eval loss after each `eval_steps` training steps """
 
     patience: int = 3
-    """ Terminate if eval loss didn not improve 
+    """ Terminate if eval loss did not improve
     over the last `patience * eval_steps` training steps"""
 
     learning_rate: float = 1e-5

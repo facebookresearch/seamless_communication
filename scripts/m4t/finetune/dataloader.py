@@ -23,7 +23,9 @@ from torch.utils.data import DataLoader
 
 from seamless_communication.datasets.datatypes import LangPairSample
 from seamless_communication.models.unity.unit_tokenizer import (
-    UnitTokenEncoder, UnitTokenizer)
+    UnitTokenEncoder,
+    UnitTokenizer,
+)
 
 logger = logging.getLogger(__name__)
 

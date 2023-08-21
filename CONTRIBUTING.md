@@ -4,8 +4,8 @@ possible.
 
 ## Our Development Process
 
-`seamless_communication` is built for Meta AI Seamless Communication team public release. 
-We engage in multiple projects internally and will update this repository with our progress upon reaching specific milestones. 
+`seamless_communication` is built for Meta AI Seamless Communication team public release.
+We engage in multiple projects internally and will update this repository with our progress upon reaching specific milestones.
 
 ## Pull Requests
 We actively welcome your pull requests.

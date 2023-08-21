@@ -1,6 +1,6 @@
 ## Finetuning scripts for M4T
 
-This section demonstrates an example of how M4T model can be finetuned for a subset of translation directions or modalities. 
+This section demonstrates an example of how M4T model can be finetuned for a subset of translation directions or modalities.
 
 Shared implementations of trainer and dataloader are not exhaustive. They were intentionally made simple in order to not obscure the specifics of data representation and optimization criteria during training.
 
@@ -10,7 +10,7 @@ M4T training data is a multimodal parallel corpus. Each training sample has four
 
 This kind of dataset can be prepared using `dataset.py` script that downloads FLEURS dataset from [HuggingFace datastes hub](https://huggingface.co/datasets/google/fleurs), extracts units from target audio samples and prepares a manifest consumable by `finetune.py`.
 
-Example run command that prepares a training dataset for language pair English->Korean: 
+Example run command that prepares a training dataset for language pair English->Korean:
 
 ```bash
 python scripts/m4t/finetune/dataset.py \
@@ -19,7 +19,7 @@ python scripts/m4t/finetune/dataset.py \
  --split train \
  --save_dir /tmp
 ```
-Path to the output manifest will be logged in the end of the command output: 
+Path to the output manifest will be logged in the end of the command output:
 
 ```bash
 ...
@@ -31,7 +31,7 @@ Manifest is a text file where each line represents information about a single da
 
 ## Finetuning
 
-`finetune.py` is an example finetuning script that initializes dataloader, and launches a training loop with periodic evaluations on evaluation dataset. `torchrun` is the recommended way of launching it. 
+`finetune.py` is an example finetuning script that initializes dataloader, and launches a training loop with periodic evaluations on evaluation dataset. `torchrun` is the recommended way of launching it.
 
 Example launch command on a single node with 8 gpus:
 
@@ -48,7 +48,7 @@ torchrun \
    --save_model_to /tmp/checkpoint.pt
 ```
 
-Example of a training log: 
+Example of a training log:
 
 ```
 ...
@@ -64,6 +64,3 @@ Example of a training log:
 2023-08-19 02:28:12,762 INFO -- trainer.1871488: Saving model
 ...
 ```
-
-
-
