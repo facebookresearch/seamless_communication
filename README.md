@@ -18,7 +18,7 @@ Links:
 - [Blog](https://ai.meta.com/blog/seamless-m4t)
 - [Paper](https://ai.meta.com/research/publications/seamlessm4tmassively-multilingual-multimodal-machine-translation)
 - [Demo](https://ai.meta.com/resources/models-and-libraries/seamless-communication/)
-- [Huggingface Space](https://huggingface.co/spaces/facebook/seamless_m4t)
+- [🤗 Hugging Face space](https://huggingface.co/spaces/facebook/seamless_m4t)
 
 # Quick Start
 ## Installation
@@ -63,8 +63,8 @@ As part of the seamless communication project, we've extended the stopes library
 ## SeamlessM4T models
 | Model Name         | #params | checkpoint                                                                              | metrics                                                                              |
 | ------------------ | ------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| SeamlessM4T-Large  | 2.3B    | [model](https://huggingface.co/facebook/seamless-m4t-large/resolve/main/multitask_unity_large.pt)   | [metrics](https://dl.fbaipublicfiles.com/seamlessM4T/metrics/seamlessM4T_large.zip)  |
-| SeamlessM4T-Medium | 1.2B    | [model](https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/multitask_unity_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamlessM4T/metrics/seamlessM4T_medium.zip) |
+| SeamlessM4T-Large  | 2.3B    | [Model card](https://huggingface.co/facebook/seamless-m4t-large) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-large/resolve/main/multitask_unity_large.pt)   | [metrics](https://dl.fbaipublicfiles.com/seamlessM4T/metrics/seamlessM4T_large.zip)  |
+| SeamlessM4T-Medium | 1.2B    | |[Model card](https://huggingface.co/facebook/seamless-m4t-medium) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/multitask_unity_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamlessM4T/metrics/seamlessM4T_medium.zip) |
 
 We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T-Medium reported in the paper (as averages) in the `metrics` files above.
 
