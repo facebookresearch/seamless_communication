@@ -4,10 +4,10 @@ Apart from SeamlessM4T-LARGE (2.3B) and SeamlessM4T-MEDIUM (1.2B) models, we are
 This folder contains an example to run an exported small model covering most tasks (ASR/S2TT/S2ST). The model could be executed on popular mobile devices with Pytorch Mobile (https://pytorch.org/mobile/home/).
 
 ## Overview
-| Model   | Disk Size | Supported Tasks         | Supported Languages|
-|---------|----------------------|-------------------------|-------------------------|
-| [UnitY-Small](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device.ptl) | 862MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
-| [UnitY-Small-S2T](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device_s2t.ptl) | 637MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
+| Model   | Num Params | Disk Size | Supported Tasks         | Supported Languages|
+|---------|----------------------|-------------|------------|-------------------------|
+| [UnitY-Small](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device.ptl) | 281M | 862MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
+| [UnitY-Small-S2T](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device_s2t.ptl) | 235M | 637MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
 
 UnitY-Small-S2T is a pruned version of UnitY-Small without 2nd pass unit decoding.
 
