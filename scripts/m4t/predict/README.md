@@ -42,8 +42,8 @@ python scripts/m4t/predict/predict.py <path_to_input_audio> asr <tgt_lang>
 ## Inference breakdown
 
 Inference calls for the `Translator` object instantiated with a multitask UnitY model with the options:
-- `seamlessM4T_large`
-- `seamlessM4T_medium`
+- [`seamlessM4T_large`](https://huggingface.co/facebook/seamless-m4t-large)
+- [`seamlessM4T_medium`](https://huggingface.co/facebook/seamless-m4t-medium)
 
 and a vocoder `vocoder_36langs`
 
