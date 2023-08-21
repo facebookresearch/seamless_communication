@@ -50,14 +50,13 @@ Seamless Communication depends on 3 libraries developed by Meta.
 ## [fairseq2](https://github.com/facebookresearch/fairseq2)
 fairseq2 is our next-generation open-source library of sequence modeling components that provides researchers and developers with building blocks for machine translation, language modeling, and other sequence generation tasks. All SeamlessM4T models in this repository are powered by fairseq2.
 
-## [SONAR]()
-SONAR, Sentence-level multimOdal and laNguage-Agnostic Representations is a new multilingual and -modal sentence embedding space which outperforms existing sentence embeddings such as LASER3 and LabSE on the xsim and xsim++ multilingual similarity search tasks. SONAR provides [text and speech encoders for many languages](https://github.com/facebookresearch/SONAR). SeamlessAlign was mined based on SONAR embeddings.
+## [SONAR and BLASER 2.0](https://github.com/facebookresearch/SONAR)
+SONAR, Sentence-level multimOdal and laNguage-Agnostic Representations is a new multilingual and -modal sentence embedding space which outperforms existing sentence embeddings such as LASER3 and LabSE on the xsim and xsim++ multilingual similarity search tasks. SONAR provides text and speech encoders for many languages. SeamlessAlign was mined based on SONAR embeddings.
+
+BLASER 2.0 is our latest model-based evaluation metric for multimodal translation. It is an extension of BLASER, supporting both speech and text. It operates directly on the source signal, and as such, does not require any intermediate ASR sytem like ASR-BLEU. As in the first version, BLASER 2.0 leverages the similarity between input and output sentence embeddings. SONAR is the underlying embedding space for BLASER 2.0. Scripts to run evaluation with BLASER 2.0 can be found in the [SONAR repo](https://github.com/facebookresearch/SONAR).
 
 ## [stopes](https://github.com/facebookresearch/stopes)
 As part of the seamless communication project, we've extended the stopes library. Version 1 provided a text-text mining tool to build training dataset for translation models. Version 2 has been extended thanks to SONAR to support tasks around training large speech translation models. In particular, we provide tools to read/write the fairseq audiozip datasets and a new mining pipeline that can do speech-speech, text-speech, speech-text and text-text mining, all based on the new SONAR embedding space.
-
-## [BLASER 2.0](https://github.com/facebookresearch/SONAR)
-BLASER 2.0 is our latest model-based evaluation metric for multimodal translation. It is an extension of BLASER, supporting both speech and text. It operates directly on the source signal, and as such, does not require any intermediate ASR sytem like ASR-BLEU. As in the first version, BLASER 2.0 leverages the similarity between input and output sentence embeddings. SONAR is the underlying embedding space for BLASER 2.0. Scripts to run evaluation with BLASER 2.0 can be found in the [SONAR repo](https://github.com/facebookresearch/SONAR).
 
 
 # Resources and usage
