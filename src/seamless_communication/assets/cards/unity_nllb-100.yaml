@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 model_type: unity
-tokenizer: "https://dl.fbaipublicfiles.com/seamless_aug/models/large_unity/spm_256k_nllb100.model"
+tokenizer: "https://dl.fbaipublicfiles.com/seamlessM4T/models/large/spm_256k_nllb100.model"
 default_lang: eng
 langs:
   - afr
