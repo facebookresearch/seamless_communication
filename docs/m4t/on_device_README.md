@@ -6,8 +6,8 @@ This folder contains an example to run an exported small model covering most tas
 ## Overview
 | Model   | Num Params | Disk Size | Supported Tasks         | Supported Languages|
 |---------|----------------------|-------------|------------|-------------------------|
-| [UnitY-Small](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device.ptl) | 281M | 862MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
-| [UnitY-Small-S2T](https://dl.fbaipublicfiles.com/seamless_aug/models/small_unity/unity_on_device_s2t.ptl) | 235M | 637MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
+| [UnitY-Small](https://huggingface.co/facebook/seamless-m4t-unity-small/resolve/main/unity_on_device.ptl) | 281M | 862MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
+| [UnitY-Small-S2T](https://huggingface.co/facebook/seamless-m4t-unity-small-s2t/resolve/main/unity_on_device_s2t.ptl) | 235M | 637MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
 
 UnitY-Small-S2T is a pruned version of UnitY-Small without 2nd pass unit decoding.
 
