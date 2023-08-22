@@ -124,7 +124,7 @@ class Translator(nn.Module):
     def synthesize_speech(
         self,
         code: List[int],
-        lang: int,
+        lang: str,
         speaker: Optional[int] = None,
         dur_prediction: Optional[bool] = True,
     ) -> Tuple[List[Tensor], int]:
