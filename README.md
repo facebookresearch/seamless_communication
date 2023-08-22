@@ -31,7 +31,7 @@ A temporary extra requirement for fairseq2 is [libsndfile](https://github.com/li
 ```
 conda install -y -c conda-forge libsndfile
 ```
-At this point fairseq2 has a confirmed support only for Linux and macOS.
+At this point fairseq2 has a confirmed support only for Linux and macOS. Pre-built packages are only available for Linux (macOS is planned).
 
 ## Running inference
 
