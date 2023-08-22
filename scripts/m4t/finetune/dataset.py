@@ -13,9 +13,6 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
-from stopes.hub import load_config
-from stopes.speech.tokenizers import SpeechTokenizer, SpeechTokenizerConfig
-
 from seamless_communication.datasets.huggingface import (
     Speech2SpeechFleursDatasetBuilder,
 )
@@ -99,15 +96,11 @@ def download_fleurs_dataset(
     source_lang: str,
     target_lang: str,
     split: str,
-    unit_extractor_config: str,
     save_directory: str,
 ) -> str:
     _check_lang_code_mapping(source_lang)
     _check_lang_code_mapping(target_lang)
-    tokenizer_conf: SpeechTokenizerConfig = load_config(
-        unit_extractor_config, namespace=""
-    )
-    tokenizer: SpeechTokenizer = SpeechTokenizer.build(tokenizer_conf)
+    tokenizer = None
     dataset_iterator = Speech2SpeechFleursDatasetBuilder(
         source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
         target_lang=UNITY_TO_FLEURS_LANG_MAPPING[target_lang],
@@ -168,7 +161,6 @@ def main(args: Namespace) -> None:
     manifest_path = download_fleurs_dataset(
         source_lang=args.source_lang,
         target_lang=args.target_lang,
-        unit_extractor_config="lang41_10k_xlsr_lyr35.yaml",
         split=args.split,
         save_directory=args.save_dir,
     )

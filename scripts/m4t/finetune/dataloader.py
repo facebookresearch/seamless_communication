@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 class SeqsBatch:
     src_tokens: Optional[Tensor]
     src_lengths: Optional[Tensor]
-    target_tokens: Tensor
-    prev_output_tokens: Tensor
-    target_lengths: Tensor
+    target_tokens: Optional[Tensor]
+    prev_output_tokens: Optional[Tensor]
+    target_lengths: Optional[Tensor]
 
     def __del__(self) -> None:
         """Explicitly delete tensors
@@ -136,8 +136,10 @@ class UnitYDataLoader:
         tokens = torch.concat([tokens, torch.LongTensor([eos_idx])])
         return tokens
 
-    def _get_tokenized_units(self, sample: LangPairSample) -> Tensor:
+    def _get_tokenized_units(self, sample: LangPairSample) -> Optional[Tensor]:
         """Expected sequence is [<eos>, <lang_tok> , ..unit tokens.., <eos>]"""
+        if sample.target.units is None:
+            return None
         target_lang = sample.target.lang
         if target_lang not in self.unit_encoders_per_lang:
             self.unit_encoders_per_lang[
@@ -185,15 +187,25 @@ class UnitYDataLoader:
             [tokens.shape[0] - 1 for tokens in text_tokens_list]
         )
         # output units
-        units_list = [self._get_tokenized_units(sample) for sample in samples]
-        units_pad_idx = self.unit_tokenizer.vocab_info.pad_idx
-        prev_outputs_units = self._batch_tensors(
-            [tokens[:-1] for tokens in units_list], pad_value=units_pad_idx
-        )
-        target_units = self._batch_tensors(
-            [tokens[1:] for tokens in units_list], pad_value=units_pad_idx
-        )
-        units_lengths = torch.LongTensor([tokens.shape[0] - 1 for tokens in units_list])
+        units_list_raw = [self._get_tokenized_units(sample) for sample in samples]
+        if None in units_list_raw:
+            prev_outputs_units = None
+            target_units = None
+            units_lengths = None
+        else:
+            units_list: List[Tensor] = [
+                value for value in units_list_raw if value is not None
+            ]
+            units_pad_idx = self.unit_tokenizer.vocab_info.pad_idx
+            prev_outputs_units = self._batch_tensors(
+                [tokens[:-1] for tokens in units_list], pad_value=units_pad_idx
+            )
+            target_units = self._batch_tensors(
+                [tokens[1:] for tokens in units_list], pad_value=units_pad_idx
+            )
+            units_lengths = torch.LongTensor(
+                [tokens.shape[0] - 1 for tokens in units_list]
+            )
         return MultimodalSeqsBatch(
             speech_to_text=SeqsBatch(
                 src_tokens=src_tokens,

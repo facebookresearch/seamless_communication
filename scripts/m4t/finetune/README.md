@@ -1,14 +1,14 @@
 ## Finetuning scripts for M4T
 
-This section demonstrates an example of how M4T model can be finetuned for a subset of translation directions or modalities.
+This section demonstrates an example of M4T finetuning on a single translation direction: English-to-Korean.
 
-Shared implementations of trainer and dataloader are not efficient and/or exhaustive. They were intentionally made simple in order to not obscure the specifics of data representation and optimization criteria during training.
+The trainer and dataloader were designed mainly for demonstration purposes. Their simplicity should facilitate the code transparency and portability.
 
 ## Data preparation
 
-M4T training data is a multimodal parallel corpus. Each training sample has four parts: audio and text representation of a sample in source language, and corresponding audio and text representation of a sample in target language.
+M4T training dataset is a multimodal parallel corpus. Each training sample has four parts: audio and text representation of the sample in the source language, and its corresponding audio and text representation in the target language.
 
-This kind of dataset can be prepared using `dataset.py` script that downloads FLEURS dataset from [HuggingFace datastes hub](https://huggingface.co/datasets/google/fleurs), extracts units from target audio samples and prepares a manifest consumable by `finetune.py`. Manifest is a text file where each line represents information about a single dataset sample, serialized in JSON format.
+That kind of dataset can be prepared using `dataset.py` script that downloads FLEURS dataset from [HuggingFace datastes hub](https://huggingface.co/datasets/google/fleurs), (optionally) extracts units from the target audio samples, and prepares a manifest consumable by `finetune.py`. Manifest is a text file where each line represents information about a single dataset sample, serialized in JSON format.
 
 List of input arguments for `dataset.py`:
 
@@ -23,12 +23,12 @@ List of input arguments for `dataset.py`:
 
 Language codes should follow the notation adopted by M4T models.
 
-Below is an example bash script that prepares a training and evaluation dataset for language pair English->Korean:
+Below is an example bash script that prepares a training and evaluation dataset for the translation direction English-to-Korean:
 
 ```bash
-mkdir -p datasets && cd datasets
-export DATASET_DIR=`pwd`
-cd -
+export DATASET_DIR=~/m4t_dataset
+mkdir -p $DATASET_DIR
+
 python scripts/m4t/finetune/dataset.py \
   --source_lang eng \
   --target_lang kor \
@@ -42,13 +42,13 @@ python scripts/m4t/finetune/dataset.py \
 ```
 
 
-Output manifests will be stored in `$DATASET_DIR/train_manifest.json` and `$DATASET_DIR/validation_manifest.json`.
+Output manifests will be stored in `${DATASET_DIR}/train_manifest.json` and `${DATASET_DIR}/validation_manifest.json`.
 
 
 ## Finetuning
 
-`finetune.py` is an example finetuning script that initializes dataloaders, and launches training loop with periodic scoring against validation dataset.
-It is recommended to launch it with `torchrun`. Multi-gpu and multi-node training are supported out of the box.
+`finetune.py` is an example finetuning script that initializes dataloaders, and launches training loop with periodic scoring against the validation dataset.
+It is recommended to launch it with [`torchrun`](https://pytorch.org/docs/stable/elastic/run.html). Multi-gpu and multi-node training are supported out of the box.
 
 List of input arguments for `finetune.py`:
 
@@ -86,7 +86,7 @@ The scripts supports three modes of finetuning:
 - `TEXT_TO_SPEECH`: only text-to-unit part of the model will be engaged in the finetuning, other weights will be frozen;
 - `SPEECH_TO_TEXT`: only speech-to-text part of the model will be engaged in the finetuning.
 
-The referenced finetuning script does not support finetuning of the text encoder. Though the code expantion should be trivial.
+The referenced finetuning script does not support finetuning of the text encoder.
 
 
 Below is an example bash script that launches finetuning of M4T-large on the dataset prepared earlier, using a single node with eight GPUs:
@@ -98,6 +98,7 @@ torchrun \
    --nnodes=1 \
    --nproc-per-node=8  \
   scripts/m4t/finetune/finetune.py \
+   --mode SPEECH_TO_TEXT \
    --train_dataset $DATASET_DIR/train_manifest.json  \
    --eval_dataset $DATASET_DIR/validation_manifest.json \
    --learning_rate 1e-6 \
@@ -105,7 +106,7 @@ torchrun \
    --max_epochs 10 \
    --patience 3 \
    --model_name seamlessM4T_large \
-   --save_model_to $WORKDIR/checkpoint_lr_1e-6_full.pt
+   --save_model_to $DATASET_DIR/checkpoint.pt
 ```
 
 Excerpt from an example finetuning log:
