@@ -22,9 +22,9 @@ Links:
 
 # Quick Start
 ## Installation
-
+1. Install fairseq2. Follow tutorials in fairseq2 [README](https://github.com/facebookresearch/fairseq2)
+2. Install seamless_communication
 ```
-pip install --extra-index-url https://test.pypi.org/simple/ fairseq2==0.1.0rc0
 pip install .
 ```
 
