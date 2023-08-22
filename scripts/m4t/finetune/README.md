@@ -29,12 +29,12 @@ Below is an example bash script that prepares a training and evaluation dataset 
 export DATASET_DIR=~/m4t_dataset
 mkdir -p $DATASET_DIR
 
-python scripts/m4t/finetune/dataset.py \
+m4t_prepare_dataset \
   --source_lang eng \
   --target_lang kor \
   --split train \
   --save_dir $DATASET_DIR
- python scripts/m4t/finetune/dataset.py \
+m4t_prepare_dataset \
   --source_lang eng \
   --target_lang kor \
   --split validation \
@@ -97,7 +97,8 @@ torchrun \
    --rdzv-endpoint=localhost:0 \
    --nnodes=1 \
    --nproc-per-node=8  \
-  scripts/m4t/finetune/finetune.py \
+   --no-python \
+  m4t_finetune \
    --mode SPEECH_TO_TEXT \
    --train_dataset $DATASET_DIR/train_manifest.json  \
    --eval_dataset $DATASET_DIR/validation_manifest.json \

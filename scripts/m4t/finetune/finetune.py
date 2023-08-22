@@ -7,7 +7,6 @@
 import argparse
 import logging
 import os
-from argparse import Namespace
 from pathlib import Path
 
 import dataloader
@@ -125,7 +124,8 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_finetune(args: Namespace) -> None:
+def main() -> None:
+    args = init_parser().parse_args()
     dist_utils.init_distributed([logger, trainer.logger])
     device = torch.device("cuda")
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
@@ -182,5 +182,4 @@ def run_finetune(args: Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = init_parser()
-    run_finetune(parser.parse_args())
+    main()

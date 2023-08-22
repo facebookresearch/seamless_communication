@@ -22,9 +22,14 @@ Links:
 
 # Quick Start
 ## Installation
+
 ```
-pip install fairseq2==0.1
 pip install .
+```
+
+A temporary extra requirement for fairseq2 is [libsndfile](https://github.com/libsndfile/libsndfile). From [Conda](https://docs.conda.io/en/latest/) environment it can be installed via:
+```
+conda install -y -c conda-forge libsndfile
 ```
 
 ## Running inference
@@ -33,11 +38,11 @@ Here’s an example of using the CLI from the root directory to run inference.
 
 S2ST task:
 ```bash
-python scripts/m4t/predict/predict.py <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio>
+m4t_predict <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio>
 ```
 T2TT task:
 ```bash
-python scripts/m4t/predict/predict.py <input_text> t2tt <tgt_lang> --src_lang <src_lang>
+m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 ```
 
 Please refer to the [evaluation README](scripts/m4t/predict) for detailed instruction on how to run inference.

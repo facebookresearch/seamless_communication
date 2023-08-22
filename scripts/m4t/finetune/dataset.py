@@ -10,7 +10,6 @@ import dataclasses
 import json
 import logging
 import os
-from argparse import Namespace
 from pathlib import Path
 
 from seamless_communication.datasets.huggingface import (
@@ -157,7 +156,8 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(args: Namespace) -> None:
+def main() -> None:
+    args = init_parser().parse_args()
     manifest_path = download_fleurs_dataset(
         source_lang=args.source_lang,
         target_lang=args.target_lang,
@@ -168,5 +168,4 @@ def main(args: Namespace) -> None:
 
 
 if __name__ == "__main__":
-    args = init_parser().parse_args()
-    main(args)
+    main()
