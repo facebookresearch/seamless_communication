@@ -86,7 +86,7 @@ The scripts supports three modes of finetuning:
 - `TEXT_TO_SPEECH`: only text-to-unit part of the model will be engaged in the finetuning, other weights will be frozen;
 - `SPEECH_TO_TEXT`: only speech-to-text part of the model will be engaged in the finetuning.
 
-The referenced finetuning script does not support finetuning of the text encoder. Though the code expantion should be trivial.
+The referenced finetuning script does not support finetuning of the text encoder.
 
 
 Below is an example bash script that launches finetuning of M4T-large on the dataset prepared earlier, using a single node with eight GPUs:
@@ -98,6 +98,7 @@ torchrun \
    --nnodes=1 \
    --nproc-per-node=8  \
   scripts/m4t/finetune/finetune.py \
+   --mode SPEECH_TO_TEXT \
    --train_dataset $DATASET_DIR/train_manifest.json  \
    --eval_dataset $DATASET_DIR/validation_manifest.json \
    --learning_rate 1e-6 \
@@ -105,7 +106,7 @@ torchrun \
    --max_epochs 10 \
    --patience 3 \
    --model_name seamlessM4T_large \
-   --save_model_to $WORKDIR/checkpoint_lr_1e-6_full.pt
+   --save_model_to $DATASET_DIR/checkpoint.pt
 ```
 
 Excerpt from an example finetuning log:

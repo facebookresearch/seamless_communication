@@ -1,3 +1,5 @@
 pre-commit
 datasets
 torchaudio
+soundfile
+librosa
