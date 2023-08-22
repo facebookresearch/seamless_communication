@@ -112,7 +112,7 @@ def init_parser() -> argparse.ArgumentParser:
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
-        default=trainer.FinetuneMode.TEXT_TO_SPEECH,
+        default=trainer.FinetuneMode.SPEECH_TO_TEXT,
         help=(
             "* `SPEECH_TO_SPEECH` -- finetune S2T and T2U parts of the model; "
             "* `TEXT_TO_SPEECH` -- finetune only T2U; "
