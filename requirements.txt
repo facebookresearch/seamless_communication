@@ -1,2 +1,3 @@
 pre-commit
 datasets
+torchaudio
