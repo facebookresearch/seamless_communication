@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, Optional
 import numpy as np
 import torch
 from datasets import load_dataset
+from datasets.download.download_manager import DownloadMode
 
 from .datatypes import LangPairSample, MultimodalSample
 
@@ -85,6 +86,7 @@ class Speech2SpeechFleursDatasetBuilder:
             split=self.split,
             cache_dir=self.dataset_cache_dir,
             streaming=False,
+            download_mode=DownloadMode.REUSE_CACHE_IF_EXISTS,
         )
         for item in ds:
             audio_path = os.path.join(
