@@ -23,7 +23,7 @@ Links:
 # Quick Start
 ## Installation
 ```
-pip install fairseq2
+pip install fairseq2==0.1
 pip install .
 ```
 
