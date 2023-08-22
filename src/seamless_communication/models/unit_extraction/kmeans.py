@@ -13,14 +13,12 @@ from seamless_communication.assets import download_manager
 
 
 class KmeansModel(nn.Module):
-    @staticmethod
-    def load_model(km_path: Path, device: Device) -> "KmeansModel":
+    def __init__(self, kmeans_uri: str, device: Device):
+        super().__init__()
+        km_path = download_manager.download_checkpoint(kmeans_uri, kmeans_uri)
         km_model = np.load(km_path)
         centroids_numpy = km_model.transpose()
-        return KmeansModel(torch.from_numpy(centroids_numpy), device)
-
-    def __init__(self, centroids: Tensor, device: Device):
-        super().__init__()
+        centroids = torch.from_numpy(centroids_numpy)
 
         self.centroids = nn.Parameter(centroids, requires_grad=False).to(device)
         self.centroid_norm = nn.Parameter(
@@ -34,13 +32,3 @@ class KmeansModel(nn.Module):
             + self.centroid_norm
         )
         return dist.argmin(dim=-1)
-
-
-if __name__ == "__main__":
-    kmeans_uri = "https://dl.fbaipublicfiles.com/seamlessM4T/models/unit_extraction/kmeans_10k.npy"
-    km_path = download_manager.download_checkpoint(kmeans_uri, "kmeans_10k")
-    device = torch.device("cuda:1")
-    model = KmeansModel.load_model(km_path, device)
-    t = torch.randn((1000, 1280), device=device, dtype=torch.float32)
-    units = model(t)
-    print(units)

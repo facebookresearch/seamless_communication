@@ -93,9 +93,7 @@ class Wav2Vec2LayerOutputModel(Wav2Vec2Model):
         :param batch:
             The batch of sequences to process.
         """
-        print(f"Before run_frontend: {batch.seqs.sum()}")
         seqs, padding_mask, _, _ = self.run_frontend(batch.seqs, batch.seq_lens)
-        print(f"After run_frontend: {seqs.sum()}")
         w2v2_layer_output = None
 
         def layer_output_hook(
@@ -107,7 +105,6 @@ class Wav2Vec2LayerOutputModel(Wav2Vec2Model):
             nonlocal w2v2_layer_output
 
             if layer_idx == out_layer_idx:
-                print(f"{layer_idx=}")
                 w2v2_layer_output = layer_output
 
         # TODO: Should pad for fp16?
@@ -177,39 +174,3 @@ load_wav2vec2_layer_output_model = Wav2Vec2Loader(
     # initialization.
     use_meta=False,
 )
-
-
-if __name__ == "__main__":
-    from fairseq2.data import Collater
-    from fairseq2.memory import MemoryBlock
-    from fairseq2.data.audio import AudioDecoder
-    from pathlib import Path
-
-    audio = "/large_experiments/seamless/ust/data/TTS/vocoder_training/audio_wavs/multi_spkr/eng/eng_LJSpeech-1.1_0/LJ003-0001.wav"
-    out_layer_idx = 34
-    device = torch.device("cuda:1")
-    decode_audio = AudioDecoder(dtype=torch.float32, device=device)
-    collate = Collater(pad_idx=2, pad_to_multiple=2)
-    decoded_audio = None
-    if isinstance(audio, str):
-        with Path(audio).open("rb") as fb:
-            block = MemoryBlock(fb.read())
-        decoded_audio = decode_audio(block)
-    src = collate(decoded_audio)["waveform"]
-
-    x = torch.tensor(torch.load("/checkpoint/krs/x.pt"), device=device)
-    print(f"After read audio: {x.sum()}, {x.shape}")
-    x = x.unsqueeze(0)
-    import torch.nn.functional as F
-
-    x = F.layer_norm(x, x.shape)
-    # batch.seqs = batch.seqs.view(1, -1)
-
-    print(f"After layer norm: {x.sum()}, {x.shape}")
-    model = load_wav2vec2_layer_output_model(
-        "xlsr2_1b_v2", device=device, dtype=torch.float32
-    )
-    model.eval()
-    batch = SequenceBatch(seqs=x, seq_lens=src["seq_lens"])
-    out = model(batch, out_layer_idx)
-    print(out.sum(), out.shape)

@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,7 @@ from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.generation import SequenceToTextOutput, SequenceGeneratorOptions
 from fairseq2.memory import MemoryBlock
-from fairseq2.typing import Device
+from fairseq2.typing import DataType, Device
 from torch import Tensor
 from enum import Enum, auto
 
@@ -54,10 +54,9 @@ class Translator(nn.Module):
     ):
         super().__init__()
         # Load the model.
-        self.model: UnitYModel = load_unity_model(
-            model_name_or_card, device=device, dtype=torch.float16
+        self.model: UnitYModel = self.load_model_for_inference(
+            load_unity_model, model_name_or_card, device, torch.float16
         )
-        self.model.eval()
         self.text_tokenizer = load_unity_text_tokenizer(model_name_or_card)
         self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
         self.device = device
@@ -74,9 +73,21 @@ class Translator(nn.Module):
             pad_idx=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
         # Load the vocoder.
-        self.vocoder: Vocoder = load_vocoder_model(vocoder_name_or_card, device=device)
-        self.vocoder.eval()
+        self.vocoder = self.load_model_for_inference(
+            load_vocoder_model, vocoder_name_or_card, device, torch.float32
+        )
         self.sr = sample_rate
+
+    @staticmethod
+    def load_model_for_inference(
+        load_model_fn: Any,
+        model_name_or_card: Union[str, AssetCard],
+        device: Device,
+        dtype: DataType,
+    ) -> nn.Module:
+        model = load_model_fn(model_name_or_card, device=device, dtype=dtype)
+        model.eval()
+        return model
 
     @classmethod
     def get_prediction(
