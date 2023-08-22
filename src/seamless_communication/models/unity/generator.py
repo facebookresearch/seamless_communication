@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import torch
 from fairseq2.data.text import TextTokenizer
@@ -23,6 +23,26 @@ from seamless_communication.models.unity.unit_tokenizer import (
 )
 from fairseq2.nn.utils.module import infer_device
 from torch import Tensor
+
+
+def remove_consecutive_repeated_ngrams(
+    sequence: List[int], min_size: int = 1, max_size: int = 40
+):
+    assert 1 <= min_size <= max_size
+    drop_idx = set()  # indices that will be dropped from the sequence
+
+    # start from the beginning, check if an ngram of size k (for k=max..min) is
+    # followed by its copy, if so delete the first one, and start over after
+    # the deleted ngram.
+    start = 0
+    while start < len(sequence):
+        for k in range(max_size, min_size - 1, -1):
+            if sequence[start : start + k] == sequence[start + k : start + k + k]:
+                drop_idx |= set(range(start, start + k))
+                start += k - 1  # assumes repeating subsequences don't overlap
+                break
+        start += 1
+    return [token for idx, token in enumerate(sequence) if idx not in drop_idx]
 
 
 class UnitYGenerator:
@@ -127,6 +147,7 @@ class UnitYGenerator:
         source_seq_lens: Optional[Tensor],
         input_modality: str = "speech",
         output_modality: str = "speech",
+        ngram_filtering: bool = False,
     ) -> Tuple[SequenceToTextOutput, Optional["SequenceToUnitOutput"]]:
         """
         :param source_seqs:
@@ -192,6 +213,9 @@ class UnitYGenerator:
 
         # Convert to speech units.
         units = self.unit_decoder(unit_seqs)
+        if ngram_filtering:
+            units = remove_consecutive_repeated_ngrams(units.cpu().numpy().tolist())
+            units = torch.tensor(units)
 
         unit_output = SequenceToUnitOutput(
             units, unit_gen_output, t2u_encoder_output, t2u_encoder_padding_mask
