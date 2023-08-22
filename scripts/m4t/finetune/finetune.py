@@ -9,11 +9,9 @@ import logging
 import os
 from pathlib import Path
 
-import dataloader
-import dist_utils
 import torch
-import trainer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
+from m4t_scripts.finetune import dataloader, dist_utils, trainer
 
 from seamless_communication.models.unity import (
     UnitTokenizer,
