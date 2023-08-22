@@ -19,7 +19,7 @@ from fairseq2.typing import Device
 from torch import Tensor
 from enum import Enum, auto
 from seamless_communication.models.inference.ngram_repeat_block_logits_processor import (
-    NGramRepeatBlockLogitsProcessor,
+    NGramRepeatBlockProcessor,
 )
 
 from seamless_communication.models.unity import (
@@ -101,8 +101,8 @@ class Translator(nn.Module):
         text_opts = SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(1, 200))
         unit_opts = SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(max_len_a, 50))
         if ngram_filtering:
-            text_opts.logits_processor = NGramRepeatBlockLogitsProcessor(no_repeat_ngram_size=4)
-            unit_opts.logits_processor = NGramRepeatBlockLogitsProcessor(no_repeat_ngram_size=4)
+            text_opts.logits_processor = NGramRepeatBlockProcessor(no_repeat_ngram_size=4)
+            unit_opts.logits_processor = NGramRepeatBlockProcessor(no_repeat_ngram_size=4)
         generator = UnitYGenerator(
             model,
             text_tokenizer,
