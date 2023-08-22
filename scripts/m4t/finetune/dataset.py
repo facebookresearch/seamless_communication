@@ -168,7 +168,7 @@ def main(args: Namespace) -> None:
     manifest_path = download_fleurs_dataset(
         source_lang=args.source_lang,
         target_lang=args.target_lang,
-        unit_extractor_config="/checkpoint/krs/unit_extraction/xlsr1b/lang41_10k_xlsr_lyr35.yaml",
+        unit_extractor_config="lang41_10k_xlsr_lyr35.yaml",
         split=args.split,
         save_directory=args.save_dir,
     )
