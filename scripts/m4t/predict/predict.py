@@ -44,6 +44,12 @@ def main():
     parser.add_argument(
         "--vocoder_name", type=str, help="Vocoder name", default="vocoder_36langs"
     )
+    parser.add_argument(
+        "--ngram-filtering",
+        type=bool,
+        help="Enable ngram_repeat_block (currently hardcoded to 4, during decoding) and ngram filtering over units (postprocessing)",
+        default=False,
+    )
 
     args = parser.parse_args()
 
@@ -59,7 +65,11 @@ def main():
 
     translator = Translator(args.model_name, args.vocoder_name, device)
     translated_text, wav, sr = translator.predict(
-        args.input, args.task, args.tgt_lang, src_lang=args.src_lang
+        args.input,
+        args.task,
+        args.tgt_lang,
+        src_lang=args.src_lang,
+        ngram_filtering=args.ngram_filtering,
     )
 
     if wav is not None and sr is not None:

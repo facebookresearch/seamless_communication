@@ -18,6 +18,9 @@ from fairseq2.memory import MemoryBlock
 from fairseq2.typing import Device
 from torch import Tensor
 from enum import Enum, auto
+from seamless_communication.models.inference.ngram_repeat_block_processor import (
+    NGramRepeatBlockProcessor,
+)
 
 from seamless_communication.models.unity import (
     UnitTokenizer,
@@ -88,25 +91,38 @@ class Translator(nn.Module):
         input_modality: Modality,
         output_modality: Modality,
         tgt_lang: str,
+        ngram_filtering: bool = False,
     ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
         if input_modality == Modality.TEXT:
             # need to adjust this since src_len is smaller for text.
             max_len_a = 25
         else:
             max_len_a = 1
-
+        text_opts = SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(1, 200))
+        unit_opts = SequenceGeneratorOptions(
+            beam_size=5, soft_max_seq_len=(max_len_a, 50)
+        )
+        if ngram_filtering:
+            text_opts.logits_processor = NGramRepeatBlockProcessor(
+                no_repeat_ngram_size=4
+            )
+            unit_opts.logits_processor = NGramRepeatBlockProcessor(
+                no_repeat_ngram_size=4
+            )
         generator = UnitYGenerator(
             model,
             text_tokenizer,
             tgt_lang,
             unit_tokenizer if output_modality == Modality.SPEECH else None,
-            text_opts=SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(1, 200)),
-            unit_opts=SequenceGeneratorOptions(
-                beam_size=5, soft_max_seq_len=(max_len_a, 50)
-            ),
+            text_opts=text_opts,
+            unit_opts=unit_opts,
         )
         return generator(
-            src["seqs"], src["seq_lens"], input_modality.value, output_modality.value
+            src["seqs"],
+            src["seq_lens"],
+            input_modality.value,
+            output_modality.value,
+            ngram_filtering=ngram_filtering,
         )
 
     def get_modalities_from_task(self, task: Task) -> Tuple[Modality, Modality]:
@@ -138,6 +154,7 @@ class Translator(nn.Module):
         tgt_lang: str,
         src_lang: Optional[str] = None,
         spkr: Optional[int] = -1,
+        ngram_filtering: bool = False,
     ) -> Tuple[StringLike, Optional[List[Tensor]], Optional[int]]:
         """
         The main method used to perform inference on all tasks.
@@ -197,6 +214,7 @@ class Translator(nn.Module):
             input_modality,
             output_modality,
             tgt_lang=tgt_lang,
+            ngram_filtering=ngram_filtering,
         )
 
         text_out = result[0]
