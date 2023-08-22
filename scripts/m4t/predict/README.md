@@ -43,10 +43,10 @@ Note that it takes 16kHz audio now. Here's how you could resample your audio:
 ```python
 import torchaudio
 resample_rate = 16000
-waveform, sample_rate = torchaudio.load('input_audio.wav')
+waveform, sample_rate = torchaudio.load(<path_to_input_audio>)
 resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
 resampled_waveform = resampler(waveform)
-torchaudio.save('output_audio.wav', resampled_waveform, resample_rate)
+torchaudio.save(<path_to_resampled_audio>, resampled_waveform, resample_rate)
 ```
 ## Inference breakdown
 
