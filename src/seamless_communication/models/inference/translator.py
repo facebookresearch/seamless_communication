@@ -73,7 +73,7 @@ class Translator(nn.Module):
             pad_idx=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
         # Load the vocoder.
-        self.vocoder = self.load_model_for_inference(
+        self.vocoder: Vocoder = self.load_model_for_inference(
             load_vocoder_model, vocoder_name_or_card, device, torch.float32
         )
         self.sr = sample_rate
@@ -130,16 +130,6 @@ class Translator(nn.Module):
             return Modality.TEXT, Modality.TEXT
         else:
             return Modality.TEXT, Modality.SPEECH
-
-    @torch.no_grad()
-    def synthesize_speech(
-        self,
-        code: List[int],
-        lang: str,
-        speaker: Optional[int] = None,
-        dur_prediction: Optional[bool] = True,
-    ) -> Tuple[List[Tensor], int]:
-        return self.vocoder(code, lang, speaker, dur_prediction), self.sr
 
     @torch.no_grad()
     def predict(
@@ -216,5 +206,5 @@ class Translator(nn.Module):
             return text_out.sentences[0], None, None
         else:
             units = unit_out.units[:, 1:][0].cpu().numpy().tolist()
-            wav_out, sr_out = self.synthesize_speech(units, tgt_lang, spkr)
-            return text_out.sentences[0], wav_out, sr_out
+            wav_out = self.vocoder(units, tgt_lang, spkr, dur_prediction=True)
+            return text_out.sentences[0], wav_out, self.sr

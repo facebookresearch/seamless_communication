@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 from pathlib import Path
 import torch
 
@@ -68,13 +68,3 @@ class UnitExtractor(nn.Module):
         features = self.model(batch, out_layer_idx).squeeze(0)
         units = self.kmeans_model(features)
         return units
-
-
-if __name__ == "__main__":
-    kmeans_uri = "https://dl.fbaipublicfiles.com/seamlessM4T/models/unit_extraction/kmeans_10k.npy"
-    audio = "/large_experiments/seamless/ust/data/TTS/vocoder_training/audio_wavs/multi_spkr/eng/eng_LJSpeech-1.1_0/LJ003-0001.wav"
-    device = torch.device("cuda:1")
-    unit_extractor = UnitExtractor("xlsr2_1b_v2", kmeans_uri, device=Device("cuda:0"))
-    out_layer_number = 35
-    units = unit_extractor.predict(audio, out_layer_number - 1)
-    print(units.shape, units.dtype, units.device)
