@@ -39,6 +39,15 @@ python scripts/m4t/predict/predict.py <input_text> t2st <tgt_lang> --src_lang <s
 python scripts/m4t/predict/predict.py <path_to_input_audio> asr <tgt_lang>
 ```
 
+Note that it takes 16kHz audio now. Here's how you could resample your audio:
+```python
+import torchaudio
+resample_rate = 16000
+waveform, sample_rate = torchaudio.load('input_audio.wav')
+resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
+resampled_waveform = resampler(waveform)
+torchaudio.save('output_audio.wav', resampled_waveform, resample_rate)
+```
 ## Inference breakdown
 
 Inference calls for the `Translator` object instantiated with a multitask UnitY model with the options:
