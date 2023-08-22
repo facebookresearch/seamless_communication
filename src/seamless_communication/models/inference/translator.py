@@ -98,8 +98,8 @@ class Translator(nn.Module):
         generator = UnitYGenerator(
             model,
             text_tokenizer,
-            unit_tokenizer,
             tgt_lang,
+            unit_tokenizer if output_modality == Modality.SPEECH else None,
             text_opts=SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(1, 200)),
             unit_opts=SequenceGeneratorOptions(
                 beam_size=5, soft_max_seq_len=(max_len_a, 50)
