@@ -17,7 +17,7 @@ This unified model enables multiple tasks without relying on multiple separate m
 Links:
 - [Blog](https://ai.meta.com/blog/seamless-m4t)
 - [Paper](https://dl.fbaipublicfiles.com/seamless/seamless_m4t_paper.pdf)
-- [Demo](https://ai.meta.com/resources/models-and-libraries/seamless-communication/)
+- [Demo](https://seamless.metademolab.com/)
 - [🤗 Hugging Face space](https://huggingface.co/spaces/facebook/seamless_m4t)
 
 # Quick Start
