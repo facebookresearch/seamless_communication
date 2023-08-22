@@ -46,7 +46,7 @@ def init_parser() -> argparse.ArgumentParser:
         "--eval_dataset",
         type=Path,
         required=True,
-        help="Path to manifest with train samples",
+        help="Path to manifest with eval samples",
     )
     parser.add_argument(
         "--model_name",
@@ -117,9 +117,9 @@ def init_parser() -> argparse.ArgumentParser:
         choices=list(trainer.FinetuneMode),
         default=trainer.FinetuneMode.TEXT_TO_SPEECH,
         help=(
-            "* SPEECH_TO_SPEECH -- finetune S2T and T2U parts of the model;\n"
-            "* TEXT_TO_SPEECH -- finetune only T2U;\n"
-            "* SPEECH_TO_TEXT -- finetune only S2T"
+            "* `SPEECH_TO_SPEECH` -- finetune S2T and T2U parts of the model; "
+            "* `TEXT_TO_SPEECH` -- finetune only T2U; "
+            "* `SPEECH_TO_TEXT` -- finetune only S2T"
         ),
     )
     return parser

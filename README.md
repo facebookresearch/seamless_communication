@@ -73,7 +73,7 @@ To reproduce our results, or to evaluate using the same metrics over your own te
 
 ## Finetuning SeamlessM4T models
 
-TODO
+Please check out [README under scripts/m4t/finetune](scripts/m4t/finetune/README.md).
 
 ## On-device models
 Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/on_device_README.md)
