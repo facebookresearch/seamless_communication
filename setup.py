@@ -50,7 +50,7 @@ setup(
         "m4t_scripts": "scripts/m4t",
         "seamless_communication": "src/seamless_communication",
     },
-    package_data={"": ["seamless_communication/assets/cards/*.yaml"]},
+    package_data={"": ["assets/cards/*.yaml"]},
     description="SeamlessM4T -- Massively Multilingual & Multimodal Machine Translation Model",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
