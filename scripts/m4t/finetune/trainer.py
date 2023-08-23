@@ -12,16 +12,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Tuple
 
-import dataloader
-import dist_utils
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from fairseq2.models.sequence import SequenceModelOutput
-from fairseq2.models.unity import UnitYModel
 from fairseq2.optim.lr_scheduler import MyleLR
 from fairseq2.typing import Device
+from m4t_scripts.finetune import dataloader, dist_utils
 from torch.optim import Adam
+
+from seamless_communication.models.unity import UnitYModel
 
 logger = logging.getLogger(__name__)
 

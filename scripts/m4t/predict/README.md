@@ -16,27 +16,27 @@ The model can be specified with `--model_name` `seamlessM4T_large` or `seamlessM
 
 **S2ST**:
 ```bash
-python scripts/m4t/predict/predict.py <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
+m4t_predict <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
 ```
 
 **S2TT**:
 ```bash
-python scripts/m4t/predict/predict.py <path_to_input_audio> s2tt <tgt_lang>
+m4t_predict <path_to_input_audio> s2tt <tgt_lang>
 ```
 
 **T2TT**:
 ```bash
-python scripts/m4t/predict/predict.py <input_text> t2tt <tgt_lang> --src_lang <src_lang>
+m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 ```
 
 **T2ST**:
 ```bash
-python scripts/m4t/predict/predict.py <input_text> t2st <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
+m4t_predict <input_text> t2st <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
 ```
 
 **ASR**:
 ```bash
-python scripts/m4t/predict/predict.py <path_to_input_audio> asr <tgt_lang>
+m4t_predict <path_to_input_audio> asr <tgt_lang>
 ```
 
 Note that it takes 16kHz audio now. Here's how you could resample your audio:

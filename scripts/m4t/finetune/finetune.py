@@ -7,14 +7,11 @@
 import argparse
 import logging
 import os
-from argparse import Namespace
 from pathlib import Path
 
-import dataloader
-import dist_utils
 import torch
-import trainer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
+from m4t_scripts.finetune import dataloader, dist_utils, trainer
 
 from seamless_communication.models.unity import (
     UnitTokenizer,
@@ -115,7 +112,7 @@ def init_parser() -> argparse.ArgumentParser:
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
-        default=trainer.FinetuneMode.TEXT_TO_SPEECH,
+        default=trainer.FinetuneMode.SPEECH_TO_TEXT,
         help=(
             "* `SPEECH_TO_SPEECH` -- finetune S2T and T2U parts of the model; "
             "* `TEXT_TO_SPEECH` -- finetune only T2U; "
@@ -125,7 +122,8 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_finetune(args: Namespace) -> None:
+def main() -> None:
+    args = init_parser().parse_args()
     dist_utils.init_distributed([logger, trainer.logger])
     device = torch.device("cuda")
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
@@ -182,5 +180,4 @@ def run_finetune(args: Namespace) -> None:
 
 
 if __name__ == "__main__":
-    parser = init_parser()
-    run_finetune(parser.parse_args())
+    main()

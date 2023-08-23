@@ -9,8 +9,11 @@ import torch
 import torchaudio
 from seamless_communication.models.inference import Translator
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
