@@ -63,7 +63,7 @@ from seamless_communication.models.inference import Translator
 
 
 # Initialize a Translator object with a multitask model, vocoder on the GPU.
-translator = Translator("seamlessM4T_large", "vocoder_36langs", torch.device("cuda:0"))
+translator = Translator("seamlessM4T_large", "vocoder_36langs", torch.device("cuda:0"), torch.float16)
 ```
 
 Now `predict()` can be used to run inference as many times on any of the supported tasks.

@@ -53,10 +53,10 @@ class Translator(nn.Module):
         model_name_or_card: Union[str, AssetCard],
         vocoder_name_or_card: Union[str, AssetCard],
         device: Device,
+        dtype: DataType,
         sample_rate: int = 16000,
     ):
         super().__init__()
-        dtype = torch.float16 if "cuda" in device.type else torch.float32
         # Load the model.
         self.model: UnitYModel = self.load_model_for_inference(
             load_unity_model, model_name_or_card, device, dtype
