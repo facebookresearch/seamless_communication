@@ -11,6 +11,8 @@ This folder contains an example to run an exported small model covering most tas
 
 UnitY-Small-S2T is a pruned version of UnitY-Small without 2nd pass unit decoding.
 
+Note: If using pytorch runtime in python, only **pytorch<=1.11.0** is supported for **UnitY-Small(281M)**. We tested UnitY-Small-S2T(235M), it works with later versions. 
+
 ## Inference
 To use exported model, users don't need seamless_communication or fairseq2 dependency.
 ```python
