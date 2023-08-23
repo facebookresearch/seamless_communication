@@ -46,7 +46,7 @@ T2TT task:
 m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 ```
 
-Please refer to the [evaluation README](scripts/m4t/predict) for detailed instruction on how to run inference.
+Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference.
 
 # Libraries
 
@@ -74,17 +74,16 @@ As part of the seamless communication project, we've extended the stopes library
 We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T-Medium reported in the paper (as averages) in the `metrics` files above.
 
 ## Evaluating SeamlessM4T models
-To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/eval_README.md).
+To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out the [README here](docs/m4t/eval_README.md).
 
 ## Finetuning SeamlessM4T models
-
-Please check out [README under scripts/m4t/finetune](scripts/m4t/finetune/README.md).
+Please check out the [README here](scripts/m4t/finetune/README.md).
 
 ## On-device models
-Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out [README here](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/on_device_README.md)
+Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out the [README here](docs/m4t/on_device_README.md).
 
 ## SeamlessAlign mined dataset
-We open-source the metadata to SeamlessAlign, the largest open dataset for multimodal translation, totaling 270k+ hours of aligned Speech and Text data. The dataset can be rebuilt by the community based on the [SeamlessAlign readme](https://github.com/facebookresearch/seamless_communication/blob/main/docs/m4t/seamless_align_README.md).
+We open-source the metadata to SeamlessAlign, the largest open dataset for multimodal translation, totaling 270k+ hours of aligned Speech and Text data. The dataset can be rebuilt by the community based on the [SeamlessAlign readme](docs/m4t/seamless_align_README.md).
 
 # Citation
 If you use SeamlessM4T in your work or any models/datasets/artifacts published in SeamlessM4T, please cite :
