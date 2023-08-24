@@ -7,7 +7,8 @@
 
 import logging
 import os
-from typing import Any, Dict, Iterable, Optional
+from abc import abstractmethod
+from typing import Dict, Iterable, Optional
 
 import numpy as np
 import torch
@@ -16,6 +17,12 @@ from datasets import load_dataset
 from .datatypes import LangPairSample, MultimodalSample
 
 logger = logging.getLogger(__name__)
+
+
+class SpeechTokenizer:
+    @abstractmethod
+    def encode(self, wav: torch.Tensor, sample_rate: int) -> torch.Tensor:
+        ...
 
 
 class Speech2SpeechFleursDatasetBuilder:
@@ -32,7 +39,7 @@ class Speech2SpeechFleursDatasetBuilder:
         skip_target_audio: bool = True,
         audio_dtype: torch.dtype = torch.float32,
         dataset_cache_dir: Optional[str] = None,
-        speech_tokenizer: Optional[Any] = None,
+        speech_tokenizer: Optional[SpeechTokenizer] = None,
     ):
         self.source_lang = source_lang
         self.target_lang = target_lang
@@ -65,7 +72,11 @@ class Speech2SpeechFleursDatasetBuilder:
             waveform = None
         if self.speech_tokenizer is not None and not should_skip_audio:
             assert waveform is not None
-            units = self.speech_tokenizer.encode(waveform.unsqueeze(0))[0].tolist()
+            assert sampling_rate is not None
+            units_tensor = self.speech_tokenizer.encode(
+                waveform, sampling_rate
+            ).reshape(-1)
+            units = units_tensor.tolist()
         else:
             units = None
         return MultimodalSample(
