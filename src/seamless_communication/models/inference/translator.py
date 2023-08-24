@@ -54,7 +54,6 @@ class Translator(nn.Module):
         vocoder_name_or_card: Union[str, AssetCard],
         device: Device,
         dtype: DataType,
-        sample_rate: int = 16000,
     ):
         super().__init__()
         # Load the model.
@@ -80,22 +79,10 @@ class Translator(nn.Module):
         self.vocoder: Vocoder = self.load_model_for_inference(
             load_vocoder_model, vocoder_name_or_card, device, torch.float32
         )
-        self.sample_rate = sample_rate
 
     @staticmethod
     def load_model_for_inference(
         load_model_fn: Callable[..., nn.Module],
-        model_name_or_card: Union[str, AssetCard],
-        device: Device,
-        dtype: DataType,
-    ) -> nn.Module:
-        model = load_model_fn(model_name_or_card, device=device, dtype=dtype)
-        model.eval()
-        return model
-
-    @staticmethod
-    def load_model_for_inference(
-        load_model_fn: Any,
         model_name_or_card: Union[str, AssetCard],
         device: Device,
         dtype: DataType,
@@ -168,6 +155,7 @@ class Translator(nn.Module):
         src_lang: Optional[str] = None,
         spkr: Optional[int] = -1,
         ngram_filtering: bool = False,
+        sample_rate: int = 16000,
     ) -> Tuple[StringLike, Optional[List[Tensor]], Optional[int]]:
         """
         The main method used to perform inference on all tasks.
@@ -205,7 +193,7 @@ class Translator(nn.Module):
             else:
                 decoded_audio = {
                     "waveform": audio,
-                    "sample_rate": self.sample_rate,
+                    "sample_rate": sample_rate,
                     "format": -1,
                 }
             src = self.collate(self.convert_to_fbank(decoded_audio))["fbank"]
@@ -237,4 +225,4 @@ class Translator(nn.Module):
         else:
             units = unit_out.units[:, 1:][0].cpu().numpy().tolist()
             wav_out = self.vocoder(units, tgt_lang, spkr, dur_prediction=True)
-            return text_out.sentences[0], wav_out, self.sample_rate
+            return text_out.sentences[0], wav_out, sample_rate

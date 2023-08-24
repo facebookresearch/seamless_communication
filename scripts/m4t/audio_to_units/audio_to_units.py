@@ -6,11 +6,7 @@
 import argparse
 import logging
 import torch
-import torchaudio
 from seamless_communication.models.unit_extraction import UnitExtractor
-from seamless_communication.models.inference import Translator
-from seamless_communication.models.vocoder import load_vocoder_model, Vocoder
-from itertools import groupby
 
 
 logging.basicConfig(level=logging.INFO)
@@ -35,22 +31,10 @@ def main():
         default="xlsr2_1b_v2",
     )
     parser.add_argument(
-        "--vocoder_name", type=str, help="Vocoder name", default="vocoder_36langs"
-    )
-    parser.add_argument(
         "--out_layer_number",
         type=int,
         help="Layer number of the feature extraction model to pull out features from.",
         default=35,
-    )
-    parser.add_argument(
-        "--output_path",
-        type=str,
-        help="Path to save the generated audio.",
-        default=None,
-    )
-    parser.add_argument(
-        "--src_lang", type=str, help="Source language of the audio.", default=None
     )
 
     args = parser.parse_args()
@@ -64,27 +48,7 @@ def main():
 
     unit_extractor = UnitExtractor(args.model_name, args.kmeans_uri, device=device)
     units = unit_extractor.predict(args.audio, args.out_layer_number - 1)
-
-    if args.output_path is not None:
-
-        if args.src_lang is None:
-            raise ValueError("src_lang must be provided to resynthesize the audio.")
-
-        def reduce_list(lst):
-            return [key for key, _ in groupby(lst)]
-
-        reduced_units = reduce_list(units.cpu().tolist())
-
-        vocoder: Vocoder = Translator.load_model_for_inference(
-            load_vocoder_model, args.vocoder_name, device, torch.float32
-        )
-        wav = vocoder(reduced_units, args.src_lang, spkr=-1, dur_prediction=True)
-
-        torchaudio.save(
-            args.output_path,
-            wav[0].cpu(),
-            sample_rate=16000,
-        )
+    logger.info(f"Converted to units: {units}")
 
 
 if __name__ == "__main__":

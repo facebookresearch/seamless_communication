@@ -7,7 +7,6 @@
 import torch
 from torch import Tensor, nn
 import numpy as np
-from pathlib import Path
 from fairseq2.typing import Device
 from seamless_communication.assets import download_manager
 
@@ -20,10 +19,8 @@ class KmeansModel(nn.Module):
         centroids_numpy = km_model.transpose()
         centroids = torch.from_numpy(centroids_numpy)
 
-        self.centroids = nn.Parameter(centroids, requires_grad=False).to(device)
-        self.centroid_norm = nn.Parameter(
-            (centroids**2).sum(0, keepdims=True), requires_grad=False
-        ).to(device)
+        self.centroids = centroids.to(device)
+        self.centroid_norm = (self.centroids**2).sum(0, keepdims=True)
 
     def forward(self, x: Tensor) -> Tensor:
         dist: Tensor = (

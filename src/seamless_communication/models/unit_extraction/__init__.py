@@ -10,8 +10,5 @@ from seamless_communication.models.unit_extraction.kmeans import (
     KmeansModel as KmeansModel,
 )
 from seamless_communication.models.unit_extraction.wav2vec2_layer_output import (
-    load_wav2vec2_layer_output_model as load_wav2vec2_layer_output_model,
-)
-from seamless_communication.models.unit_extraction.wav2vec2_layer_output import (
     Wav2Vec2LayerOutputModel as Wav2Vec2LayerOutputModel,
 )
