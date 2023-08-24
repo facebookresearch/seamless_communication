@@ -113,7 +113,9 @@ class VocoderBuilder:
             self.config.spkr_embedding_dim,
             self.config.num_spkrs,
         )
-        return Vocoder(code_generator, self.config.lang_spkr_idx_map)
+        vocoder = Vocoder(code_generator, self.config.lang_spkr_idx_map)
+        vocoder.to(dtype=self.dtype)
+        return vocoder
 
 
 def create_vocoder_model(

@@ -81,7 +81,7 @@ def main():
         logger.info(f"Saving translated audio in {args.tgt_lang}")
         torchaudio.save(
             args.output_path,
-            wav[0].cpu(),
+            wav[0].to(torch.float32).cpu(),
             sample_rate=sr,
         )
     logger.info(f"Translated text in {args.tgt_lang}: {translated_text}")
