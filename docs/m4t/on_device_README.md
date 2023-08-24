@@ -1,17 +1,18 @@
-# On-device Models
+# On-device Models [Experimental]
 
 Apart from SeamlessM4T-LARGE (2.3B) and SeamlessM4T-MEDIUM (1.2B) models, we are also developing a small model (281M) targeting for on-device inference.
 This folder contains an example to run an exported small model covering most tasks (ASR/S2TT/S2ST). The model could be executed on popular mobile devices with Pytorch Mobile (https://pytorch.org/mobile/home/).
 
+## Updates
+[2023/8/23] Uploaded new on-device models with several fixes to reduce size and avoid OOM. Metrics should be close to what's reported below, will rerun eval and update.   
+
 ## Overview
 | Model   | Checkpoint | Num Params | Disk Size | Supported Tasks         | Supported Languages|
 |---------|------------|----------|-------------|------------|-------------------------|
-| UnitY-Small|[🤗 Model card](https://huggingface.co/facebook/seamless-m4t-unity-small) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-unity-small/resolve/main/unity_on_device.ptl) | 281M | 862MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
-| UnitY-Small-S2T |[🤗 Model card](https://huggingface.co/facebook/seamless-m4t-unity-small-s2t) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-unity-small-s2t/resolve/main/unity_on_device_s2t.ptl) | 235M | 637MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
+| UnitY-Small|[🤗 Model card](https://huggingface.co/facebook/seamless-m4t-unity-small) - [checkpoint](https://dl.fbaipublicfiles.com/seamlessM4T/models/small_fixed/unity_on_device.ptl) | 281M | 747MB        | S2ST, S2TT, ASR |eng, fra, hin, por, spa|
+| UnitY-Small-S2T |[🤗 Model card](https://huggingface.co/facebook/seamless-m4t-unity-small-s2t) - [checkpoint](https://dl.fbaipublicfiles.com/seamlessM4T/models/small_fixed/unity_on_device_s2t.ptl) | 235M | 481MB        | S2TT, ASR    |eng, fra,hin,  por, spa|
 
 UnitY-Small-S2T is a pruned version of UnitY-Small without 2nd pass unit decoding.
-
-Note: If using pytorch runtime in python, only **pytorch<=1.11.0** is supported for **UnitY-Small(281M)**. We tested UnitY-Small-S2T(235M), it works with later versions. 
 
 ## Inference
 To use exported model, users don't need seamless_communication or fairseq2 dependency.
