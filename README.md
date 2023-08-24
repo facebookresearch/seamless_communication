@@ -48,6 +48,21 @@ m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 
 Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference.
 
+## Docker
+
+Here’s how you run Seamless Communication on Docker for Windows
+
+Build:
+```cmd
+.\build.bat
+```
+Running inference:
+```bash
+.\run.bat
+```
+
+Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference.
+
 # Libraries
 
 Seamless Communication depends on 3 libraries developed by Meta.
