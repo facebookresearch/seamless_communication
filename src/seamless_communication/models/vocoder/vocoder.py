@@ -8,7 +8,7 @@ from typing import List, Optional
 
 import torch
 import torch.nn as nn
-from fairseq2.typing import Device
+from torch import Tensor
 
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
 
@@ -25,7 +25,7 @@ class Vocoder(nn.Module):
         lang: str,
         spkr: Optional[int] = -1,
         dur_prediction: bool = True,
-    ):
+    ) -> Tensor:
         x = {
             "code": torch.LongTensor(code).view(1, -1),
         }

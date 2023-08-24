@@ -66,6 +66,7 @@ setup(
             "m4t_predict=m4t_scripts.predict.predict:main",
             "m4t_finetune=m4t_scripts.finetune.finetune:main",
             "m4t_prepare_dataset=m4t_scripts.finetune.dataset:main",
+            "m4t_audio_to_units=m4t_scripts.audio_to_units.audio_to_units:main",
         ],
     },
     cmdclass={"develop": cmd_for_editable_mode},

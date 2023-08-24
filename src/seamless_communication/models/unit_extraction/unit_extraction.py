@@ -50,7 +50,7 @@ class UnitExtractor(nn.Module):
     @torch.inference_mode()
     def predict(
         self,
-        audio: Union[str, torch.Tensor],
+        audio: Union[str, Tensor],
         out_layer_idx: int,
         sample_rate: int = 16000,
     ) -> Tensor:
@@ -74,7 +74,12 @@ class UnitExtractor(nn.Module):
         return units
 
     @staticmethod
-    def resynthesize_audio(units, src_lang, device, vocoder_name="vocoder_36langs"):
+    def resynthesize_audio(
+        units: Tensor,
+        src_lang: str,
+        device: Device,
+        vocoder_name: str = "vocoder_36langs",
+    ) -> Tensor:
         def reduce_list(lst):
             return [key for key, _ in groupby(lst)]
 
