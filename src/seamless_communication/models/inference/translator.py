@@ -116,12 +116,10 @@ class Translator(nn.Module):
                 unit_max_len_a = 1
 
         text_opts = SequenceGeneratorOptions(
-            beam_size=5,
-            soft_max_seq_len=(text_max_len_a, text_max_len_b)
+            beam_size=5, soft_max_seq_len=(text_max_len_a, text_max_len_b)
         )
         unit_opts = SequenceGeneratorOptions(
-            beam_size=5,
-            soft_max_seq_len=(unit_max_len_a, unit_max_len_b or 50)
+            beam_size=5, soft_max_seq_len=(unit_max_len_a, unit_max_len_b or 50)
         )
 
         if ngram_filtering:
