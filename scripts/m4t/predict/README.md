@@ -38,8 +38,9 @@ m4t_predict <input_text> t2st <tgt_lang> --src_lang <src_lang> --output_path <pa
 ```bash
 m4t_predict <path_to_input_audio> asr <tgt_lang>
 ```
+Please set --ngram-filtering to True to get the same translation performance as the [demo](https://seamless.metademolab.com/).
 
-Note that it takes 16kHz audio now. Here's how you could resample your audio:
+The input audio must be 16kHz currently. Here's how you could resample your audio:
 ```python
 import torchaudio
 resample_rate = 16000
