@@ -113,9 +113,11 @@ translated_text, _, _ = translator.predict(<input_text>, "t2tt", <tgt_lang>, src
 Note that `<src_lang>` must be specified for T2TT
 
 ## Supported languages
-Listed below, are the languages supported by SeamlessM4T models.
+Listed below, are the languages supported by SeamlessM4T-large.
 The `source` column specifies whether a language is supported as source speech (`Sp`) and/or source text (`Tx`).
 The `target` column specifies whether a language is supported as target speech (`Sp`) and/or target text (`Tx`).
+
+Note that seamlessM4T-medium supports 200 languages and is based on NLLB-200 (see full list in [asset card](src/seamless_communication/assets/cards/unity_nllb-200.yaml))
 
 | code | language               | script     | Source | Target |
 | ---- | ---------------------- | ---------- | ------ | ------ |
@@ -135,7 +137,8 @@ The `target` column specifies whether a language is supported as target speech (
 | ceb  | Cebuano                | Latn       | Sp, Tx | Tx     |
 | ces  | Czech                  | Latn       | Sp, Tx | Sp, Tx |
 | ckb  | Central Kurdish        | Arab       | Sp, Tx | Tx     |
-| cmn  | Mandarin Chinese       | Hans, Hant | Sp, Tx | Sp, Tx |
+| cmn  | Mandarin Chinese       | Hans       | Sp, Tx | Sp, Tx |
+| cmn_Hant  | Mandarin Chinese  | Hant       | Sp, Tx | Sp, Tx |
 | cym  | Welsh                  | Latn       | Sp, Tx | Sp, Tx |
 | dan  | Danish                 | Latn       | Sp, Tx | Sp, Tx |
 | deu  | German                 | Latn       | Sp, Tx | Sp, Tx |
