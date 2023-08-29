@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
+# All rights reserved.
+# This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
@@ -107,7 +107,6 @@ class Translator(nn.Module):
         unit_max_len_a: Optional[int] = None,
         unit_max_len_b: Optional[int] = None,
     ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
-
         if unit_max_len_a is None:
             # need to adjust this for T2ST since src_len is smaller for text.
             if input_modality == Modality.TEXT:
