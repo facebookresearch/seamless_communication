@@ -114,7 +114,7 @@ class ASRBleu:
         torch.cuda.empty_cache()
 
 		# Initialize the vocoder
-        self.vocoder: Vocoder = Translator.load_model_for_inference(
+        vocoder: Vocoder = Translator.load_model_for_inference(
             load_model_fn=load_vocoder_model,
             model_name_or_card="vocoder_36langs",
             device=device,
@@ -124,7 +124,7 @@ class ASRBleu:
         # Generate and save audio
         for i, unit in enumerate(unit_out):
             units = unit.units[:, 1:][0].cpu().numpy().tolist()
-            wav_out = self.vocoder(units, tgt_lang, -1, dur_prediction=True)
+            wav_out = vocoder(units, tgt_lang, -1, dur_prediction=True)
             with open(self.output_path + f"/output_waveforms/{i}_spk.wav", "w+") as _:
                 pass
             torchaudio.save(
