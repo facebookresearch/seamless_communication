@@ -22,7 +22,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="M4T inference on supported tasks using Translator."
     )
-    parser.add_argument("input", type=str, help="Audio WAV file path.")
+    parser.add_argument("input_path", type=str, help="Audio WAV files path.")
+    parser.add_argument("reference_path", type=str, help="Path to ground truth reference file")
     parser.add_argument(
         "tgt_lang", type=str, help="Target language to translate/transcribe into."
     )
@@ -33,9 +34,15 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--audio_format",
+        type=str,
+        help="Format of audio file (eg. n_pred.wav).",
+        default="n_pred.wav"
+    )
+    parser.add_argument(
         "--output_path",
         type=str,
-        help="Path to save the generated audio.",
+        help="Path to save results.",
         default=None,
     )
     parser.add_argument(
@@ -60,9 +67,11 @@ def main():
         args.output_path,
     )
     asrbleu.compute_asr_bleu(
-        args.input,
+        args.input_path,
+        args.reference_path,
         args.tgt_lang,
         args.src_lang,
+        args.audio_format,
         args.model_name,
         device,
         dtype,
