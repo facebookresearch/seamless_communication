@@ -45,7 +45,9 @@ def download_datasets(language_pairs, num_datasets, output_directory):
 
         logger.info(f"Downloading datasets for language pair: {lang_pair}")
 
-        # cache_dir = output_directory / "cache"
+        cache_dir = os.path.join(output_directory, "cache")
+
+
 
         dataset_builder = Speech2SpeechFleursDatasetBuilder(
             source_lang=source_lang,
@@ -54,7 +56,7 @@ def download_datasets(language_pairs, num_datasets, output_directory):
             skip_source_audio=False,
             skip_target_audio=False,
             audio_dtype=torch.float32,
-            dataset_cache_dir=None,
+            dataset_cache_dir=cache_dir,
             speech_tokenizer=None,
         )
 
