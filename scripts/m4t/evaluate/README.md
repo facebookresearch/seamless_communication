@@ -6,7 +6,7 @@ Evaluation is run with the CLI, from the root directory of the repository. Curre
 ### Usage:
 
 ```bash
-m4t_evaluate <path_to_input_audio> <path_to_reference_text> <tgt_lang> --src_lang <src_lang> --audio_format <audio_format> --output_path <path_to_output_dir> --model_name <model_name>
+m4t_evaluate <path_to_input_audio> <path_to_reference_text> <tgt_lang> --src_lang <src_lang> --audio_format <audio_format> --output_path <path_to_output_dir> --dataset_name <dataset_name> --save_first_pass <true/false> --model_name <model_name>
 ```
 
 ## Evaluation breakdown
