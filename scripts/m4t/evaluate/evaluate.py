@@ -46,6 +46,18 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--dataset_name",
+        type=str,
+        help="Name of passed dataset.",
+        default="",
+    )
+    parser.add_argument(
+        "--save_first_pass",
+        type=bool,
+        help="Save first pass text data and BLEU score.",
+        default=True,
+    )
+    parser.add_argument(
         "--model_name",
         type=str,
         help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
@@ -72,6 +84,8 @@ def main():
         args.tgt_lang,
         args.src_lang,
         args.audio_format,
+        args.dataset_name,
+        args.save_first_pass,
         args.model_name,
         device,
         dtype,

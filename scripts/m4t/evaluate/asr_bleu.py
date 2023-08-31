@@ -43,6 +43,8 @@ class ASRBleu:
         tgt_lang: str,
         src_lang: str,
         audio_format: str,
+        dataset_name: str,
+        save_first_pass: bool,
         model_name: str,
         device: str,
         dtype: str,
@@ -80,7 +82,9 @@ class ASRBleu:
         # Generate and save text and unit outputs
         text_out = []
         unit_out = []
-        with open(self.output_path + f"first-pass-{src_lang}-{tgt_lang}_ref_pred.txt", "w+") as first_pass_file:
+        with open(self.output_path + f"/generate-{dataset_name}_{src_lang}-{tgt_lang}.unit", "w+") as unit_file:
+            if save_first_pass:
+                first_pass_file = open(self.output_path + f"/first-pass-{dataset_name}_{src_lang}-{tgt_lang}_ref_pred.txt", "w+")
             for i in itertools.count():
                 filename = audio_format.replace("n", str(i))
                 try:
@@ -97,18 +101,22 @@ class ASRBleu:
                         tgt_lang=tgt_lang,
                     )
                     text_out.append(str(result[0].sentences[0]))
-                    first_pass_file.write(text_out[i] + "\n")
+                    if save_first_pass:
+                        first_pass_file.write(f"{text_out[i]}\n")
                     unit_out.append(result[1])
+                    unit_file.write(f"{unit_out[i]}\n")
                 except FileNotFoundError:
                     break
 
         # First pass BLEU score computation and save
         tokenizer = "char" if tgt_lang in ["cmn", "jpn", "tha", "lao", "mya"] else "13a"
         bleu_metric = sacrebleu.BLEU(tokenize=tokenizer)
-        bleu_score = bleu_metric.corpus_score(text_out, [reference])
-        first_pass_bleu = self.output_path + f"/{src_lang}-{tgt_lang}_first_pass_bleu.json"
-        with open(first_pass_bleu, "w+") as f: 
-            f.write( bleu_score.format(signature=str(bleu_metric.get_signature()), is_json=True))
+        if save_first_pass:
+            first_pass_file.close()
+            bleu_score = bleu_metric.corpus_score(text_out, [reference])
+            first_pass_bleu = self.output_path + f"/{dataset_name}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
+            with open(first_pass_bleu, "w+") as f: 
+                f.write( bleu_score.format(signature=str(bleu_metric.get_signature()), is_json=True))
 
         # Free GPU memory
         torch.cuda.empty_cache()
@@ -125,15 +133,15 @@ class ASRBleu:
         for i, unit in enumerate(unit_out):
             units = unit.units[:, 1:][0].cpu().numpy().tolist()
             wav_out = vocoder(units, tgt_lang, -1, dur_prediction=True)
-            with open(self.output_path + f"/output_waveforms/{i}_spk.wav", "w+") as _:
+            with open(self.output_path + f"/output_waveforms/{i}_pred.wav", "w+") as _:
                 pass
             torchaudio.save(
-                self.output_path + f"/output_waveforms/{i}_spk.wav",
+                self.output_path + f"/output_waveforms/{i}_pred.wav",
                 wav_out[0].to(torch.float32).cpu(),
                 sample_rate=16000,
             )
 
-		# Free GPU memory	
+		# Free GPU memory
         torch.cuda.empty_cache()
 
 		# Initialize the Whisper model
@@ -141,16 +149,15 @@ class ASRBleu:
 
         # Generate and save transcriptions
         transcriptions = []
-        with open(self.output_path + f"/generate-{src_lang}-{tgt_lang}.unit", "w+") as transcriptions_file:
-            for i in range(len(unit_out)):
-                filename = "n_spk.wav".replace("n", str(i))
+        with open(self.output_path + f"/{dataset_name}_{src_lang}-{tgt_lang}_ref_pred.tsv", "w+") as transcriptions_file:
+            for i in range(len(reference)):
+                filename = "n_pred.wav".replace("n", str(i))
                 transcription = normalizer(whisper_model.transcribe(self.output_path + f"/output_waveforms/{filename}", temperature=0, beam_size=1)["text"])
                 transcriptions.append(transcription)
-                transcriptions_file.write(transcription + "\n")
+                transcriptions_file.write(f"{i}\t{reference[i]}\t{transcription}\n")
 
         # Compute and save BLEU score
-        bleu_metric = sacrebleu.BLEU(tokenize=tokenizer)
         bleu_score = bleu_metric.corpus_score(transcriptions, [reference])
-        bleu_filename = self.output_path + f"/{src_lang}-{tgt_lang}_bleu.json"
+        bleu_filename = self.output_path + f"/{dataset_name}_{src_lang}-{tgt_lang}_bleu.json"
         with open(bleu_filename, "w+") as f: 
             f.write(bleu_score.format(signature=str(bleu_metric.get_signature()), is_json=True))
