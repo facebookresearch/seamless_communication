@@ -21,6 +21,11 @@ def make_directories(*paths):
     for path in paths:
         os.makedirs(path, exist_ok=True)
 
+def combine_texts(texts, output_path):
+    with open(output_path, 'w') as output_file:
+        for text in texts:
+            output_file.write(text + '\n')
+
 def download_datasets(languages, num_datasets_per_language, output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -54,6 +59,8 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
         )
 
         dataset_count = 0
+        source_texts = []  
+        target_texts = []  
 
         for lang_pair_sample in dataset_builder:
             source_sample = lang_pair_sample.source
@@ -72,14 +79,8 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             wavfile.write(source_audio_path, source_sample.sampling_rate, source_audio)
             wavfile.write(target_audio_path, target_sample.sampling_rate, target_audio)
 
-            source_text_path = os.path.join(lang_source_text_dir, f"source_{dataset_count}.txt")
-            target_text_path = os.path.join(lang_target_text_dir, f"target_{dataset_count}.txt")
-
-            with open(source_text_path, 'w') as source_file:
-                source_file.write(source_text)
-
-            with open(target_text_path, 'w') as target_file:
-                target_file.write(target_text)
+            source_texts.append(source_text)
+            target_texts.append(target_text)
 
             logger.info(f"Dataset {dataset_count} - Source Audio Path: {source_audio_path}")
             logger.info(f"Dataset {dataset_count} - Source Language: {source_sample.lang}")
@@ -91,10 +92,14 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             if dataset_count >= num_datasets_per_language:
                 break
 
+        
+        combine_texts(source_texts, os.path.join(lang_source_text_dir, 'source_references.txt'))
+        combine_texts(target_texts, os.path.join(lang_target_text_dir, 'target_references.txt'))
+
         logger.info(f"Downloaded and saved {dataset_count} datasets for language: {lang}")
         print("=" * 100)
 
-languages = ["hi_in", 'af_za']
+languages = ["hi_in", "af_za"]
 num_datasets_per_language = 10
 output_directory = "./downloaded_data"
 
