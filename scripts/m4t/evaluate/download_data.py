@@ -6,9 +6,9 @@
 
 import logging
 import os
-from seamless_communication.datasets.huggingface import Speech2SpeechFleursDatasetBuilder
 import torch
-
+import scipy.io.wavfile as wavfile
+from seamless_communication.datasets.huggingface import Speech2SpeechFleursDatasetBuilder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,11 +17,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 def make_directories(*paths):
     for path in paths:
         os.makedirs(path, exist_ok=True)
-
 
 def download_datasets(languages, num_datasets_per_language, output_directory):
     if not os.path.exists(output_directory):
@@ -61,9 +59,8 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             source_sample = lang_pair_sample.source
             target_sample = lang_pair_sample.target
 
-            #TODO Figure out how to save audio files correctly
-            source_audio = source_sample.waveform.numpy().tobytes()
-            target_audio = target_sample.waveform.numpy().tobytes()
+            source_audio = source_sample.waveform.numpy()
+            target_audio = target_sample.waveform.numpy()
 
             source_text = source_sample.text
             target_text = target_sample.text
@@ -71,14 +68,12 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             source_audio_path = os.path.join(lang_source_audio_dir, f"source_{dataset_count}.wav")
             target_audio_path = os.path.join(lang_target_audio_dir, f"target_{dataset_count}.wav")
 
+            # Save audio data as WAV files
+            wavfile.write(source_audio_path, source_sample.sampling_rate, source_audio)
+            wavfile.write(target_audio_path, target_sample.sampling_rate, target_audio)
+
             source_text_path = os.path.join(lang_source_text_dir, f"source_{dataset_count}.txt")
             target_text_path = os.path.join(lang_target_text_dir, f"target_{dataset_count}.txt")
-
-            with open(source_audio_path, 'wb') as source_file:
-                source_file.write(source_audio)
-
-            with open(target_audio_path, 'wb') as target_file:
-                target_file.write(target_audio)
 
             with open(source_text_path, 'w') as source_file:
                 source_file.write(source_text)
@@ -98,7 +93,6 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
 
         logger.info(f"Downloaded and saved {dataset_count} datasets for language: {lang}")
         print("=" * 100)
-# Languages : Hindi & Afrikaans
 
 languages = ["hi_in", 'af_za']
 num_datasets_per_language = 10
