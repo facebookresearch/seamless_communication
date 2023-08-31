@@ -6,9 +6,11 @@
 
 import logging
 import os
-import torch
+
 import scipy.io.wavfile as wavfile
-from seamless_communication.datasets.huggingface import Speech2SpeechFleursDatasetBuilder
+import torch
+from seamless_communication.datasets.huggingface import \
+    Speech2SpeechFleursDatasetBuilder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,14 +19,17 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
 def make_directories(*paths):
     for path in paths:
         os.makedirs(path, exist_ok=True)
 
+
 def combine_texts(texts, output_path):
-    with open(output_path, 'w') as output_file:
+    with open(output_path, "w") as output_file:
         for text in texts:
-            output_file.write(text + '\n')
+            output_file.write(text + "\n")
+
 
 def download_datasets(languages, num_datasets_per_language, output_directory):
     if not os.path.exists(output_directory):
@@ -32,17 +37,17 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
 
     for lang in languages:
         lang_output_dir = os.path.join(output_directory, lang)
-        lang_source_audio_dir = os.path.join(lang_output_dir, 'source_audio')
-        lang_target_text_dir = os.path.join(lang_output_dir, 'target_text')
-        lang_source_text_dir = os.path.join(lang_output_dir, 'source_text')
-        lang_target_audio_dir = os.path.join(lang_output_dir, 'target_audio')
+        lang_source_audio_dir = os.path.join(lang_output_dir, "source_audio")
+        lang_target_text_dir = os.path.join(lang_output_dir, "target_text")
+        lang_source_text_dir = os.path.join(lang_output_dir, "source_text")
+        lang_target_audio_dir = os.path.join(lang_output_dir, "target_audio")
 
         make_directories(
             lang_output_dir,
             lang_source_audio_dir,
             lang_target_text_dir,
             lang_source_text_dir,
-            lang_target_audio_dir
+            lang_target_audio_dir,
         )
 
         logger.info(f"Downloading datasets for language: {lang}")
@@ -59,8 +64,8 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
         )
 
         dataset_count = 0
-        source_texts = []  
-        target_texts = []  
+        source_texts = []
+        target_texts = []
 
         for lang_pair_sample in dataset_builder:
             source_sample = lang_pair_sample.source
@@ -72,8 +77,12 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             source_text = source_sample.text
             target_text = target_sample.text
 
-            source_audio_path = os.path.join(lang_source_audio_dir, f"source_{dataset_count}.wav")
-            target_audio_path = os.path.join(lang_target_audio_dir, f"target_{dataset_count}.wav")
+            source_audio_path = os.path.join(
+                lang_source_audio_dir, f"source_{dataset_count}.wav"
+            )
+            target_audio_path = os.path.join(
+                lang_target_audio_dir, f"target_{dataset_count}.wav"
+            )
 
             # Save audio data as WAV files
             wavfile.write(source_audio_path, source_sample.sampling_rate, source_audio)
@@ -82,9 +91,15 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             source_texts.append(source_text)
             target_texts.append(target_text)
 
-            logger.info(f"Dataset {dataset_count} - Source Audio Path: {source_audio_path}")
-            logger.info(f"Dataset {dataset_count} - Source Language: {source_sample.lang}")
-            logger.info(f"Dataset {dataset_count} - Target Language: {target_sample.lang}")
+            logger.info(
+                f"Dataset {dataset_count} - Source Audio Path: {source_audio_path}"
+            )
+            logger.info(
+                f"Dataset {dataset_count} - Source Language: {source_sample.lang}"
+            )
+            logger.info(
+                f"Dataset {dataset_count} - Target Language: {target_sample.lang}"
+            )
             logger.info(f"Dataset {dataset_count} - Target Text: {target_text}")
             print("=" * 100)
 
@@ -92,12 +107,18 @@ def download_datasets(languages, num_datasets_per_language, output_directory):
             if dataset_count >= num_datasets_per_language:
                 break
 
-        
-        combine_texts(source_texts, os.path.join(lang_source_text_dir, 'source_references.txt'))
-        combine_texts(target_texts, os.path.join(lang_target_text_dir, 'target_references.txt'))
+        combine_texts(
+            source_texts, os.path.join(lang_source_text_dir, "source_references.txt")
+        )
+        combine_texts(
+            target_texts, os.path.join(lang_target_text_dir, "target_references.txt")
+        )
 
-        logger.info(f"Downloaded and saved {dataset_count} datasets for language: {lang}")
+        logger.info(
+            f"Downloaded and saved {dataset_count} datasets for language: {lang}"
+        )
         print("=" * 100)
+
 
 languages = ["hi_in", "af_za"]
 num_datasets_per_language = 10

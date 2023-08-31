@@ -6,9 +6,9 @@
 
 import argparse
 import logging
+
 import torch
 from m4t_scripts.evaluate.asr_bleu import ASRBleu
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,10 +23,10 @@ def main():
         description="M4T inference on supported tasks using Translator."
     )
     parser.add_argument("input_path", type=str, help="Audio WAV files path.")
-    parser.add_argument("reference_path", type=str, help="Path to ground truth reference file")
     parser.add_argument(
-        "tgt_lang", type=str, help="Target language to translate/transcribe into."
+        "reference_path", type=str, help="Path to ground truth reference file"
     )
+    parser.add_argument("tgt_lang", type=str, help="Target language for translation.")
     parser.add_argument(
         "--src_lang",
         type=str,
@@ -37,7 +37,7 @@ def main():
         "--audio_format",
         type=str,
         help="Format of audio file (eg. n_pred.wav).",
-        default="n_pred.wav"
+        default="n_pred.wav",
     )
     parser.add_argument(
         "--output_path",
@@ -90,6 +90,7 @@ def main():
         device,
         dtype,
     )
+
 
 if __name__ == "__main__":
     main()
