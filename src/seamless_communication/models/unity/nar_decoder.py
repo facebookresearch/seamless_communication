@@ -15,6 +15,7 @@ from fairseq2.nn.transformer import (
     LayerNorm,
     TransformerDecoderLayer,
     MultiheadAttention,
+    TransformerNormOrder,
 )
 from fairseq2.typing import DataType, Device, finaloverride
 
@@ -28,17 +29,15 @@ class Conv1dBlock(Module):
     """Represents the Conv1d block within the FFT Block as described in
     :cite:t:`https://arxiv.org/pdf/1905.09263.pdf`."""
 
-    inner_layer: Conv1d
-    inner_dropout: Optional[Dropout]
-    inner_norm: Optional[LayerNorm]
-    outer_layer: Conv1d
+    conv1: Conv1d
+    activation: ReLU
+    conv2: Conv1d
 
     def __init__(
         self,
         model_dim: int,
         inner_dim: int,
         kernel_size: int,
-        inner_dropout_p: float = 0.0,
         bias: bool = True,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -47,19 +46,12 @@ class Conv1dBlock(Module):
         :param model_dim:
             The dimensionality of the model.
         :param inner_dim:
-            The dimensionality of the inner projection layer.
+            The inner dimensionality between the two convolutional layers.
         :param kernel_size:
             The kernel size of the Conv1d layers.
-        :param inner_activation:
-            The activation to apply to outputs of the inner projection layer. If
-            ``None``, :func:`~torch.nn.ReLU` will be used.
-        :param inner_dropout_p:
-            The dropout probability on outputs of the inner projection layer.
         :param bias:
             If ``True``, both the inner and output projections learn an additive
             bias.
-        :param layer_norm_fn:
-            The factory to use to construct the Layer Normalization module.
         """
         super().__init__(model_dim)
 
@@ -74,7 +66,7 @@ class Conv1dBlock(Module):
             dtype=dtype,
         )
 
-        self.inner_activation = ReLU()
+        self.activation = ReLU()
 
         self.conv2 = Conv1d(
             inner_dim,
@@ -87,52 +79,46 @@ class Conv1dBlock(Module):
             dtype=dtype,
         )
 
-        if inner_dropout_p > 0.0:
-            self.inner_dropout = Dropout(inner_dropout_p)
-        else:
-            self.register_module("inner_dropout", None)
-
-        self.layer_norm = create_default_layer_norm(inner_dim, device, dtype)
-
     @finaloverride
     def forward(self, seqs: Tensor) -> Tensor:
-        # TODO: Should I transpose seqs?
-        residual = seqs
+        # (N, S, M) -> (N, M, S)
+        seqs = seqs.transpose(1, 2)
 
+        # (N, M, S) -> (N, inner_dim, S)
         seqs = self.conv1(seqs)
 
-        seqs = self.inner_activation(seqs)
+        seqs = self.activation(seqs)
 
+        # (N, inner_dim, S) -> (N, M, S)
         seqs = self.conv2(seqs)
 
-        if self.inner_dropout is not None:
-            seqs = self.inner_dropout(seqs)
-
-        seqs = seqs + residual
-
-        seqs = self.layer_norm(seqs)
+        # (N, M, S) -> (N, S, M)
+        seqs = seqs.transpose(1, 2)
 
         return seqs
 
 
 @final
 class NARTransformerDecoderLayer(TransformerDecoderLayer):
-    """Represents a Transformer decoder layer as described in
-    :cite:t:`https://doi.org/10.48550/arxiv.1706.03762`."""
+    """Represents the FFT Block as described in
+    :cite:t:`https://arxiv.org/pdf/1905.09263.pdf`."""
 
     self_attn: MultiheadAttention
     self_attn_norm: Optional[LayerNorm]
     self_attn_dropout: Optional[Dropout]
     self_attn_layer_norm: LayerNorm
-    conv1d_block: Conv1dBlock
+    conv1d: Conv1dBlock
     conv1d_dropout: Optional[Dropout]
     conv1d_layer_norm: LayerNorm
+    norm_order: TransformerNormOrder
 
     def __init__(
         self,
         self_attn: MultiheadAttention,
-        conv1d_block: Conv1dBlock,
+        conv1d: Conv1dBlock,
         dropout_p: float = 0.1,
+        conv1d_dropout_p: float = 0.1,
+        norm_order: TransformerNormOrder = TransformerNormOrder.POST,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -142,8 +128,11 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         :param ffn:
             The feed-forward network.
         :param dropout_p:
-            The dropout probability on outputs of the attention layers and the
-            feed-forward network.
+            The dropout probability on the outputs of the self attention layer.
+        :param conv1d_dropout_p:
+            The dropout probability on the outputs of the conv1d block.
+        :param norm_order:
+            The Layer Normalization order to use.
         :param layer_norm_fn:
             The factory to use to construct the Layer Normalization modules.
         """
@@ -154,29 +143,44 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         if layer_norm_fn is None:
             layer_norm_fn = create_default_layer_norm
 
+        self_attn_layer_norm = layer_norm_fn(model_dim, device, dtype)
+
+        if norm_order != TransformerNormOrder.POST:
+            self.self_attn_layer_norm = self_attn_layer_norm
+
         self.self_attn = self_attn
+
+        if norm_order == TransformerNormOrder.PRE_WITH_NORMFORMER:
+            self.self_attn_norm = layer_norm_fn(model_dim, device, dtype)
+        else:
+            self.register_module("self_attn_norm", None)
 
         if dropout_p > 0.0:
             self.self_attn_dropout = Dropout(dropout_p)
         else:
             self.register_module("self_attn_dropout", None)
 
-        self.self_attn_layer_norm = layer_norm_fn(model_dim, device, dtype)
-
-        self.conv1d_block = conv1d_block
-
-        if dropout_p > 0.0:
-            self.conv1d_dropout = Dropout(dropout_p)
-        else:
-            self.register_module("conv1d_dropout", None)
+        if norm_order == TransformerNormOrder.POST:
+            self.self_attn_layer_norm = self_attn_layer_norm
 
         conv1d_layer_norm = layer_norm_fn(model_dim, device, dtype)
 
-        self.conv1d_layer_norm = conv1d_layer_norm
+        if norm_order != TransformerNormOrder.POST:
+            self.conv1d_layer_norm = conv1d_layer_norm
+
+        self.conv1d = conv1d
+
+        if conv1d_dropout_p > 0.0:
+            self.conv1d_dropout = Dropout(conv1d_dropout_p)
+        else:
+            self.register_module("conv1d_dropout", None)
+
+        if norm_order == TransformerNormOrder.POST:
+            self.conv1d_layer_norm = conv1d_layer_norm
+
+        self.norm_order = norm_order
 
         check_model_dim(self)
-
-        self.reset_parameters()
 
     @finaloverride
     def forward(
@@ -190,9 +194,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
     ) -> Tuple[Tensor, Optional[Tensor]]:
         seqs = self._forward_self_attn(seqs, padding_mask, self_attn_mask, state_bag)
 
-        seqs = self._forward_conv1d(
-            seqs, padding_mask, encoder_output, encoder_padding_mask, state_bag
-        )
+        seqs = self._forward_conv1d(seqs)
 
         return seqs, padding_mask
 
@@ -204,6 +206,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         state_bag: Optional[IncrementalStateBag],
     ) -> Tensor:
         residual = seqs
+
+        if self.norm_order != TransformerNormOrder.POST:
+            seqs = self.self_attn_layer_norm(seqs)
 
         seqs = self.self_attn(
             seqs,
@@ -223,15 +228,31 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
 
         seqs = seqs + residual
 
-        seqs = self.self_attn_layer_norm(seqs)
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.self_attn_layer_norm(seqs)
 
         return seqs
 
-    def _forward_conv1d(
-        self,
-        seqs: Tensor,
-        padding_mask: Optional[Tensor],
-        self_attn_mask: Optional[Tensor],
-        state_bag: Optional[IncrementalStateBag],
-    ) -> Tensor:
-        return
+    def _forward_conv1d(self, seqs: Tensor) -> Tensor:
+        residual = seqs
+
+        if self.norm_order != TransformerNormOrder.POST:
+            seqs = self.conv1d_layer_norm(seqs)
+
+        seqs = self.conv1d(seqs)
+
+        if self.conv1d_dropout is not None:
+            seqs = self.conv1d_dropout(seqs)
+
+        seqs = seqs + residual
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.conv1d_layer_norm(seqs)
+
+        return seqs
+
+    def extra_repr(self) -> str:
+        """:meta private:"""
+        s = super().extra_repr()
+
+        return s + f", norm_order={self.norm_order}"

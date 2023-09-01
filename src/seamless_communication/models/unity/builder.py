@@ -383,7 +383,9 @@ def create_unity_model(
 
 @dataclass
 class NARDecoderConfig:
-    pass
+    conv1d_kernel_size: int
+    conv1d_inner_dim: int
+    conv1d_dropout_p: int
 
 
 @dataclass
@@ -596,12 +598,14 @@ class UnitYT2UBuilder:
         self_attn = self.build_attention(self.config.num_decoder_attn_heads)
 
         if self.config.nar_decoder_config:
-            conv1d_block = self.build_conv1d_block()
+            conv1d = self.build_conv1d_block()
 
             return NARTransformerDecoderLayer(
                 self_attn,
-                conv1d_block,
+                conv1d,
                 dropout_p=self.config.dropout_p,
+                conv1d_dropout_p=self.config.nar_decoder_config.conv1d_dropout_p,
+                norm_order=TransformerNormOrder.POST,
                 device=self.device,
                 dtype=self.dtype,
             )
@@ -648,8 +652,11 @@ class UnitYT2UBuilder:
     def build_conv1d_block(self) -> Conv1dBlock:
         return Conv1dBlock(
             self.config.model_dim,
-            self.config.ffn_inner_dim,
-            self.config.kernel_size,
+            self.config.nar_decoder_config.conv1d_inner_dim,
+            self.config.nar_decoder_config.conv1d_kernel_size,
+            bias=True,
+            device=self.device,
+            dtype=self.dtype,
         )
 
 
