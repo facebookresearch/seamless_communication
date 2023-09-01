@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import itertools
+import logging
 import os
 
 import sacrebleu
@@ -23,6 +24,13 @@ from seamless_communication.models.unity import (UnitYModel, load_unity_model,
 from seamless_communication.models.vocoder import Vocoder, load_vocoder_model
 from whisper_normalizer.basic import BasicTextNormalizer
 from whisper_normalizer.english import EnglishTextNormalizer
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ASRBleu:
@@ -43,9 +51,17 @@ class ASRBleu:
         eval_first_pass: bool,
         dataset: str,
         audio_format: str,
-        device: str,
-        dtype: str,
     ):
+        # Set device
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            dtype = torch.float16
+            logger.info(f"Running inference on the GPU in {dtype}.")
+        else:
+            device = torch.device("cpu")
+            dtype = torch.float32
+            logger.info(f"Running inference on the CPU in {dtype}.")
+
         # Download fleurs test data
         src_lang, tgt_lang = lang_dir.split("-")
         download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")

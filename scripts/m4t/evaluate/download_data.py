@@ -12,6 +12,13 @@ import torch
 from seamless_communication.datasets.huggingface import \
     Speech2SpeechFleursDatasetBuilder
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 UNITY_TO_FLEURS_LANG_MAPPING = {
     "eng": "en_us",
     "ita": "it_it",
@@ -65,13 +72,6 @@ UNITY_TO_FLEURS_LANG_MAPPING = {
     "yor": "yo_ng",
     "zul": "zu_za",
 }
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
-)
-
-logger = logging.getLogger(__name__)
 
 
 def make_directories(*paths):

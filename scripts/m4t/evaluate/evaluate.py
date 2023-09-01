@@ -7,7 +7,6 @@
 import argparse
 import logging
 
-import torch
 from m4t_scripts.evaluate.asr_bleu import ASRBleu
 
 logging.basicConfig(
@@ -69,15 +68,6 @@ def main():
 
     args = parser.parse_args()
 
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        dtype = torch.float16
-        logger.info(f"Running inference on the GPU in {dtype}.")
-    else:
-        device = torch.device("cpu")
-        dtype = torch.float32
-        logger.info(f"Running inference on the CPU in {dtype}.")
-
     asrbleu = ASRBleu(
         args.output_dir,
     )
@@ -89,8 +79,6 @@ def main():
         args.eval_first_pass,
         args.dataset,
         args.audio_format,
-        device,
-        dtype,
     )
 
 
