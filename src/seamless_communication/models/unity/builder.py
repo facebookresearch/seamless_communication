@@ -20,6 +20,11 @@ from seamless_communication.models.unity.adaptor_block import (
     UnitYTransformerAdaptorLayer,
 )
 from seamless_communication.models.unity.model import UnitYModel, UnitYT2UModel
+from seamless_communication.models.unity.nar_decoder import (
+    NARTransformerDecoderLayer,
+    Conv1dBlock,
+)
+from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.models.wav2vec2 import Wav2Vec2EncoderBuilder, Wav2Vec2EncoderConfig
@@ -377,6 +382,11 @@ def create_unity_model(
 
 
 @dataclass
+class NARDecoderConfig:
+    pass
+
+
+@dataclass
 class UnitYT2UConfig:
     """Holds the configuration of a UnitY T2U model as described in
     :cite:t`https://doi.org/10.48550/arxiv.2212.08055`"""
@@ -398,6 +408,8 @@ class UnitYT2UConfig:
 
     num_decoder_layers: int
     """The number of Transformer decoder layers."""
+
+    nar_decoder_config: Optional[NARDecoderConfig]
 
     num_encoder_attn_heads: int
     """The number of attention heads in Transformer encoder layers."""
@@ -431,6 +443,7 @@ def _base_t2u() -> UnitYT2UConfig:
         unit_pad_idx=1,
         num_encoder_layers=6,
         num_decoder_layers=6,
+        nar_decoder_config=None,
         num_encoder_attn_heads=16,
         num_decoder_attn_heads=16,
         ffn_inner_dim=1024 * 8,
@@ -447,6 +460,7 @@ def _medium_t2u() -> UnitYT2UConfig:
         unit_pad_idx=1,
         num_encoder_layers=4,
         num_decoder_layers=4,
+        nar_decoder_config=None,
         num_encoder_attn_heads=16,
         num_decoder_attn_heads=16,
         ffn_inner_dim=1024 * 8,
@@ -545,21 +559,24 @@ class UnitYT2UBuilder:
 
     def build_decoder_frontend(self, embed: Embedding) -> TransformerFrontend:
         """Build a Transformer decoder front-end."""
-        pos_encoder = SinusoidalPositionEncoder(
-            self.config.model_dim,
-            self.config.unit_max_seq_len,
-            _legacy_pad_idx=self.config.unit_pad_idx,
-            device=self.device,
-            dtype=self.dtype,
-        )
+        if self.config.nar_decoder_config:
+            return NARDecoderFrontend()
+        else:
+            pos_encoder = SinusoidalPositionEncoder(
+                self.config.model_dim,
+                self.config.unit_max_seq_len,
+                _legacy_pad_idx=self.config.unit_pad_idx,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
-        return TransformerEmbeddingFrontend(
-            embed,
-            pos_encoder,
-            dropout_p=self.config.dropout_p,
-            device=self.device,
-            dtype=self.dtype,
-        )
+            return TransformerEmbeddingFrontend(
+                embed,
+                pos_encoder,
+                dropout_p=self.config.dropout_p,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
     def build_decoder(self) -> TransformerDecoder:
         """Build a Transformer decoder."""
@@ -578,19 +595,32 @@ class UnitYT2UBuilder:
         """Build a Transformer decoder layer."""
         self_attn = self.build_attention(self.config.num_decoder_attn_heads)
 
-        encoder_decoder_attn = self.build_attention(self.config.num_decoder_attn_heads)
+        if self.config.nar_decoder_config:
+            conv1d_block = self.build_conv1d_block()
 
-        ffn = self.build_ffn()
+            return NARTransformerDecoderLayer(
+                self_attn,
+                conv1d_block,
+                dropout_p=self.config.dropout_p,
+                device=self.device,
+                dtype=self.dtype,
+            )
+        else:
+            encoder_decoder_attn = self.build_attention(
+                self.config.num_decoder_attn_heads
+            )
 
-        return StandardTransformerDecoderLayer(
-            self_attn,
-            encoder_decoder_attn,
-            ffn,
-            dropout_p=self.config.dropout_p,
-            norm_order=TransformerNormOrder.PRE,
-            device=self.device,
-            dtype=self.dtype,
-        )
+            ffn = self.build_ffn()
+
+            return StandardTransformerDecoderLayer(
+                self_attn,
+                encoder_decoder_attn,
+                ffn,
+                dropout_p=self.config.dropout_p,
+                norm_order=TransformerNormOrder.PRE,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
     def build_attention(self, num_heads: int) -> MultiheadAttention:
         """Build a Transformer multi-head attention layer."""
@@ -613,6 +643,13 @@ class UnitYT2UBuilder:
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
+        )
+
+    def build_conv1d_block(self) -> Conv1dBlock:
+        return Conv1dBlock(
+            self.config.model_dim,
+            self.config.ffn_inner_dim,
+            self.config.kernel_size,
         )
 
 
