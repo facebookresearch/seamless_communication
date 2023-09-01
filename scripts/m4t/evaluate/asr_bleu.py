@@ -14,6 +14,7 @@ import whisper
 from fairseq2.data import Collater
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.memory import MemoryBlock
+from m4t_scripts.evaluate.download_data import download_datasets
 from seamless_communication.models.inference import Translator
 from seamless_communication.models.inference.translator import Modality
 from seamless_communication.models.unity import (UnitYModel, load_unity_model,
@@ -27,25 +28,32 @@ from whisper_normalizer.english import EnglishTextNormalizer
 class ASRBleu:
     def __init__(
         self,
-        output_path: str,
+        output_dir: str,
     ):
-        self.output_path = output_path
-        waveforms_dir = os.path.join(output_path, "output_waveforms")
+        self.output_dir = output_dir
+        waveforms_dir = os.path.join(output_dir, "output_waveforms")
         os.makedirs(waveforms_dir, exist_ok=True)
 
     def compute_asr_bleu(
         self,
-        input_path: str,
-        reference_path: str,
-        tgt_lang: str,
-        src_lang: str,
-        audio_format: str,
-        dataset_name: str,
-        save_first_pass: bool,
+        lang_dir: str,
+        split: str,
+        num_data_pairs: int,
         model_name: str,
+        eval_first_pass: bool,
+        dataset: str,
+        audio_format: str,
         device: str,
         dtype: str,
     ):
+        # Download fleurs test data
+        src_lang, tgt_lang = lang_dir.split("-")
+        download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
+        input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
+        reference_path = (
+            f"./data/{lang_dir}/target_text_{tgt_lang}/target_text_references.txt"
+        )
+
         # Retrieve ground truth reference text
         reference = []
         normalizer = (
@@ -80,14 +88,14 @@ class ASRBleu:
         text_out = []
         unit_out = []
         unit_file_name = (
-            self.output_path + f"/generate-{dataset_name}_{src_lang}-{tgt_lang}.unit"
+            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
         )
         first_pass_file_name = (
-            self.output_path
-            + f"/first-pass-{dataset_name}_{src_lang}-{tgt_lang}_ref_pred.txt"
+            self.output_dir
+            + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
         )
         with open(unit_file_name, "w+") as unit_file:
-            if save_first_pass:
+            if eval_first_pass:
                 first_pass_file = open(first_pass_file_name, "w+")
             for i in itertools.count():
                 name = audio_format.replace("n", str(i))
@@ -105,7 +113,7 @@ class ASRBleu:
                         tgt_lang=tgt_lang,
                     )
                     text_out.append(str(result[0].sentences[0]))
-                    if save_first_pass:
+                    if eval_first_pass:
                         first_pass_file.write(f"{text_out[i]}\n")
                     unit_out.append(result[1])
                     unit_file.write(f"{unit_out[i]}\n")
@@ -115,12 +123,12 @@ class ASRBleu:
         # First pass BLEU score computation and save
         tokenizer = "char" if tgt_lang in ["cmn", "jpn", "tha", "lao", "mya"] else "13a"
         bleu_metric = sacrebleu.BLEU(tokenize=tokenizer)
-        if save_first_pass:
+        if eval_first_pass:
             first_pass_file.close()
             bleu_score = bleu_metric.corpus_score(text_out, [reference])
             first_pass_bleu = (
-                self.output_path
-                + f"/{dataset_name}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
+                self.output_dir
+                + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
             )
             with open(first_pass_bleu, "w+") as f:
                 f.write(
@@ -144,7 +152,7 @@ class ASRBleu:
         for i, unit in enumerate(unit_out):
             units = unit.units[:, 1:][0].cpu().numpy().tolist()
             wav_out = vocoder(units, tgt_lang, -1, dur_prediction=True)
-            wav_file_name = self.output_path + f"/output_waveforms/{i}_pred.wav"
+            wav_file_name = self.output_dir + f"/output_waveforms/{i}_pred.wav"
             with open(wav_file_name, "w+") as _:
                 pass
             torchaudio.save(
@@ -162,14 +170,14 @@ class ASRBleu:
         # Generate and save transcriptions
         transcriptions = []
         ref_pred_file_name = (
-            self.output_path + f"/{dataset_name}_{src_lang}-{tgt_lang}_ref_pred.tsv"
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
         )
         with open(ref_pred_file_name, "w+") as transcriptions_file:
             for i, reference_line in enumerate(reference):
                 filename = "n_pred.wav".replace("n", str(i))
                 transcription = normalizer(
                     whisper_model.transcribe(
-                        self.output_path + f"/output_waveforms/{filename}",
+                        self.output_dir + f"/output_waveforms/{filename}",
                         temperature=0,
                         beam_size=1,
                     )["text"]
@@ -179,9 +187,7 @@ class ASRBleu:
 
         # Compute and save BLEU score
         bleu_score = bleu_metric.corpus_score(transcriptions, [reference])
-        bleu_filename = (
-            self.output_path + f"/{dataset_name}_{src_lang}-{tgt_lang}_bleu.json"
-        )
+        bleu_filename = self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
         with open(bleu_filename, "w+") as f:
             f.write(
                 bleu_score.format(

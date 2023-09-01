@@ -22,46 +22,49 @@ def main():
     parser = argparse.ArgumentParser(
         description="M4T inference on supported tasks using Translator."
     )
-    parser.add_argument("input_path", type=str, help="Audio WAV files path.")
     parser.add_argument(
-        "reference_path", type=str, help="Path to ground truth reference file"
-    )
-    parser.add_argument("tgt_lang", type=str, help="Target language for translation.")
-    parser.add_argument(
-        "--src_lang",
-        type=str,
-        help="Source language.",
-        default=None,
-    )
-    parser.add_argument(
-        "--audio_format",
-        type=str,
-        help="Format of audio file (eg. n_pred.wav).",
-        default="n_pred.wav",
-    )
-    parser.add_argument(
-        "--output_path",
+        "output_dir",
         type=str,
         help="Path to save results.",
-        default=None,
     )
     parser.add_argument(
-        "--dataset_name",
+        "lang_dir", type=str, help="Language direction for translation."
+    )
+    parser.add_argument(
+        "--split",
         type=str,
-        help="Name of passed dataset.",
-        default="",
+        help="Test/train/validation split.",
+        default="test",
     )
     parser.add_argument(
-        "--save_first_pass",
-        type=bool,
-        help="Save first pass text data and BLEU score.",
-        default=True,
+        "--num_data_pairs",
+        type=int,
+        help="Number of audio/text pairs to evaluate",
+        default=5,
     )
     parser.add_argument(
         "--model_name",
         type=str,
         help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
         default="seamlessM4T_large",
+    )
+    parser.add_argument(
+        "--eval_first_pass",
+        type=bool,
+        help="Save first pass text data and BLEU score.",
+        default=True,
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        help="Name of passed dataset.",
+        default="fleurs",
+    )
+    parser.add_argument(
+        "--audio_format",
+        type=str,
+        help="Format of audio file (eg. n_pred.wav).",
+        default="n_pred.wav",
     )
 
     args = parser.parse_args()
@@ -76,17 +79,16 @@ def main():
         logger.info(f"Running inference on the CPU in {dtype}.")
 
     asrbleu = ASRBleu(
-        args.output_path,
+        args.output_dir,
     )
     asrbleu.compute_asr_bleu(
-        args.input_path,
-        args.reference_path,
-        args.tgt_lang,
-        args.src_lang,
-        args.audio_format,
-        args.dataset_name,
-        args.save_first_pass,
+        args.lang_dir,
+        args.split,
+        args.num_data_pairs,
         args.model_name,
+        args.eval_first_pass,
+        args.dataset,
+        args.audio_format,
         device,
         dtype,
     )
