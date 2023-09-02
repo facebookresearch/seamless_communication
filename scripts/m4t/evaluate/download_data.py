@@ -11,6 +11,8 @@ import scipy.io.wavfile as wavfile
 import torch
 from seamless_communication.datasets.huggingface import \
     Speech2SpeechFleursDatasetBuilder
+from m4t_scripts.finetune.dataset import UNITY_TO_FLEURS_LANG_MAPPING
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,60 +20,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-UNITY_TO_FLEURS_LANG_MAPPING = {
-    "eng": "en_us",
-    "ita": "it_it",
-    "afr": "af_za",
-    "asm": "as_in",
-    "bel": "be_by",
-    "bul": "bg_bg",
-    "ben": "bn_in",
-    "cat": "ca_es",
-    "ces": "cs_cz",
-    "dan": "da_dk",
-    "deu": "de_de",
-    "ell": "el_gr",
-    "fin": "fi_fi",
-    "fra": "fr_fr",
-    "glg": "gl_es",
-    "heb": "he_il",
-    "hin": "hi_in",
-    "hrv": "hr_hr",
-    "hun": "hu_hu",
-    "ind": "id_id",
-    "ibo": "ig_ng",
-    "isl": "is_is",
-    "jpn": "ja_jp",
-    "jav": "jv_id",
-    "kaz": "kk_kz",
-    "kan": "kn_in",
-    "kir": "ky_kg",
-    "kor": "ko_kr",
-    "lit": "lt_lt",
-    "mkd": "mk_mk",
-    "mlt": "mt_mt",
-    "mya": "my_mm",
-    "nld": "nl_nl",
-    "pan": "pa_in",
-    "pol": "pl_pl",
-    "ron": "ro_ro",
-    "rus": "ru_ru",
-    "snd": "sd_in",
-    "slk": "sk_sk",
-    "srp": "sr_rs",
-    "swh": "sw_ke",
-    "tam": "ta_in",
-    "tel": "te_in",
-    "tha": "th_th",
-    "tur": "tr_tr",
-    "ukr": "uk_ua",
-    "urd": "ur_pk",
-    "uzn": "uz_uz",
-    "vie": "vi_vn",
-    "yor": "yo_ng",
-    "zul": "zu_za",
-}
 
 
 def make_directories(*paths):
