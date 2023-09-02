@@ -6,11 +6,13 @@ Evaluation is run with the CLI, from the root directory of the repository. Curre
 ### Usage:
 
 ```bash
-m4t_evaluate <path_to_input_audio> <path_to_reference_text> <tgt_lang> --src_lang <src_lang> --audio_format <audio_format> --output_path <path_to_output_dir> --dataset_name <dataset_name> --save_first_pass <true/false> --model_name <model_name>
+m4t_evaluate <path_to_output_dir> <lang_dir> --split <split> --num_data_pairs <num_data_pairs> --model_name <model_name> --eval_first_pass <true/false> --dataset <dataset_name> --audio_format <audio_format> 
 ```
 
 ## Evaluation breakdown
-First, the selected SeamlessM4T model translates the audios, outputting the first pass text data and the audio units.
+If not already cached, data is downloaded from the fleurs dataset based on a given lang_dir, desired quantity, and split
+
+The selected SeamlessM4T model translates the audios, outputting the first pass text data and the audio units.
 
 ```python
 model: UnitYModel = Translator.load_model_for_inference(

@@ -40,10 +40,10 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
 
         lang_output_dir = os.path.join(output_directory, lang_dir)
         lang_source_audio_dir = os.path.join(
-            lang_output_dir, f"source_audio_{source_mapping}"
+            lang_output_dir, f"source_audio_{source_lang}"
         )
         lang_target_texts_dir = os.path.join(
-            lang_output_dir, f"target_texts_{target_mapping}"
+            lang_output_dir, f"target_texts_{target_lang}"
         )
 
         make_directories(
@@ -101,4 +101,3 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
             f"Downloaded and saved {dataset_count} datasets for language pair: {lang_pair}"
         )
         print("=" * 100)
-
