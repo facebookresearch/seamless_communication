@@ -67,7 +67,7 @@ class ASRBleu:
         download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
         input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
         reference_path = (
-            f"./data/{lang_dir}/target_text_{tgt_lang}/target_text_references.txt"
+            f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
         )
 
         # Retrieve ground truth reference text

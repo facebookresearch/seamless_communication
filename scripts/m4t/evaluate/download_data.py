@@ -71,7 +71,7 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
 
         for entry in manifest_entries:
             source_audio_path = os.path.join(
-                lang_source_audio_dir, f"{entry['source']['id']}_pred.wav"
+                lang_source_audio_dir, f"{dataset_count}_pred.wav"
             )
 
             # Copy the source audio to the output directory
