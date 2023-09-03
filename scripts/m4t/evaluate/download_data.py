@@ -60,6 +60,7 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
             target_lang=target_lang,
             split=split,
             save_directory=output_directory,
+            use_tokenizer=False,
         )
 
         # Read the manifest file and parse JSON objects

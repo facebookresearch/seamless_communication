@@ -122,13 +122,14 @@ def download_fleurs_dataset(
     target_lang: str,
     split: str,
     save_directory: str,
+    use_tokenizer=True,
 ) -> str:
     _check_lang_code_mapping(source_lang)
     _check_lang_code_mapping(target_lang)
     device = (
         torch.device("cuda:0") if torch.cuda.device_count() > 0 else torch.device("cpu")
     )
-    tokenizer = UnitSpeechTokenizer(device=device)
+    tokenizer = UnitSpeechTokenizer(device=device) if use_tokenizer else None
     dataset_iterator = Speech2SpeechFleursDatasetBuilder(
         source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
         target_lang=UNITY_TO_FLEURS_LANG_MAPPING[target_lang],
