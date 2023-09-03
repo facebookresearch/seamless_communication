@@ -129,9 +129,7 @@ def download_fleurs_dataset(
     device = (
         torch.device("cuda:0") if torch.cuda.device_count() > 0 else torch.device("cpu")
     )
-    tokenizer=None
-    if use_tokenizer:
-        tokenizer = UnitSpeechTokenizer(device=device)
+    tokenizer = UnitSpeechTokenizer(device=device) if use_tokenizer else None
     cache_dir = os.path.join(save_directory, "cache")
     dataset_iterator = Speech2SpeechFleursDatasetBuilder(
         source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
@@ -189,8 +187,10 @@ def init_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--use_tokenizer",
         type=bool,
-        help="Specify whether to use the tokenizer (True/False).",
+        help="Specify whether to do speech tokenization(True/False)",
         default=False,
+
+        
     )
     return parser
 
