@@ -122,18 +122,21 @@ def download_fleurs_dataset(
     target_lang: str,
     split: str,
     save_directory: str,
-    use_tokenizer=True,
+    use_tokenizer: bool,
 ) -> str:
     _check_lang_code_mapping(source_lang)
     _check_lang_code_mapping(target_lang)
     device = (
         torch.device("cuda:0") if torch.cuda.device_count() > 0 else torch.device("cpu")
     )
-    tokenizer = UnitSpeechTokenizer(device=device) if use_tokenizer else None
+    tokenizer=None
+    if use_tokenizer:
+        tokenizer = UnitSpeechTokenizer(device=device)
+    cache_dir = os.path.join(save_directory, "cache")
     dataset_iterator = Speech2SpeechFleursDatasetBuilder(
         source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
         target_lang=UNITY_TO_FLEURS_LANG_MAPPING[target_lang],
-        dataset_cache_dir=save_directory,
+        dataset_cache_dir=cache_dir,
         speech_tokenizer=tokenizer,
         skip_source_audio=True,  # don't extract units from source audio
         skip_target_audio=False,
@@ -183,6 +186,12 @@ def init_parser() -> argparse.ArgumentParser:
         required=True,
         help="Directory where the datastets will be stored with HuggingFace datasets cache files",
     )
+    parser.add_argument(
+        "--use_tokenizer",
+        type=bool,
+        help="Specify whether to use the tokenizer (True/False).",
+        default=False,
+    )
     return parser
 
 
@@ -193,6 +202,7 @@ def main() -> None:
         target_lang=args.target_lang,
         split=args.split,
         save_directory=args.save_dir,
+        use_tokenizer=args.use_tokenizer,
     )
     logger.info(f"Manifest saved to: {manifest_path}")
 
