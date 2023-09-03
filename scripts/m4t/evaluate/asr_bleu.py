@@ -51,6 +51,7 @@ class ASRBleu:
         eval_first_pass: bool,
         dataset: str,
         audio_format: str,
+        use_tokenizer: bool,
     ):
         # Set device
         if torch.cuda.is_available():
@@ -64,7 +65,7 @@ class ASRBleu:
 
         # Download fleurs test data
         src_lang, tgt_lang = lang_dir.split("-")
-        download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
+        download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data", use_tokenizer)
         input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
         reference_path = (
             f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
