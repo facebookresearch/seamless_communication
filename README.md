@@ -46,7 +46,7 @@ T2TT task:
 m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 ```
 
-Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference.
+Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
 # Libraries
 
