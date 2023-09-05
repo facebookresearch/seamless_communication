@@ -65,9 +65,31 @@ class ASRBleu:
         # Download fleurs test data
         src_lang, tgt_lang = lang_dir.split("-")
         download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
+
+        # Input paths
         input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
         reference_path = (
             f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
+        )
+
+        # Output paths
+        units_path = (
+            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
+        )
+        first_pass_path = (
+            self.output_dir
+            + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
+        )
+        first_pass_bleu = (
+            self.output_dir
+            + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
+        )
+        ref_pred_path = (
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
+        )
+        wav_path = self.output_dir + "/output_waveforms/"
+        bleu_filename = (
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
         )
 
         # Retrieve ground truth reference text
@@ -103,16 +125,9 @@ class ASRBleu:
         # Generate and save text and unit outputs
         text_out = []
         unit_out = []
-        unit_file_name = (
-            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
-        )
-        first_pass_file_name = (
-            self.output_dir
-            + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
-        )
-        with open(unit_file_name, "w+") as unit_file:
+        with open(units_path, "w+") as unit_file:
             if eval_first_pass:
-                first_pass_file = open(first_pass_file_name, "w+")
+                first_pass_file = open(first_pass_path, "w+")
             for i in itertools.count():
                 name = audio_format.replace("n", str(i))
                 try:
@@ -142,10 +157,6 @@ class ASRBleu:
         if eval_first_pass:
             first_pass_file.close()
             bleu_score = bleu_metric.corpus_score(text_out, [reference])
-            first_pass_bleu = (
-                self.output_dir
-                + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
-            )
             with open(first_pass_bleu, "w+") as f:
                 f.write(
                     bleu_score.format(
@@ -168,11 +179,11 @@ class ASRBleu:
         for i, unit in enumerate(unit_out):
             units = unit.units[:, 1:][0].cpu().numpy().tolist()
             wav_out = vocoder(units, tgt_lang, -1, dur_prediction=True)
-            wav_file_name = self.output_dir + f"/output_waveforms/{i}_pred.wav"
-            with open(wav_file_name, "w+") as _:
+            wav_file_path = wav_path + f"{i}_pred.wav"
+            with open(wav_file_path, "w+") as _:
                 pass
             torchaudio.save(
-                wav_file_name,
+                wav_file_path,
                 wav_out[0].to(torch.float32).cpu(),
                 sample_rate=16000,
             )
@@ -185,15 +196,11 @@ class ASRBleu:
 
         # Generate and save transcriptions
         transcriptions = []
-        ref_pred_file_name = (
-            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
-        )
-        with open(ref_pred_file_name, "w+") as transcriptions_file:
+        with open(ref_pred_path, "w+") as transcriptions_file:
             for i, reference_line in enumerate(reference):
-                filename = "n_pred.wav".replace("n", str(i))
                 transcription = normalizer(
                     whisper_model.transcribe(
-                        self.output_dir + f"/output_waveforms/{filename}",
+                        wav_path + f"{i}_pred.wav",
                         temperature=0,
                         beam_size=1,
                     )["text"]
@@ -203,7 +210,6 @@ class ASRBleu:
 
         # Compute and save BLEU score
         bleu_score = bleu_metric.corpus_score(transcriptions, [reference])
-        bleu_filename = self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
         with open(bleu_filename, "w+") as f:
             f.write(
                 bleu_score.format(

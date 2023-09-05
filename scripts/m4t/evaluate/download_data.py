@@ -26,9 +26,9 @@ def combine_texts(texts, output_path):
         for text in texts:
             output_file.write(text + "\n")
 
-def download_datasets(language_pairs, split, num_datasets, output_directory):
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
+def download_datasets(language_pairs, split, num_datasets, data_directory):
+    if not os.path.exists(data_directory):
+        os.makedirs(data_directory)
 
     for source_lang, target_lang in language_pairs:
         # Get the language mapping from download_fleurs_dataset
@@ -38,7 +38,7 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
         lang_dir = f"{source_lang}-{target_lang}"
         lang_pair = f"{source_mapping}-{target_mapping}"
 
-        lang_output_dir = os.path.join(output_directory, lang_dir)
+        lang_output_dir = os.path.join(data_directory, lang_dir)
         lang_source_audio_dir = os.path.join(
             lang_output_dir, f"source_audio_{source_lang}"
         )
@@ -59,7 +59,7 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
             source_lang=source_lang,
             target_lang=target_lang,
             split=split,
-            save_directory=output_directory,
+            save_directory=data_directory,
             use_tokenizer=False,
         )
 
@@ -75,7 +75,7 @@ def download_datasets(language_pairs, split, num_datasets, output_directory):
                 lang_source_audio_dir, f"{dataset_count}_pred.wav"
             )
 
-            # Copy the source audio to the output directory
+            # Copy the source audio to the data directory
             source_audio_source_path = entry["source"]["audio_local_path"]
             shutil.copy(source_audio_source_path, source_audio_path)
 
