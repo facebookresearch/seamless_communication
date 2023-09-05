@@ -38,88 +38,53 @@ class ASRBleu:
         self,
         output_dir: str,
     ):
+        # Set up output directory
         self.output_dir = output_dir
         waveforms_dir = os.path.join(output_dir, "output_waveforms")
         os.makedirs(waveforms_dir, exist_ok=True)
 
-    def compute_asr_bleu(
-        self,
-        lang_dir: str,
-        split: str,
-        num_data_pairs: int,
-        model_name: str,
-        eval_first_pass: bool,
-        dataset: str,
-        audio_format: str,
-    ):
         # Set device
         if torch.cuda.is_available():
-            device = torch.device("cuda:0")
-            dtype = torch.float16
-            logger.info(f"Running inference on the GPU in {dtype}.")
+            self.device = torch.device("cuda:0")
+            self.dtype = torch.float16
+            logger.info(f"Running inference on the GPU in {self.dtype}.")
         else:
-            device = torch.device("cpu")
-            dtype = torch.float32
-            logger.info(f"Running inference on the CPU in {dtype}.")
+            self.device = torch.self.device("cpu")
+            self.dtype = torch.float32
+            logger.info(f"Running inference on the CPU in {self.dtype}.")
 
-        # Download fleurs test data
-        src_lang, tgt_lang = lang_dir.split("-")
-        download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
-
-        # Input paths
-        input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
-        reference_path = (
-            f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
-        )
-
-        # Output paths
-        units_path = (
-            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
-        )
-        first_pass_path = (
-            self.output_dir
-            + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
-        )
-        first_pass_bleu = (
-            self.output_dir
-            + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
-        )
-        ref_pred_path = (
-            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
-        )
-        wav_path = self.output_dir + "/output_waveforms/"
-        bleu_filename = (
-            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
-        )
-
-        # Retrieve ground truth reference text
-        reference = []
-        normalizer = (
-            EnglishTextNormalizer() if tgt_lang == "eng" else BasicTextNormalizer()
-        )
-        with open(reference_path, "r") as reference_file:
-            for line in reference_file.readlines():
-                reference.append(normalizer(line))
+    def _compute_inference(
+        self,
+        model_name: str,
+        tgt_lang: str,
+        eval_first_pass: bool,
+        audio_format: str,
+        input_path: str,
+        units_path: str,
+        first_pass_path: str,
+    ):
+        """SeamlessM4T model runs inference on selected dataset"""
 
         # Initialize the multitask model
         model: UnitYModel = Translator.load_model_for_inference(
             load_model_fn=load_unity_model,
             model_name_or_card=model_name,
-            device=device,
-            dtype=dtype,
+            device=self.device,
+            dtype=self.dtype,
         )
 
+        # Misc functionality required for inference
         text_tokenizer = load_unity_text_tokenizer(model_name)
         unit_tokenizer = load_unity_unit_tokenizer(model_name)
-        decode = AudioDecoder(torch.float32, device)
+        decode = AudioDecoder(torch.float32, self.device)
         collate = Collater(pad_idx=text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2)
         convert_to_fbank = WaveformToFbankConverter(
             num_mel_bins=80,
             waveform_scale=2**15,
             channel_last=True,
             standardize=True,
-            device=device,
-            dtype=dtype,
+            device=self.device,
+            dtype=self.dtype,
         )
 
         # Generate and save text and unit outputs
@@ -151,28 +116,28 @@ class ASRBleu:
                 except FileNotFoundError:
                     break
 
-        # First pass BLEU score computation and save
-        tokenizer = "char" if tgt_lang in ["cmn", "jpn", "tha", "lao", "mya"] else "13a"
-        bleu_metric = sacrebleu.BLEU(tokenize=tokenizer)
         if eval_first_pass:
             first_pass_file.close()
-            bleu_score = bleu_metric.corpus_score(text_out, [reference])
-            with open(first_pass_bleu, "w+") as f:
-                f.write(
-                    bleu_score.format(
-                        signature=str(bleu_metric.get_signature()), is_json=True
-                    )
-                )
 
         # Free GPU memory
         torch.cuda.empty_cache()
+
+        return unit_out, text_out
+    
+    def _generate_audio(
+        self,
+        unit_out,
+        tgt_lang,
+        wav_path,
+    ):
+        """Vocoder generates audio based on generated units"""
 
         # Initialize the vocoder
         vocoder: Vocoder = Translator.load_model_for_inference(
             load_model_fn=load_vocoder_model,
             model_name_or_card="vocoder_36langs",
-            device=device,
-            dtype=dtype,
+            device=self.device,
+            dtype=self.dtype,
         )
 
         # Generate and save audio
@@ -191,6 +156,15 @@ class ASRBleu:
         # Free GPU memory
         torch.cuda.empty_cache()
 
+    def _compute_asr(
+        self,
+        normalizer,
+        reference,
+        wav_path,
+        ref_pred_path,
+    ):
+        """Compute ASR on generated audio"""
+
         # Initialize the Whisper model
         whisper_model = whisper.load_model("base")
 
@@ -207,12 +181,123 @@ class ASRBleu:
                 )
                 transcriptions.append(transcription)
                 transcriptions_file.write(f"{i}\t{reference_line}\t{transcription}\n")
-
-        # Compute and save BLEU score
+        
+        return transcriptions
+    
+    def _compute_bleu(
+        self,
+        reference,
+        text_out,
+        transcriptions,
+        tgt_lang,
+        eval_first_pass,
+        first_pass_bleu,
+        bleu_file_path,
+    ):
+        """Compute and save BLEU scores"""
+        tokenizer = "char" if tgt_lang in ["cmn", "jpn", "tha", "lao", "mya"] else "13a"
+        bleu_metric = sacrebleu.BLEU(tokenize=tokenizer)
+        if eval_first_pass:
+            bleu_score = bleu_metric.corpus_score(text_out, [reference])
+            with open(first_pass_bleu, "w+") as f:
+                f.write(
+                    bleu_score.format(
+                        signature=str(bleu_metric.get_signature()), is_json=True
+                    )
+                )
         bleu_score = bleu_metric.corpus_score(transcriptions, [reference])
-        with open(bleu_filename, "w+") as f:
+        with open(bleu_file_path, "w+") as f:
             f.write(
                 bleu_score.format(
                     signature=str(bleu_metric.get_signature()), is_json=True
                 )
             )
+        
+
+    def compute_asr_bleu(
+        self,
+        lang_dir: str,
+        split: str,
+        num_data_pairs: int,
+        model_name: str,
+        eval_first_pass: bool,
+        dataset: str,
+        audio_format: str,
+    ):
+        """BLEU score evaluation for SeamlessM4T models on S2ST tasks"""
+
+        # Download fleurs test data
+        src_lang, tgt_lang = lang_dir.split("-")
+        download_datasets([(src_lang, tgt_lang)], split, num_data_pairs, "./data")
+
+        # Input paths
+        input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
+        reference_path = (
+            f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
+        )
+
+        # Output paths
+        units_path = (
+            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
+        )
+        first_pass_path = (
+            self.output_dir
+            + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
+        )
+        first_pass_bleu = (
+            self.output_dir
+            + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
+        )
+        ref_pred_path = (
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
+        )
+        wav_path = self.output_dir + "/output_waveforms/"
+        bleu_file_path = (
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
+        )
+
+        # Retrieve ground truth reference text
+        reference = []
+        normalizer = (
+            EnglishTextNormalizer() if tgt_lang == "eng" else BasicTextNormalizer()
+        )
+        with open(reference_path, "r") as reference_file:
+            for line in reference_file.readlines():
+                reference.append(normalizer(line))
+
+        # Run inference
+        unit_out, text_out = self._compute_inference(
+            model_name,
+            tgt_lang,
+            eval_first_pass,
+            audio_format,
+            input_path,
+            units_path,
+            first_pass_path,
+        )
+
+        # Generate audio based on the units
+        self._generate_audio(
+            unit_out,
+            tgt_lang,
+            wav_path,
+        )
+
+        # Run ASR on generated audio
+        transcriptions = self._compute_asr(
+            normalizer,
+            reference,
+            wav_path,
+            ref_pred_path,
+        )
+
+        # Compute resulting BLEU scores
+        self._compute_bleu(
+            reference,
+            text_out,
+            transcriptions,
+            tgt_lang,
+            eval_first_pass,
+            first_pass_bleu,
+            bleu_file_path,
+        )
