@@ -123,7 +123,7 @@ class ASRBleu:
         torch.cuda.empty_cache()
 
         return unit_out, text_out
-    
+
     def _generate_audio(
         self,
         unit_out,
@@ -181,9 +181,9 @@ class ASRBleu:
                 )
                 transcriptions.append(transcription)
                 transcriptions_file.write(f"{i}\t{reference_line}\t{transcription}\n")
-        
+
         return transcriptions
-    
+
     def _compute_bleu(
         self,
         reference,
@@ -212,7 +212,6 @@ class ASRBleu:
                     signature=str(bleu_metric.get_signature()), is_json=True
                 )
             )
-        
 
     def compute_asr_bleu(
         self,
@@ -232,29 +231,22 @@ class ASRBleu:
 
         # Input paths
         input_path = f"./data/{lang_dir}/source_audio_{src_lang}/"
-        reference_path = (
-            f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
-        )
+        reference_path = f"./data/{lang_dir}/target_texts_{tgt_lang}/references.txt"
 
         # Output paths
-        units_path = (
-            self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
-        )
+        units_path = self.output_dir + f"/generate-{dataset}_{src_lang}-{tgt_lang}.unit"
         first_pass_path = (
             self.output_dir
             + f"/first-pass-{dataset}_{src_lang}-{tgt_lang}_ref_pred.txt"
         )
         first_pass_bleu = (
-            self.output_dir
-            + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
+            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_first_pass_bleu.json"
         )
         ref_pred_path = (
             self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_ref_pred.tsv"
         )
         wav_path = self.output_dir + "/output_waveforms/"
-        bleu_file_path = (
-            self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
-        )
+        bleu_file_path = self.output_dir + f"/{dataset}_{src_lang}-{tgt_lang}_bleu.json"
 
         # Retrieve ground truth reference text
         reference = []

@@ -4,11 +4,13 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import os
-import shutil
 import json
 import logging
-from m4t_scripts.finetune.dataset import download_fleurs_dataset, UNITY_TO_FLEURS_LANG_MAPPING
+import os
+import shutil
+
+from m4t_scripts.finetune.dataset import (UNITY_TO_FLEURS_LANG_MAPPING,
+                                          download_fleurs_dataset)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,14 +19,17 @@ logging.basicConfig(
 
 logger = logging.getLogger("dataset")
 
+
 def make_directories(*paths):
     for path in paths:
         os.makedirs(path, exist_ok=True)
+
 
 def combine_texts(texts, output_path):
     with open(output_path, "w") as output_file:
         for text in texts:
             output_file.write(text + "\n")
+
 
 def download_datasets(language_pairs, split, num_datasets, data_directory):
     if not os.path.exists(data_directory):
@@ -34,7 +39,7 @@ def download_datasets(language_pairs, split, num_datasets, data_directory):
         # Get the language mapping from download_fleurs_dataset
         source_mapping = UNITY_TO_FLEURS_LANG_MAPPING[source_lang]
         target_mapping = UNITY_TO_FLEURS_LANG_MAPPING[target_lang]
-        
+
         lang_dir = f"{source_lang}-{target_lang}"
         lang_pair = f"{source_mapping}-{target_mapping}"
 
@@ -82,7 +87,9 @@ def download_datasets(language_pairs, split, num_datasets, data_directory):
             target_text = entry["target"]["text"]
             target_texts.append(target_text)
 
-            logger.info(f"Dataset {dataset_count} - Source Audio Path: {source_audio_path}")
+            logger.info(
+                f"Dataset {dataset_count} - Source Audio Path: {source_audio_path}"
+            )
             logger.info(f"Dataset {dataset_count} - Source Language: {source_lang}")
             logger.info(f"Dataset {dataset_count} - Target Language: {target_lang}")
             logger.info(f"Dataset {dataset_count} - Target Text: {target_text}")
