@@ -22,16 +22,15 @@ Links:
 
 # Quick Start
 ## Installation
+> [!NOTE]
+> One of the prerequisites of SeamlessM4T is [fairseq2](https://github.com/facebookresearch/fairseq2) which has pre-built packages available only
+> for Linux x84-86 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
+> might not be installed on your machine. If you experience any installation issues, please refer to its
+> [README](https://github.com/facebookresearch/fairseq2) for further instructions.
 
 ```
 pip install .
 ```
-
-A temporary extra requirement for fairseq2 is [libsndfile](https://github.com/libsndfile/libsndfile). From [Conda](https://docs.conda.io/en/latest/) environment it can be installed via:
-```
-conda install -y -c conda-forge libsndfile
-```
-At this point fairseq2 has a confirmed support only for Linux and macOS. Pre-built packages are only available for Linux (macOS is planned).
 
 ## Running inference
 
