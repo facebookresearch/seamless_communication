@@ -3,4 +3,4 @@ datasets
 torchaudio
 soundfile
 librosa
-fairseq2==0.1.0
+fairseq2==0.1.*
