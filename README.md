@@ -48,6 +48,16 @@ m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 
 Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
+## Running [Gradio](https://github.com/gradio-app/gradio) demo locally
+
+A demo is hosted [here](https://huggingface.co/spaces/facebook/seamless_m4t) on Hugging Face Spaces, but you can also try it locally.
+
+```bash
+cd demo
+pip install -r requirements.txt
+python app.py
+```
+
 # Libraries
 
 Seamless Communication depends on 3 libraries developed by Meta.

@@ -1,0 +1,6 @@
+fairseq2
+git+https://github.com/facebookresearch/seamless_communication
+gradio
+huggingface_hub
+torch
+torchaudio
