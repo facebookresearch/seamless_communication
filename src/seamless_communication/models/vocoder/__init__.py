@@ -12,6 +12,9 @@ from seamless_communication.models.vocoder.codehifigan import (
     CodeGenerator as CodeGenerator,
 )
 from seamless_communication.models.vocoder.hifigan import Generator as Generator
+from seamless_communication.models.vocoder.codehifigan import (
+    VariancePredictor as VariancePredictor,
+)
 from seamless_communication.models.vocoder.loader import VocoderLoader as VocoderLoader
 from seamless_communication.models.vocoder.loader import (
     load_vocoder_model as load_vocoder_model,

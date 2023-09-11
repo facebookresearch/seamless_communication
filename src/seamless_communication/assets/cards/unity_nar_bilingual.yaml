@@ -1,0 +1,16 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+name: unity_nar_bilingual
+model_type: unity
+tokenizer: "file://large_experiments/seamless/ust/hirofumii/datasets/s2ut_pt/es_en/s2ut/unigram65536_target/spm_unigram65536_en_XX_es_XX.model"
+char_tokenizer: "file://large_experiments/seamless/ust/hirofumii/datasets/s2ut_pt/es_en/s2ut/letter_target/spm_char_tc.model"
+default_lang: en
+langs: [en, es]
+model_arch: unity_nar_bilingual
+checkpoint: "file://private/home/hirofumii/large_experiments/checkpoints/s2ut_pt/es_en/s2st_2023h2/code.es_en.cfg_t2.asr_m4t_ddp_v2_tc_tcvits_nr.rd0.0.ls0.2.mt1.75k.uf15.lr0.0005.wu1k.seed1.unity2.W2V_cfm_L.dr0.1.ld0.2.al1.dld0.2.mtl_cfg_t2_tug65k8.0_tcctc1.6_dec1L_rd10.0_v2.fs2.noali.chali.hieup.dr0.1.rf2.mBART_spm.LND.ngpu48/checkpoint_best.pt"
+num_units: 1000
+unit_langs: [en, es]

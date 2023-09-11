@@ -1,7 +1,7 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates
 # All rights reserved.
 #
-# This source code is licensed under the BSD-style license found in the
+# This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
 from typing import Optional, final, Tuple
@@ -11,8 +11,8 @@ from torch.nn import Conv1d, Dropout, Module, ReLU
 
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.transformer import (
+    LayerNormFactory,
     create_default_layer_norm,
-    LayerNorm,
     TransformerDecoderLayer,
     MultiheadAttention,
     TransformerNormOrder,
@@ -53,7 +53,7 @@ class Conv1dBlock(Module):
             If ``True``, both the inner and output projections learn an additive
             bias.
         """
-        super().__init__(model_dim)
+        super().__init__()
 
         self.conv1 = Conv1d(
             model_dim,
@@ -119,6 +119,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         dropout_p: float = 0.1,
         conv1d_dropout_p: float = 0.1,
         norm_order: TransformerNormOrder = TransformerNormOrder.POST,
+        layer_norm_fn: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
