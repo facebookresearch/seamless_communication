@@ -34,7 +34,7 @@ class UnitTokenizer:
 
         # For legacy reasons, we have to repeat the language symbols twice,
         # along with a placeholder `<mask>` token.
-        vocab_size = num_units + (2 * (len(langs) + 1)) + 4
+        vocab_size = num_units + (len(langs) + 1) + 4
 
         # We use fairseq's control symbol order.
         self.vocab_info = VocabularyInfo(
@@ -45,7 +45,7 @@ class UnitTokenizer:
         """Return the symbol index of the specified language."""
         # +4 for PAD/EOS/BOS/UNK, and +1 for the `<mask>` token.
         try:
-            return self.num_units + len(self.langs) + self.lang_map[lang] + 5
+            return self.num_units + self.lang_map[lang] + 5
         except KeyError:
             langs = ", ".join(self.langs)
 
@@ -55,7 +55,7 @@ class UnitTokenizer:
 
     def index_to_lang(self, idx: int) -> str:
         """Return the language of the specified language symbol index."""
-        relative_idx = idx - self.num_units - len(self.langs) - 5
+        relative_idx = idx - self.num_units - 5
 
         if relative_idx < 0 or relative_idx >= len(self.langs):
             raise ValueError(

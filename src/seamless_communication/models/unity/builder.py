@@ -134,6 +134,35 @@ def _medium() -> UnitYConfig:
     )
 
 
+@unity_arch("nar_multilingual")
+def _nar_multilingual() -> UnitYConfig:
+    w2vbert_config = w2vbert_archs.get_config("600m")
+    w2v2_encoder_config = w2vbert_config.w2v2_config.encoder_config
+    w2v2_encoder_config.pos_encoder_depth = 1
+    w2v2_encoder_config.pos_conv_kernel_size = 128
+    w2v2_encoder_config.num_pos_conv_groups = 16
+
+    mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
+
+    mt_model_config.vocabulary_size = 256102  # NLLB-100
+
+    t2u_config = unity_t2u_archs.get_config("nar_multilingual")
+
+    return UnitYConfig(
+        model_dim=1024,
+        w2v2_encoder_config=w2v2_encoder_config,
+        mt_model_config=mt_model_config,
+        t2u_config=t2u_config,
+        use_text_encoder=False,
+        use_conformer_adaptor=False,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+    )
+
+
 class UnitYBuilder:
     """Builds modules of a UnitY model.
 

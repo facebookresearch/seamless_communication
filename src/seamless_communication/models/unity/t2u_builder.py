@@ -39,16 +39,32 @@ from fairseq2.models.nllb.loader import NllbTokenizerLoader
 
 
 from seamless_communication.assets import asset_store
-from seamless_communication.models.unity.nar_decoder import (
+from seamless_communication.models.unity.nar_decoder_layer import (
     NARTransformerDecoderLayer,
     Conv1dBlock,
 )
-from seamless_communication.models.unity.nar_decoder_frontend import (
-    NARDecoderFrontend,
-    NARDecoderFrontendConfig,
-)
+from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
-from seamless_communication.models.unity.model import UnitYT2UModel
+from seamless_communication.models.unity.model import UnitYT2UModel, UnitYNART2UModel
+from seamless_communication.models.unity.length_regulator import (
+    VariancePredictor,
+    VarianceAdaptor,
+)
+
+
+@dataclass
+class VariancePredictorConfig:
+    var_pred_hidden_dim: int
+    var_pred_kernel_size: int
+    var_pred_dropout: float
+
+
+@dataclass
+class NARDecoderFrontendConfig:
+    subword_to_unit_upsampling_type: Literal["gaussian", "hard"]
+    duration_predictor_config: VariancePredictorConfig
+    pitch_predictor_config: Optional[VariancePredictorConfig]
+    energy_predictor_config: Optional[VariancePredictorConfig]
 
 
 @dataclass
@@ -56,8 +72,7 @@ class NARDecoderConfig:
     text_tokenizer_type: Literal["nllb", "mbart"]
     model_name_or_card: Union[str, AssetCard]
     char_vocabulary_size: int
-    char_pad_idx: int
-    decoder_frontend_config: NARDecoderFrontendConfig
+    char_max_seq_len: int
     conv1d_kernel_size: int
     conv1d_inner_dim: int
     conv1d_dropout_p: float
@@ -85,6 +100,9 @@ class UnitYT2UConfig:
 
     num_decoder_layers: int
     """The number of Transformer decoder layers."""
+
+    nar_decoder_frontend_config: Optional[NARDecoderFrontendConfig]
+    """Non-autoregressive decoder front-end config."""
 
     nar_decoder_config: Optional[NARDecoderConfig]
     """Non-autoregressive decoder config."""
@@ -121,6 +139,7 @@ def _base_t2u() -> UnitYT2UConfig:
         unit_pad_idx=1,
         num_encoder_layers=6,
         num_decoder_layers=6,
+        nar_decoder_frontend_config=None,
         nar_decoder_config=None,
         num_encoder_attn_heads=16,
         num_decoder_attn_heads=16,
@@ -138,6 +157,7 @@ def _medium_t2u() -> UnitYT2UConfig:
         unit_pad_idx=1,
         num_encoder_layers=4,
         num_decoder_layers=4,
+        nar_decoder_frontend_config=None,
         nar_decoder_config=None,
         num_encoder_attn_heads=16,
         num_decoder_attn_heads=16,
@@ -146,8 +166,49 @@ def _medium_t2u() -> UnitYT2UConfig:
     )
 
 
+@unity_t2u_arch("nar_multilingual")
+def _nar_multilingual_t2u() -> UnitYT2UConfig:
+    duration_predictor_config = VariancePredictorConfig(
+        var_pred_hidden_dim=256,
+        var_pred_kernel_size=3,
+        var_pred_dropout=0.5,
+    )
+
+    nar_decoder_frontend_config = NARDecoderFrontendConfig(
+        subword_to_unit_upsampling_type="hard",
+        duration_predictor_config=duration_predictor_config,
+        pitch_predictor_config=None,
+        energy_predictor_config=None,
+    )
+
+    nar_decoder_config = NARDecoderConfig(
+        text_tokenizer_type="nllb",
+        model_name_or_card="unity_nar_multilingual",
+        char_vocabulary_size=10904,
+        char_max_seq_len=4096,
+        conv1d_kernel_size=7,
+        conv1d_inner_dim=1024,
+        conv1d_dropout_p=0.1,
+    )
+
+    return UnitYT2UConfig(
+        model_dim=1024,
+        unit_max_seq_len=2048,
+        unit_vocabulary_size=10020,
+        unit_pad_idx=1,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        nar_decoder_frontend_config=nar_decoder_frontend_config,
+        nar_decoder_config=nar_decoder_config,
+        num_encoder_attn_heads=16,
+        num_decoder_attn_heads=16,
+        ffn_inner_dim=1024 * 8,
+        dropout_p=0.0,
+    )
+
+
 class UnitYT2UBuilder:
-    """Builds modules of a UnitY T2U model.
+    """Builds modules of an AR or NAR UnitY T2U model.
 
     To tweak the architecture, you can derive from this class and override the
     corresponding methods.
@@ -175,24 +236,34 @@ class UnitYT2UBuilder:
         self.device = device
         self.dtype = dtype
 
-    def build_model(self) -> UnitYT2UModel:
+    def build_model(self) -> Union[UnitYT2UModel, UnitYNART2UModel]:
         """Build a model."""
         embed_unit = self.build_unit_embedding()
 
         encoder = self.build_encoder()
 
-        decoder_frontend = self.build_decoder_frontend(embed_unit)
         decoder = self.build_decoder()
 
         final_proj = TiedProjection(embed_unit.weight)
 
-        return UnitYT2UModel(
-            encoder,
-            decoder_frontend,
-            decoder,
-            final_proj,
-            self.config.unit_pad_idx,
-        )
+        if self.config.nar_decoder_config is None:
+            decoder_frontend = self.build_decoder_frontend(embed_unit)
+            return UnitYT2UModel(
+                encoder,
+                decoder_frontend,
+                decoder,
+                final_proj,
+                self.config.unit_pad_idx,
+            )
+        else:
+            nar_decoder_frontend = self.build_nar_decoder_frontend(embed_unit)
+            return UnitYNART2UModel(
+                encoder,
+                nar_decoder_frontend,
+                decoder,
+                final_proj,
+                self.config.unit_pad_idx,
+            )
 
     def build_unit_embedding(self) -> Embedding:
         """Build a unit embedding table."""
@@ -235,6 +306,29 @@ class UnitYT2UBuilder:
             dtype=self.dtype,
         )
 
+    def build_variance_adaptor(
+        self, nar_decoder_frontend_config: NARDecoderFrontendConfig
+    ) -> VarianceAdaptor:
+        duration_predictor_config = (
+            nar_decoder_frontend_config.duration_predictor_config
+        )
+        duration_predictor = VariancePredictor(
+            self.config.model_dim,
+            duration_predictor_config.var_pred_hidden_dim,
+            duration_predictor_config.var_pred_kernel_size,
+            duration_predictor_config.var_pred_dropout,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+        variance_adaptor = VarianceAdaptor(
+            duration_predictor,
+            pitch_predictor=None,
+            energy_predictor=None,
+        )
+
+        return variance_adaptor
+
     def build_decoder_frontend(self, embed_unit: Embedding) -> TransformerFrontend:
         """Build a Transformer decoder front-end."""
         pos_encoder = SinusoidalPositionEncoder(
@@ -244,21 +338,23 @@ class UnitYT2UBuilder:
             device=self.device,
             dtype=self.dtype,
         )
+        return TransformerEmbeddingFrontend(
+            embed_unit,
+            pos_encoder,
+            dropout_p=self.config.dropout_p,
+            device=self.device,
+            dtype=self.dtype,
+        )
 
-        if self.config.nar_decoder_config is None:
-            return TransformerEmbeddingFrontend(
-                embed_unit,
-                pos_encoder,
-                dropout_p=self.config.dropout_p,
-                device=self.device,
-                dtype=self.dtype,
-            )
+    def build_nar_decoder_frontend(self, embed_unit: Embedding) -> NARDecoderFrontend:
+        """Build a non-autoregressive decoder front-end."""
+        assert self.config.nar_decoder_config is not None
+        assert self.config.nar_decoder_frontend_config is not None
 
-        embed_char = Embedding(
-            num_embeddings=self.config.nar_decoder_config.char_vocabulary_size,
-            embedding_dim=self.config.model_dim,
-            pad_idx=self.config.nar_decoder_config.char_pad_idx,
-            scaled=True,
+        unit_pos_encoder = SinusoidalPositionEncoder(
+            self.config.model_dim,
+            self.config.unit_max_seq_len,
+            _legacy_pad_idx=self.config.unit_pad_idx,
             device=self.device,
             dtype=self.dtype,
         )
@@ -267,32 +363,76 @@ class UnitYT2UBuilder:
             self.config.nar_decoder_config.model_name_or_card
         )
 
+        variance_adaptor = self.build_variance_adaptor(
+            self.config.nar_decoder_frontend_config
+        )
+
         if self.config.nar_decoder_config.text_tokenizer_type == "nllb":
             nllb_tokenizer = NllbTokenizerLoader(asset_store, download_manager)(
                 self.config.nar_decoder_config.model_name_or_card
             )
+            text_pad_idx = nllb_tokenizer.vocab_info.pad_idx
+
+            char_pos_encoder = SinusoidalPositionEncoder(
+                self.config.model_dim,
+                self.config.nar_decoder_config.char_max_seq_len,
+                _legacy_pad_idx=text_pad_idx,
+                device=self.device,
+                dtype=self.dtype,
+            )
+
+            embed_char = Embedding(
+                num_embeddings=self.config.nar_decoder_config.char_vocabulary_size,
+                embedding_dim=self.config.model_dim,
+                pad_idx=text_pad_idx,
+                scaled=True,
+                device=self.device,
+                dtype=self.dtype,
+            )
+
             return NARDecoderFrontend(
                 embed_unit,
                 embed_char,
                 nllb_tokenizer,
                 char_tokenizer,
-                pos_encoder,
-                self.config.nar_decoder_config.decoder_frontend_config,
+                unit_pos_encoder,
+                char_pos_encoder,
+                variance_adaptor,
                 dropout_p=self.config.dropout_p,
                 device=self.device,
                 dtype=self.dtype,
             )
+
         else:
             mbart_tokenizer = mBartTokenizerLoader(asset_store, download_manager)(
                 self.config.nar_decoder_config.model_name_or_card
+            )
+            text_pad_idx = mbart_tokenizer.vocab_info.pad_idx
+
+            char_pos_encoder = SinusoidalPositionEncoder(
+                self.config.model_dim,
+                self.config.nar_decoder_config.char_max_seq_len,
+                _legacy_pad_idx=text_pad_idx,
+                device=self.device,
+                dtype=self.dtype,
+            )
+
+            embed_char = Embedding(
+                num_embeddings=self.config.nar_decoder_config.char_vocabulary_size,
+                embedding_dim=self.config.model_dim,
+                pad_idx=text_pad_idx,
+                scaled=True,
+                device=self.device,
+                dtype=self.dtype,
             )
             return NARDecoderFrontend(
                 embed_unit,
                 embed_char,
                 mbart_tokenizer,
                 char_tokenizer,
-                pos_encoder,
-                self.config.nar_decoder_config.decoder_frontend_config,
+                unit_pos_encoder,
+                char_pos_encoder,
+                variance_adaptor,
                 dropout_p=self.config.dropout_p,
                 device=self.device,
                 dtype=self.dtype,
@@ -330,7 +470,6 @@ class UnitYT2UBuilder:
                 conv1d,
                 dropout_p=self.config.dropout_p,
                 conv1d_dropout_p=self.config.nar_decoder_config.conv1d_dropout_p,
-                norm_order=TransformerNormOrder.POST,
                 device=self.device,
                 dtype=self.dtype,
             )
@@ -378,7 +517,7 @@ def create_unity_t2u_model(
     config: UnitYT2UConfig,
     device: Optional[Device] = None,
     dtype: Optional[DataType] = None,
-) -> UnitYT2UModel:
+) -> Union[UnitYT2UModel, UnitYNART2UModel]:
     """Create a UnitY T2U model.
 
     :param config:

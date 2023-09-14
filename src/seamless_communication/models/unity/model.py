@@ -5,10 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, final
+from typing import Optional, Tuple, Union, final
 
 from fairseq2.models.encoder_decoder import EncoderDecoderModel, Seq2SeqDecoder
-from fairseq2.models.seq2seq import Seq2SeqBatch
 from fairseq2.models.sequence import SequenceModelOutput
 from fairseq2.models.transformer.frontend import TransformerFrontend
 from fairseq2.nn.incremental_state import IncrementalStateBag
@@ -18,6 +17,8 @@ from fairseq2.nn.utils.module import check_model_dim
 from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
+
+from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 
 
 @final
@@ -38,7 +39,7 @@ class UnitYModel(EncoderDecoderModel):
     text_decoder_frontend: TransformerFrontend
     text_decoder: TransformerDecoder
     final_proj: Projection
-    t2u_model: Optional["UnitYT2UModel"]
+    t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None]
     pad_idx: Optional[int]
 
     def __init__(
@@ -50,7 +51,7 @@ class UnitYModel(EncoderDecoderModel):
         text_decoder_frontend: TransformerFrontend,
         text_decoder: TransformerDecoder,
         final_proj: Projection,
-        t2u_model: Optional["UnitYT2UModel"],
+        t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None],
         pad_idx: Optional[int],
         input_modality: str = "speech",
     ) -> None:
@@ -270,14 +271,20 @@ class UnitYT2UModel(Module, Seq2SeqDecoder):
 
         self.pad_idx = pad_idx
 
-    def forward(self, batch: Seq2SeqBatch) -> SequenceModelOutput:
+    def forward(
+        self,
+        text_decoder_output: Tensor,
+        text_decoder_padding_mask: Optional[Tensor],
+        target_seqs: Tensor,
+        target_seq_lens: Optional[Tensor],
+    ) -> SequenceModelOutput:
         encoder_output, encoder_padding_mask = self.encode(
-            batch.source_seqs, batch.source_seq_lens
+            text_decoder_output, text_decoder_padding_mask
         )
 
         decoder_output, decoder_padding_mask = self.decode(
-            batch.target_seqs,
-            batch.target_seq_lens,
+            target_seqs,
+            target_seq_lens,
             encoder_output,
             encoder_padding_mask,
         )
@@ -311,6 +318,107 @@ class UnitYT2UModel(Module, Seq2SeqDecoder):
             encoder_padding_mask,
             state_bag=state_bag,
         )
+
+    def project(
+        self, decoder_output: Tensor, decoder_padding_mask: Optional[Tensor]
+    ) -> SequenceModelOutput:
+        logits = self.final_proj(decoder_output)
+
+        return SequenceModelOutput(logits, self.pad_idx)
+
+
+@final
+class UnitYNART2UModel(Module):
+    """Represents a non-autoregressive UnitY T2U model."""
+
+    model_dim: int
+    encoder: Optional[TransformerEncoder]
+    decoder_frontend: NARDecoderFrontend
+    decoder: TransformerDecoder
+    final_proj: Projection
+    pad_idx: Optional[int]
+
+    def __init__(
+        self,
+        encoder: Optional[TransformerEncoder],
+        decoder_frontend: NARDecoderFrontend,
+        decoder: TransformerDecoder,
+        final_proj: Projection,
+        pad_idx: Optional[int],
+    ) -> None:
+        super().__init__()
+
+        self.model_dim = decoder.model_dim
+
+        if encoder is not None:
+            if encoder.model_dim != self.model_dim:
+                raise ValueError(
+                    f"`model_dim` of `encoder` and `model_dim` of `decoder` must be equal, but are {encoder.model_dim} and {self.model_dim} instead."
+                )
+
+            self.encoder = encoder
+        else:
+            self.register_module("encoder", None)
+
+        if decoder_frontend.model_dim != self.model_dim:
+            raise ValueError(
+                f"`model_dim` of `decoder_frontend` and `model_dim` of `decoder` must be equal, but are {decoder_frontend.model_dim} and {self.model_dim} instead."
+            )
+
+        self.decoder_frontend = decoder_frontend
+        self.decoder = decoder
+
+        self.final_proj = final_proj
+
+        self.pad_idx = pad_idx
+
+    def forward(
+        self,
+        text_decoder_output: Tensor,
+        text_decoder_padding_mask: Optional[Tensor],
+        target_seqs: Optional[Tensor],
+        target_seq_lens: Optional[Tensor],
+        text_seqs: Optional[Tensor],
+    ) -> SequenceModelOutput:
+        encoder_output, encoder_padding_mask = self.encode(
+            text_decoder_output, text_decoder_padding_mask
+        )
+
+        decoder_output, decoder_padding_mask = self.decode(
+            target_seqs,
+            target_seq_lens,
+            encoder_output,
+            encoder_padding_mask,
+            text_seqs,
+        )
+
+        return self.project(decoder_output, decoder_padding_mask)
+
+    def encode(
+        self,
+        text_decoder_output: Tensor,
+        text_decoder_padding_mask: Optional[Tensor],
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        if self.encoder is None:
+            return text_decoder_output, text_decoder_padding_mask
+
+        return self.encoder(text_decoder_output, text_decoder_padding_mask)  # type: ignore[no-any-return]
+
+    def decode(
+        self,
+        seqs: Optional[Tensor],
+        seq_lens: Optional[Tensor],
+        encoder_output: Tensor,
+        encoder_padding_mask: Optional[Tensor],
+        text_seqs: Optional[Tensor],
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        # encoder_output: (N, S, M)
+        # text_seqs: (N, S)
+        seqs, padding_mask = self.decoder_frontend(
+            seqs, seq_lens, encoder_output, encoder_padding_mask, text_seqs
+        )
+
+        return self.decoder(seqs, padding_mask)  # type: ignore[no-any-return]
 
     def project(
         self, decoder_output: Tensor, decoder_padding_mask: Optional[Tensor]

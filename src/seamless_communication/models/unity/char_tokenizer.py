@@ -25,7 +25,7 @@ from seamless_communication.assets import asset_store
 
 @final
 class CharTokenizer(TextTokenizer):
-    """A character-level tokenizer used during NAR T2U decoding."""
+    """A character-level tokenizer used during non-autoregressive T2U decoding."""
 
     model: SentencePieceModel
 

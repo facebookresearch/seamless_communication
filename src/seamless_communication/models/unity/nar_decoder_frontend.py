@@ -4,153 +4,127 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from dataclasses import dataclass
-from typing import Literal, Optional, Tuple, final
+from typing import List, Optional, Tuple, Union, final
 
 from torch import Tensor
 from torch.nn import Dropout, Module, Parameter
 
+from fairseq2.data import VocabularyInfo
 from fairseq2.data.text import TextTokenizer
-from fairseq2.models.transformer import TransformerFrontend
+from fairseq2.models.mbart.tokenizer import mBartTokenizer
+from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
-from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.normalization import LayerNorm, StandardLayerNorm
-from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.nn.normalization import StandardLayerNorm
 from fairseq2.nn.position_encoder import PositionEncoder
+from fairseq2.nn.utils.mask import to_padding_mask
+from fairseq2.typing import DataType, Device, finaloverride
 
-from seamless_communication.models.vocoder import VariancePredictor
-from seamless_communication.models.unity.aligner import AlignmentEncoder
+
 from seamless_communication.models.unity.length_regulator import (
-    GaussianUpsampling,
     HardUpsampling,
+    VarianceAdaptor,
 )
+from seamless_communication.models.unity.char_tokenizer import CharTokenizer
 
+import math
 import torch
 
 
-@dataclass
-class VariancePredictorConfig:
-    var_pred_hidden_dim: int
-    var_pred_kernel_size: int
-    var_pred_dropout: float
+SPACE = "▁"
 
 
-@dataclass
-class NARDecoderFrontendConfig:
-    subword_to_unit_upsampling_type: Literal["gaussian", "hard"]
-    duration_predictor_config: VariancePredictorConfig
-    pitch_predictor_config: Optional[VariancePredictorConfig]
-    energy_predictor_config: Optional[VariancePredictorConfig]
-    layer_norm: bool
-
-
-class VarianceAdaptor(Module):
-    def __init__(
-        self,
-        model_dim: int,
-        upsampling_type: str,
-        duration_predictor_config: VariancePredictorConfig,
-        pitch_predictor_config: Optional[VariancePredictorConfig] = None,
-        energy_predictor_config: Optional[VariancePredictorConfig] = None,
-    ):
-        super().__init__()
-        if upsampling_type == "gaussian":
-            self.gaussian_upsampling = GaussianUpsampling()
-        else:
-            self.register_module("gaussian_upsampling", None)
-
-        if upsampling_type == "hard":
-            self.hard_upsampling = HardUpsampling()
-        else:
-            self.register_module("hard_upsampling", None)
-
-        self.duration_predictor = VariancePredictor(
-            model_dim,
-            duration_predictor_config.var_pred_hidden_dim,
-            duration_predictor_config.var_pred_kernel_size,
-            duration_predictor_config.var_pred_dropout,
+class TagManager:
+    def __init__(self, text_tokenizer: TextTokenizer):
+        self.vocab_info: VocabularyInfo = text_tokenizer.vocab_info
+        token_encoder = text_tokenizer.create_encoder(mode="target")
+        self.prefix_len: int = (
+            token_encoder.prefix_indices.shape[0]
+            if token_encoder.prefix_indices is not None
+            else 0
+        )
+        self.suffix_len: int = (
+            token_encoder.suffix_indices.shape[0]
+            if token_encoder.suffix_indices is not None
+            else 0
         )
 
-        if pitch_predictor_config:
-            self.pitch_predictor = VariancePredictor(
-                model_dim,
-                pitch_predictor_config.var_pred_hidden_dim,
-                pitch_predictor_config.var_pred_kernel_size,
-                pitch_predictor_config.var_pred_dropout,
-            )
-        else:
-            self.register_module("pitch_predictor", None)
+    def preprocess_text_seqs(self, text_seqs: Tensor) -> Tensor:
+        """Remove the prefix, suffix tokens."""
+        seq_len = text_seqs.shape[1]
+        text_seqs = text_seqs[:, self.prefix_len : seq_len - self.suffix_len]
+        assert self.vocab_info.pad_idx is not None
+        text_seqs.masked_fill_(
+            text_seqs == self.vocab_info.eos_idx, self.vocab_info.pad_idx
+        )
+        return text_seqs
 
-        if energy_predictor_config:
-            self.energy_predictor = VariancePredictor(
-                model_dim,
-                energy_predictor_config.var_pred_hidden_dim,
-                energy_predictor_config.var_pred_kernel_size,
-                energy_predictor_config.var_pred_dropout,
-            )
-        else:
-            self.register_module("energy_predictor", None)
+    def postprocess_dur_or_len(self, dur_or_len: Tensor) -> Tensor:
+        """Add back 0s in place of the prefix, suffix tokens."""
+        N = dur_or_len.shape[0]
 
-    def forward(self):
-        pass
+        prefix = dur_or_len.new_zeros((N, self.prefix_len))
+        suffix = dur_or_len.new_zeros((N, self.suffix_len))
+
+        dur_or_len = torch.cat([prefix, dur_or_len, suffix], dim=1)
+        return dur_or_len
 
 
 @final
-class NARDecoderFrontend(TransformerFrontend):
-    """Represents a NAR Decoder front-end."""
+class NARDecoderFrontend(Module):
+    """Represents a Non-autoregressive decoder front-end."""
 
     def __init__(
         self,
         embed: Embedding,
         embed_char: Embedding,
-        text_tokenizer: TextTokenizer,
-        char_tokenizer: TextTokenizer,
-        pos_encoder: Optional[PositionEncoder],
-        decoder_frontend_config: NARDecoderFrontendConfig,
+        text_tokenizer: Union[NllbTokenizer, mBartTokenizer],
+        char_tokenizer: CharTokenizer,
+        unit_pos_encoder: PositionEncoder,
+        char_pos_encoder: PositionEncoder,
+        variance_adaptor: VarianceAdaptor,
         layer_norm: bool = False,
         dropout_p: float = 0.1,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
-    ) -> None:
-        model_dim = embed.embedding_dim
+    ):
+        self.model_dim = embed.embedding_dim
 
-        super().__init__(model_dim)
+        super().__init__()
 
         self.embed = embed
         self.embed_char = embed_char
         self.text_tokenizer = text_tokenizer
         self.char_tokenizer = char_tokenizer
+        self.tag_manager = TagManager(text_tokenizer)
 
-        # training: alignment encoder
-        if self.training:
-            self.alignment_encoder = AlignmentEncoder()
-        else:
-            self.register_module("alignment_encoder", None)
+        self.unk_idx = self.text_tokenizer.vocab_info.unk_idx
+        self.pad_idx = self.text_tokenizer.vocab_info.pad_idx
 
-        if pos_encoder is not None:
-            if pos_encoder.encoding_dim != model_dim:
-                raise ValueError(
-                    f"`encoding_dim` of `pos_encoder` and `embedding_dim` of `embed` must be equal, but are {pos_encoder.encoding_dim} and {model_dim} instead."
-                )
+        # TODO: Implement AlignmentEncoder for training.
 
-            self.pos_encoder = pos_encoder
-        else:
-            self.register_module("pos_encoder", None)
+        if unit_pos_encoder.encoding_dim != self.model_dim:
+            raise ValueError(
+                f"`encoding_dim` of `unit_pos_encoder` and `embedding_dim` of `embed` must be equal, but are {unit_pos_encoder.encoding_dim} and {self.model_dim} instead."
+            )
 
-        self.pos_emb_alpha = Parameter(torch.ones(1))
-        self.pos_emb_alpha_char = Parameter(torch.ones(1))
+        if char_pos_encoder.encoding_dim != self.model_dim:
+            raise ValueError(
+                f"`encoding_dim` of `char_pos_encoder` and `embedding_dim` of `embed` must be equal, but are {char_pos_encoder.encoding_dim} and {self.model_dim} instead."
+            )
 
-        self.var_adaptor = VarianceAdaptor(
-            model_dim,
-            decoder_frontend_config.subword_to_unit_upsampling_type,
-            decoder_frontend_config.duration_predictor_config,
-            decoder_frontend_config.pitch_predictor_config,
-            decoder_frontend_config.energy_predictor_config,
-        )
+        self.unit_pos_encoder = unit_pos_encoder
+        self.pos_emb_alpha = Parameter(torch.ones(1, device=device, dtype=dtype))
+        self.char_pos_encoder = char_pos_encoder
+        self.pos_emb_alpha_char = Parameter(torch.ones(1, device=device, dtype=dtype))
+        self.embed_scale = math.sqrt(self.model_dim)
+        self.char_length_regulator = HardUpsampling()
 
-        layer_norm = decoder_frontend_config.layer_norm
+        self.variance_adaptor = variance_adaptor
+
         if layer_norm:
-            self.layer_norm = StandardLayerNorm(model_dim, device=device, dtype=dtype)
+            self.layer_norm = StandardLayerNorm(
+                self.model_dim, device=device, dtype=dtype
+            )
         else:
             self.register_module("layer_norm", None)
 
@@ -159,18 +133,199 @@ class NARDecoderFrontend(TransformerFrontend):
         else:
             self.register_module("dropout", None)
 
-    def subword_to_character_upsampling(self):
-        pass
+    def indices_to_subwords(self, text_seqs: Tensor) -> List[List[str]]:
+        N, seq_len = text_seqs.shape
+        subwords_batch = []
+        for b in range(N):
+            subwords = []
+            for i in range(seq_len):
+                subword = self.text_tokenizer.model.index_to_token(int(text_seqs[b, i]))
+                subwords.append(str(subword))
+            subwords_batch.append(subwords)
+        return subwords_batch
+
+    def text_to_char_seqs(self, text_seqs: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        text_seqs = self.tag_manager.preprocess_text_seqs(text_seqs)
+
+        subwords_batch = self.indices_to_subwords(text_seqs)
+
+        char_lens = self.count_character_length_in_subword(text_seqs, subwords_batch)
+
+        char_lens = self.tag_manager.postprocess_dur_or_len(char_lens)
+
+        char_seqs, char_seq_lens = self.get_char_seqs(
+            text_seqs, subwords_batch, char_lens
+        )
+
+        return char_seqs, char_seq_lens, char_lens
+
+    def count_character_length_in_subword(
+        self,
+        text_seqs: Tensor,
+        subwords_batch: List[List[str]],
+        merge_space_with_prev_subword: bool = False,
+    ) -> Tensor:
+        N, _ = text_seqs.shape
+
+        char_lens = text_seqs.new_zeros(text_seqs.size())
+
+        assert self.pad_idx is not None
+        subword_lens = text_seqs.ne(self.pad_idx).sum(1)
+
+        for b in range(N):
+            # We slice out the tensor till the padding index.
+            subword_indices = text_seqs[b, : subword_lens[b]]
+            subwords = subwords_batch[b][: subword_lens[b]]
+
+            assert subword_indices.shape[0] == len(subwords)
+
+            is_next_start_with_space = [
+                len(subwords[i + 1]) > 1 and subwords[i + 1][0] == SPACE
+                if i < len(subwords) - 1
+                else False
+                for i in range(len(subwords))
+            ]
+            is_punc = [
+                len(subwords[i]) == 1
+                and not subwords[i].isalpha()
+                and not subwords[i].isnumeric()
+                and subwords[i] != SPACE
+                for i in range(len(subwords))
+            ]
+            for i, (subword_idx, subword) in enumerate(zip(subword_indices, subwords)):
+                if subword_idx == self.pad_idx:
+                    break
+
+                if subword_idx == self.unk_idx:
+                    # We set char_len to 1 for an unk token.
+                    char_len = 1
+
+                    if merge_space_with_prev_subword and is_next_start_with_space[i]:
+                        char_len += 1
+                else:
+                    # By default, spaces are merged with the next subword.
+                    # char_len includes the space.
+                    char_len = len(subword)
+
+                    if merge_space_with_prev_subword:
+                        # Add the space for the next subword.
+                        if is_next_start_with_space[i]:
+                            char_len += 1
+                        # Subtract the space for the current subword.
+                        if i > 0 and is_next_start_with_space[i - 1]:
+                            char_len -= 1
+                    else:
+                        # Merge space with punctuation mark by default.
+                        if is_punc[i] and is_next_start_with_space[i]:
+                            char_len += 1
+                        # Subtract the space for the subword succeeding the punctuation mark.
+                        elif (
+                            i > 0 and is_punc[i - 1] and is_next_start_with_space[i - 1]
+                        ):
+                            char_len -= 1
+
+                char_lens[b, i] = char_len
+
+        return char_lens
+
+    def get_char_seqs(
+        self, text_seqs: Tensor, subwords_batch: List[List[str]], char_lens: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        N = text_seqs.shape[0]
+        max_len = int(char_lens.sum(1).max().item())
+
+        assert self.pad_idx is not None
+        char_seqs = text_seqs.new_zeros((N, max_len)).fill_(self.pad_idx)
+        char_seq_lens = char_seqs.new_zeros(N)
+
+        assert self.pad_idx is not None
+        subword_lens = text_seqs.ne(self.pad_idx).sum(1)
+        for b in range(N):
+            total = 0
+            subword_indices = text_seqs[b, : subword_lens[b]]
+            subwords = subwords_batch[b][: subword_lens[b]]
+            for subword_idx, subword in zip(subword_indices, subwords):
+                if subword_idx == self.unk_idx:
+                    char_ids = [self.unk_idx]
+                else:
+                    # Get char token indices corresponding to the subwords.
+                    char_ids = [
+                        self.char_tokenizer.model.token_to_index(ch)
+                        for ch in list(subword)
+                    ]
+                char_seq_len = len(char_ids)
+                char_seqs[b, total : total + char_seq_len] = torch.tensor(char_ids).to(
+                    char_seqs
+                )
+                total += char_seq_len
+            char_seq_lens[b] = total
+        return char_seqs, char_seq_lens
+
+    def character_level_upsampling(
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[Tensor],
+        char_seqs: Tensor,
+        char_lens: Tensor,
+    ) -> Tensor:
+        seqs, _ = self.char_length_regulator(seqs, char_lens)
+
+        pos_embeds = self.pos_emb_alpha_char * (
+            self.char_pos_encoder(seqs, padding_mask) - seqs
+        )
+
+        char_embeds = self.embed_char(char_seqs)
+
+        pos_embeds += self.embed_scale * char_embeds
+
+        seqs += pos_embeds
+
+        return seqs
+
+    def forward_unit_pos_embedding(
+        self, seqs: Tensor, padding_mask: Optional[Tensor]
+    ) -> Tensor:
+        pos_embeds = self.pos_emb_alpha * (
+            self.unit_pos_encoder(seqs, padding_mask) - seqs
+        )
+
+        seqs += pos_embeds
+
+        if self.dropout is not None:
+            seqs = self.dropout(seqs)
+
+        return seqs
 
     @finaloverride
     def forward(
         self,
-        seqs: Tensor,
-        seq_lens: Optional[Tensor],
-        state_bag: Optional[IncrementalStateBag] = None,
+        target_seqs: Optional[Tensor],
+        target_seq_lens: Optional[Tensor],
+        encoder_output: Tensor,
+        encoder_padding_mask: Optional[Tensor],
+        text_seqs: Optional[Tensor],
     ) -> Tuple[Tensor, Optional[Tensor]]:
-        padding_mask = None
-        # inference: subword_to_character_upsampling
-        self.subword_to_character_upsampling()
+        assert text_seqs is not None
 
-        return seqs, padding_mask
+        # text_seqs: (N, S_text)
+        char_seqs, char_seq_lens, char_lens = self.text_to_char_seqs(text_seqs)
+
+        # char_seqs: (N, S_char)
+        encoder_padding_mask = to_padding_mask(char_seqs, char_seq_lens)
+
+        # (N, S_text, M) -> (N, S_char, M)
+        seqs = self.character_level_upsampling(
+            encoder_output, encoder_padding_mask, char_seqs, char_lens
+        )
+
+        # (N, S_char, M) -> (N, S_unit, M)
+        seqs, seq_lens = self.variance_adaptor(
+            seqs,
+            encoder_padding_mask,
+            min_duration=1,
+        )
+
+        decoder_padding_mask = to_padding_mask(seqs, seq_lens)
+
+        seqs = self.forward_unit_pos_embedding(seqs, decoder_padding_mask)
+        return seqs, decoder_padding_mask

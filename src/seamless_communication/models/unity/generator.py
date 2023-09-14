@@ -16,7 +16,13 @@ from fairseq2.generation import (
     SequenceToTextGenerator,
     SequenceToTextOutput,
 )
-from seamless_communication.models.unity.model import UnitYModel, UnitYX2TModel
+from fairseq2.models.seq2seq import Seq2SeqBatch
+from seamless_communication.models.unity.model import (
+    UnitYModel,
+    UnitYX2TModel,
+    UnitYT2UModel,
+    UnitYNART2UModel,
+)
 from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenDecoder,
     UnitTokenizer,
@@ -127,18 +133,19 @@ class UnitYGenerator:
                 lang=target_lang, device=infer_device(model.t2u_model)
             )
 
-            if unit_opts is None:
-                # Speech sequences are typically much longer than text sequences.
-                unit_opts = SequenceGeneratorOptions(
-                    soft_max_seq_len=(1, 50), hard_max_seq_len=5000
-                )
+            if isinstance(self.model.t2u_model, UnitYT2UModel):
+                if unit_opts is None:
+                    # Speech sequences are typically much longer than text sequences.
+                    unit_opts = SequenceGeneratorOptions(
+                        soft_max_seq_len=(1, 50), hard_max_seq_len=5000
+                    )
 
-            self.unit_generator = Seq2SeqGenerator(
-                model.t2u_model,
-                unit_tokenizer.vocab_info,
-                unit_encoder.prefix_indices,
-                unit_opts,
-            )
+                self.unit_generator = Seq2SeqGenerator(
+                    self.model.t2u_model,
+                    unit_tokenizer.vocab_info,
+                    unit_encoder.prefix_indices,
+                    unit_opts,
+                )
 
     @torch.inference_mode()
     def __call__(
@@ -195,21 +202,30 @@ class UnitYGenerator:
         )
 
         assert self.model.t2u_model is not None
-
-        t2u_encoder_output, t2u_encoder_padding_mask = self.model.t2u_model.encode(
-            decoder_output, decoder_padding_mask
-        )
-
-        assert self.unit_generator is not None
         assert self.unit_decoder is not None
 
-        unit_gen_output = self.unit_generator(
-            t2u_encoder_output,
-            t2u_encoder_padding_mask,
-            source_seq_len=source_seqs.size(1),
-        )
-
-        unit_seqs, _ = unit_gen_output.collate()
+        unit_gen_output = None
+        if isinstance(self.model.t2u_model, UnitYT2UModel):
+            assert self.unit_generator is not None
+            t2u_encoder_output, t2u_encoder_padding_mask = self.model.t2u_model.encode(
+                decoder_output, decoder_padding_mask
+            )
+            unit_gen_output = self.unit_generator(
+                t2u_encoder_output,
+                t2u_encoder_padding_mask,
+                source_seq_len=source_seqs.size(1),
+            )
+            unit_seqs, _ = unit_gen_output.collate()
+        else:
+            unit_decoder_output = self.model.t2u_model(
+                text_decoder_output=decoder_output,
+                text_decoder_padding_mask=decoder_padding_mask,
+                target_seqs=None,
+                target_seq_lens=None,
+                text_seqs=text_seqs,
+            )
+            # (B, S_unit, V_unit)
+            unit_seqs = unit_decoder_output.logits.argmax(dim=2)
 
         # Convert to speech units.
         units = self.unit_decoder(unit_seqs)
@@ -217,9 +233,7 @@ class UnitYGenerator:
             units = remove_consecutive_repeated_ngrams(units.cpu().numpy().tolist())
             units = torch.tensor(units)
 
-        unit_output = SequenceToUnitOutput(
-            units, unit_gen_output, t2u_encoder_output, t2u_encoder_padding_mask
-        )
+        unit_output = SequenceToUnitOutput(units, unit_gen_output)
 
         return text_output, unit_output
 
@@ -229,16 +243,5 @@ class SequenceToUnitOutput:
     units: Tensor
     """The generated units."""
 
-    generator_output: SequenceGeneratorOutput
+    generator_output: Optional[SequenceGeneratorOutput]
     """The output of the underlying :class:`Seq2SeqGenerator`."""
-
-    t2u_encoder_output: Tensor
-    """The encoder output of the underlying UnitY T2U model used to generate the
-    units. *Shape:* :math:`(N,S_{enc},M)`, where :math:`N` is the batch size,
-    :math:`S_{enc}` is the encoder output sequence length, and :math:`M` is the
-    dimensionality of the model."""
-
-    t2u_encoder_padding_mask: Optional[Tensor]
-    """The float padding mask of :attr:`encoder_output`. *Shape:*
-    :math:`(N,S_{enc})`, where :math:`N` is the batch size and :math:`S_{enc}`
-    is the encoder output sequence length."""

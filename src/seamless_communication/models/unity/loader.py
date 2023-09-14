@@ -9,6 +9,7 @@ from typing import Any, Dict, Mapping, Union, final
 import torch
 from fairseq2.assets import AssetStore, download_manager
 from fairseq2.assets.card import AssetCard
+from fairseq2.models.nllb import NllbConfig
 from fairseq2.models.nllb.loader import NllbTokenizerLoader
 from seamless_communication.models.unity.builder import (
     UnitYConfig,
@@ -57,22 +58,28 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         # Remnant of wav2vec2 pretraining, not needed for eval or fine-tuning.
         del state_dict["encoder.w2v_encoder.w2v_model.mask_emb"]
 
-        # Delete AlignmentEncoder keys for now.
+        # Delete AlignmentEncoder keys for inference.
         alignment_encoder_keys = [
             key for key in state_dict if key.startswith("decoder.alignment_encoder.")
         ]
         for key in alignment_encoder_keys:
             del state_dict[key]
 
-        # Delete character-level projection.
-        del state_dict["decoder_target_letter_decoder.proj.weight"]
-        del state_dict["decoder_target_letter_decoder.proj.bias"]
+        # Delete character-level projection for inference.
+        for key in [
+            "decoder_target_letter_decoder.proj.weight",
+            "decoder_target_letter_decoder.proj.bias",
+        ]:
+            if key in state_dict:
+                del state_dict[key]
 
         embeds = state_dict["final_proj.weight"]
 
         # fairseq had a bug that accidentally introduced a dummy token in the
         # embedding table of NLLB-100. We just discard it.
-        if embeds.size(0) == 256103:  # means NLLB-100
+        if (
+            isinstance(config.mt_model_config, NllbConfig) and embeds.size(0) == 256103
+        ):  # means NLLB-100
             embeds = embeds[:-1]
 
             state_dict["final_proj.weight"] = embeds
@@ -177,7 +184,7 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             r"^decoder\.embed_tokens_text\.":                           r"t2u_model.decoder_frontend.embed_char.",
             r"^decoder\.embed_tokens_unit\.":                           r"t2u_model.decoder_frontend.embed.",
             r"^decoder\.embed_tokens\.":                                r"t2u_model.decoder_frontend.embed.",
-            r"^decoder\.var_adaptor\.duration_predictor\.":             r"t2u_model.decoder_frontend.var_adaptor.duration_predictor.",
+            r"^decoder\.var_adaptor\.duration_predictor\.":             r"t2u_model.decoder_frontend.variance_adaptor.duration_predictor.",
             r"^decoder\.dec_pos_emb_alpha":                             r"t2u_model.decoder_frontend.pos_emb_alpha",
             r"^decoder\.dec_pos_emb_alpha_char":                        r"t2u_model.decoder_frontend.pos_emb_alpha_char",
 
