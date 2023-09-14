@@ -1,0 +1,485 @@
+#include "ggml/ggml.h"
+#include "ggml/ggml-alloc.h"
+
+#include "common.h"
+#include "common-ggml.h"
+
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <map>
+#include <string>
+#include <vector>
+#include <iostream>
+// default hparams
+struct unity_hparams {
+    int32_t n_text_vocab = 256206; 
+    int32_t n_unit_vocab = 10084; 
+    int32_t n_audio_enc_dim = 1024;
+    int32_t n_audio_enc_ffn_dim = 4096;
+    int32_t n_audio_enc_feat_dim = 160;
+    int32_t n_audio_enc_layer = 24;
+    int32_t n_audio_enc_head = 16;
+    int32_t ftype   = 1;
+    float   eps     = 1e-5f;
+};
+// layer def
+struct audio_enc_layer {
+    struct ggml_tensor * self_attn_layer_norm_w;
+    struct ggml_tensor * self_attn_layer_norm_b;
+
+    struct ggml_tensor * self_attn_linear_k_w;
+    struct ggml_tensor * self_attn_linear_k_b;
+    struct ggml_tensor * self_attn_linear_q_w;
+    struct ggml_tensor * self_attn_linear_q_b;
+    struct ggml_tensor * self_attn_linear_v_w;
+    struct ggml_tensor * self_attn_linear_v_b;
+    struct ggml_tensor * self_attn_linear_out_w;
+    struct ggml_tensor * self_attn_linear_out_b;
+    struct ggml_tensor * self_attn_linear_pos_w;
+
+    struct ggml_tensor * self_attn_pos_bias_u;
+    struct ggml_tensor * self_attn_pos_bias_v;
+
+    struct ggml_tensor * conv_layer_norm_w;
+    struct ggml_tensor * conv_layer_norm_b;
+
+    struct ggml_tensor * conv_pointwise_conv1_w;
+    struct ggml_tensor * conv_depthwise_conv_w;
+    struct ggml_tensor * conv_batch_norm_w;
+    struct ggml_tensor * conv_batch_norm_b;
+    struct ggml_tensor * conv_batch_norm_running_mean;
+    struct ggml_tensor * conv_batch_norm_running_var;
+    struct ggml_tensor * conv_batch_norm_num_batches_tracked;
+    struct ggml_tensor * conv_pointwise_conv2_w;
+
+    struct ggml_tensor * ffn1_layer_norm_w;
+    struct ggml_tensor * ffn1_layer_norm_b;
+    struct ggml_tensor * ffn1_w1;
+    struct ggml_tensor * ffn1_b1;
+    struct ggml_tensor * ffn1_w2;
+    struct ggml_tensor * ffn1_b2;
+
+    struct ggml_tensor * ffn2_layer_norm_w;
+    struct ggml_tensor * ffn2_layer_norm_b;
+    struct ggml_tensor * ffn2_w1;
+    struct ggml_tensor * ffn2_b1;
+    struct ggml_tensor * ffn2_w2;
+    struct ggml_tensor * ffn2_b2;
+
+    struct ggml_tensor * final_layer_norm_w;
+    struct ggml_tensor * final_layer_norm_b;
+};
+
+// struct ggml_tensor * conv_ln;
+// struct ggml_tensor * conv_pool_1d;
+
+// model def
+struct unity_model {
+    unity_hparams hparams;
+    // audio encoder
+    struct ggml_tensor * post_extract_proj;
+    struct ggml_tensor * audio_enc_pos_conv;
+    std::vector<audio_enc_layer> audio_enc_layers;
+
+    // text encoder
+    // std::vector<text_enc_layer> text_enc_layers;
+
+    // adaptor
+    // std::vector<adapter_layer> adapter_layers;
+
+    // text decoder
+    // std::vector<text_dec_layer> text_dec_layers;
+
+    // unit decoder
+    // std::vector<unit_dec_layer> unit_dec_layers;
+
+    //
+    struct ggml_context * ctx;
+    std::map<std::string, struct ggml_tensor *> tensors;
+};
+
+// model load
+bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab & vocab) {
+    printf("%s: loading model from '%s'\n", __func__, fname.c_str());
+
+    auto fin = std::ifstream(fname, std::ios::binary);
+    if (!fin) {
+        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
+        return false;
+    }
+
+    // verify magic
+    {
+        uint32_t magic;
+        fin.read((char *) &magic, sizeof(magic));
+        if (magic != GGML_FILE_MAGIC) {
+            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
+            return false;
+        }
+    }
+
+    // load hparams
+    {
+        auto & hparams = model.hparams;
+
+        fin.read((char *) &hparams.n_text_vocab, sizeof(hparams.n_text_vocab));
+        fin.read((char *) &hparams.n_audio_enc_dim,  sizeof(hparams.n_audio_enc_dim));
+        fin.read((char *) &hparams.n_audio_enc_ffn_dim,  sizeof(hparams.n_audio_enc_ffn_dim));
+        fin.read((char *) &hparams.n_audio_enc_feat_dim,  sizeof(hparams.n_audio_enc_feat_dim));
+        fin.read((char *) &hparams.n_audio_enc_layer, sizeof(hparams.n_audio_enc_layer));
+        fin.read((char *) &hparams.n_audio_enc_head, sizeof(hparams.n_audio_enc_head));
+        fin.read((char *) &hparams.ftype,   sizeof(hparams.ftype));
+
+        const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
+
+        printf("%s: n_text_vocab = %d\n", __func__, hparams.n_text_vocab);
+        printf("%s: n_audio_enc_dim   = %d\n", __func__, hparams.n_audio_enc_dim);
+        printf("%s: n_audio_enc_ffn_dim  = %d\n", __func__, hparams.n_audio_enc_ffn_dim);
+        printf("%s: n_audio_enc_feat_dim = %d\n", __func__, hparams.n_audio_enc_feat_dim);
+        printf("%s: n_audio_enc_layer = %d\n", __func__, hparams.n_audio_enc_layer);
+        printf("%s: n_audio_enc_head = %d\n", __func__, hparams.n_audio_enc_head);
+        printf("%s: ftype   = %d\n", __func__, hparams.ftype);
+        printf("%s: qntvr   = %d\n", __func__, qntvr);
+
+        hparams.ftype %= GGML_QNT_VERSION_FACTOR;
+    }
+
+    // for the big tensors, we have the option to store the data in 16-bit floats or quantized
+    // in order to save memory and also to speed up the computation
+    ggml_type wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
+    if (wtype == GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid model file '%s' (bad ftype value %d)\n",
+                __func__, fname.c_str(), model.hparams.ftype);
+        return false;
+    }
+
+    auto & ctx = model.ctx;
+
+    size_t ctx_size = 0;
+
+    {
+        const auto & hparams = model.hparams;
+
+        const int n_audio_enc_dim  = hparams.n_audio_enc_dim;
+        const int n_audio_enc_ffn_dim  = hparams.n_audio_enc_ffn_dim;
+        const int n_audio_enc_layer = hparams.n_audio_enc_layer;
+        // const int n_text_vocab = hparams.n_text_vocab;
+        const int kernel_size = 31;
+
+        ctx_size += n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // self_attn_layer_norm_w
+        ctx_size += n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // self_attn_layer_norm_b
+
+        ctx_size += n_audio_enc_layer*(5*n_audio_enc_dim*n_audio_enc_dim*ggml_type_sizef(wtype));         // self_attn_w
+        ctx_size += n_audio_enc_layer*(4*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // self_attn_b
+
+        ctx_size += n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // conv_layer_norm_w
+        ctx_size += n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // conv_layer_norm_b
+
+        ctx_size += n_audio_enc_layer*(n_audio_enc_dim*n_audio_enc_dim*2*ggml_type_sizef(wtype));           // conv_pointwise_conv1_w
+        ctx_size += n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // conv_batch_norm_w
+        ctx_size += n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // conv_batch_norm_b
+        ctx_size += n_audio_enc_layer*(n_audio_enc_dim*n_audio_enc_dim*kernel_size*ggml_type_sizef(wtype));         // conv_depthwise_conv_w
+        ctx_size += n_audio_enc_layer*(n_audio_enc_dim*n_audio_enc_dim*ggml_type_sizef(wtype));           // conv_pointwise_conv2_w
+
+        ctx_size += 2 * n_audio_enc_layer * (n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // ffn{1,2}_layer_norm_w
+        ctx_size += 2 * n_audio_enc_layer * (n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // ffn{1,2}_layer_norm_b
+        ctx_size += 2 * n_audio_enc_layer * (2 * n_audio_enc_dim * n_audio_enc_ffn_dim * ggml_type_sizef(wtype));  // ffn{1,2}_w{1,2}
+        ctx_size += 2 * n_audio_enc_layer * (2 * n_audio_enc_dim * ggml_type_sizef(GGML_TYPE_F32));  // ffn{1,2}_b{1,2}
+
+        ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // final_layer_norm_w
+        ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // final_layer_norm_b
+
+        // Adaptor
+        // ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // conv_ln
+        // ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // conv_pool_1d
+
+        // object overhead might differ depending on the structure and other miscellaneous factors
+        ctx_size += (6 + 12*n_audio_enc_layer)*512; // updated object overhead
+
+        printf("%s: ggml tensor size = %d bytes\n", __func__, (int) sizeof(ggml_tensor));
+        printf("%s: ggml ctx size = %6.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
+    }
+
+    // create the ggml context
+    {
+        struct ggml_init_params params = {
+            /*.mem_size   =*/ ctx_size,
+            /*.mem_buffer =*/ NULL,
+            /*.no_alloc   =*/ false,
+        };
+
+        model.ctx = ggml_init(params);
+        if (!model.ctx) {
+            fprintf(stderr, "%s: ggml_init() failed\n", __func__);
+            return false;
+        }
+    }
+
+    // prepare memory for the weights
+    {
+        const auto & hparams = model.hparams;
+
+        const int n_audio_enc_dim  = hparams.n_audio_enc_dim;
+        const int n_audio_enc_ffn_dim  = hparams.n_audio_enc_ffn_dim;
+        // const int n_audio_enc_feat_dim = hparams.n_audio_enc_feat_dim;
+        const int n_audio_enc_layer = hparams.n_audio_enc_layer;
+        const int n_audio_enc_head = hparams.n_audio_enc_head;
+        // const int n_text_vocab = hparams.n_text_vocab;
+
+        model.audio_enc_layers.resize(n_audio_enc_layer);
+        // model.post_extract_proj_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_feat_dim);
+        // model.post_extract_proj_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+        // model.tensors["model/post_extract_proj/w"] = model.post_extract_proj_w
+        // model.tensors["model/post_extract_proj/b"] = model.post_extract_proj_b
+        // model.audio_enc_pos_conv_w = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim, 1);
+        // model.tensors["model/audio_enc_pos_conv/w"] = model.audio_enc_pos_conv_w;
+        // model.audio_enc_pos_conv_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+        // model.tensors["model/audio_enc_pos_conv/b"] = model.audio_enc_pos_conv_b;
+
+        for (int i = 0; i < n_audio_enc_layer; ++i) {
+            auto & layer = model.audio_enc_layers[i];
+
+            layer.self_attn_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.self_attn_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.self_attn_linear_k_w   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+            layer.self_attn_linear_k_b   = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.self_attn_linear_q_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+            layer.self_attn_linear_q_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.self_attn_linear_v_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+            layer.self_attn_linear_v_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.self_attn_linear_out_w   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+            layer.self_attn_linear_out_b   = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.self_attn_linear_pos_w   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+
+            layer.self_attn_pos_bias_u = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_head, n_audio_enc_dim / n_audio_enc_head);
+            layer.self_attn_pos_bias_v = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_head, n_audio_enc_dim / n_audio_enc_head);
+
+            layer.conv_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.conv_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.conv_pointwise_conv1_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 2*n_audio_enc_dim, n_audio_enc_dim);
+            layer.conv_depthwise_conv_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, 31);
+
+            layer.conv_batch_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.conv_batch_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.conv_batch_norm_running_mean = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.conv_batch_norm_running_var = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.conv_batch_norm_num_batches_tracked = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1); 
+
+            layer.conv_pointwise_conv2_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
+
+            layer.ffn1_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.ffn1_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.ffn1_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
+            layer.ffn1_b1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim);
+
+            layer.ffn1_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
+            layer.ffn1_b2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.ffn2_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.ffn2_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.ffn2_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
+            layer.ffn2_b1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim);
+
+            layer.ffn2_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
+            layer.ffn2_b2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            layer.final_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+            layer.final_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
+
+            // map by name
+
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_layer_norm/w"] = layer.self_attn_layer_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_layer_norm/b"] = layer.self_attn_layer_norm_b;
+
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_k/w"] = layer.self_attn_linear_k_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_k/b"] = layer.self_attn_linear_k_b;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_q/w"] = layer.self_attn_linear_q_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_q/b"] = layer.self_attn_linear_q_b;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_v/w"] = layer.self_attn_linear_v_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_v/b"] = layer.self_attn_linear_v_b;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_out/w"] = layer.self_attn_linear_out_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_out/b"] = layer.self_attn_linear_out_b;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_linear_pos/w"] = layer.self_attn_linear_pos_w;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_pos_bias/u"] = layer.self_attn_pos_bias_u;
+            model.tensors["model/h" + std::to_string(i) + "/self_attn_pos_bias/v"] = layer.self_attn_pos_bias_v;
+
+            model.tensors["model/h" + std::to_string(i) + "/conv_layer_norm/w"]        = layer.conv_layer_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/conv_layer_norm/b"]        = layer.conv_layer_norm_b;
+
+            model.tensors["model/h" + std::to_string(i) + "/conv_pointwise_conv1/w"] = layer.conv_pointwise_conv1_w;
+            model.tensors["model/h" + std::to_string(i) + "/conv_depthwise_conv/w"] = layer.conv_depthwise_conv_w;
+            model.tensors["model/h" + std::to_string(i) + "/conv_batch_norm/w"] = layer.conv_batch_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/conv_batch_norm/b"] = layer.conv_batch_norm_b;
+            model.tensors["model/h" + std::to_string(i) + "/conv_batch_norm/m"] = layer.conv_batch_norm_running_mean;
+            model.tensors["model/h" + std::to_string(i) + "/conv_batch_norm/v"] = layer.conv_batch_norm_running_var;
+            model.tensors["model/h" + std::to_string(i) + "/conv_batch_norm/n"] = layer.conv_batch_norm_num_batches_tracked;
+            model.tensors["model/h" + std::to_string(i) + "/conv_pointwise_conv2/w"] = layer.conv_pointwise_conv2_w;
+
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_layer_norm/w"] = layer.ffn1_layer_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_layer_norm/b"] = layer.ffn1_layer_norm_b;
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_w_1/w"] = layer.ffn1_w1;
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_w_1/b"] = layer.ffn1_b1;
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_w_2/w"] = layer.ffn1_w2;
+            model.tensors["model/h" + std::to_string(i) + "/ffn1_w_2/b"] = layer.ffn1_b2;
+
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_layer_norm/w"] = layer.ffn2_layer_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_layer_norm/b"] = layer.ffn2_layer_norm_b;
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_w_1/w"] = layer.ffn2_w1;
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_w_1/b"] = layer.ffn2_b1;
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_w_2/w"] = layer.ffn2_w2;
+            model.tensors["model/h" + std::to_string(i) + "/ffn2_w_2/b"] = layer.ffn2_b2;
+
+            model.tensors["model/h" + std::to_string(i) + "/final_layer_norm/w"] = layer.final_layer_norm_w;
+            model.tensors["model/h" + std::to_string(i) + "/final_layer_norm/b"] = layer.final_layer_norm_b;
+        }
+    }
+
+   
+    // load weights
+    {
+        size_t total_size = 0;
+        while (true) {
+            int32_t n_dims;
+            int32_t length;
+            int32_t ttype;
+
+            fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
+            fin.read(reinterpret_cast<char *>(&length), sizeof(length));
+            fin.read(reinterpret_cast<char *>(&ttype),  sizeof(ttype));
+
+            if (fin.eof()) {
+                break;
+            }
+
+            int32_t nelements = 1;
+            int32_t ne[3] = { 1, 1, 1};
+            for (int i = 0; i < n_dims; ++i) {
+                fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+                nelements *= ne[i];
+            }
+
+            std::string name(length, 0);
+            fin.read(&name[0], length);
+
+            std::cout << "loading " << name << " " << n_dims << std::endl;
+
+            if (model.tensors.find(name) == model.tensors.end()) {
+                fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.c_str());
+                return false;
+            }
+
+            auto tensor = model.tensors[name];
+            if (ggml_nelements(tensor) != nelements) {
+                fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.c_str());
+                return false;
+            }
+
+            if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
+                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
+                        __func__, name.c_str(), (int) tensor->ne[0], (int) tensor->ne[1], ne[0], ne[1]);
+                return false;
+            }
+
+            // for debugging
+            if (0) {
+                printf("%24s - [%5d, %5d], type = %6s, %6.2f MB, %9zu bytes\n", name.c_str(), ne[0], ne[1], ggml_type_name(ggml_type(ttype)), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
+            }
+
+            const size_t bpe = ggml_type_size(ggml_type(ttype));
+
+            if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
+                fprintf(stderr, "%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
+                        __func__, name.c_str(), ggml_nbytes(tensor), nelements*bpe);
+                return false;
+            }
+
+            fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
+
+            total_size += ggml_nbytes(tensor);
+        }
+
+        printf("%s: model size  = %8.2f MB\n", __func__, total_size/1024.0/1024.0);
+    }
+
+    fin.close();
+
+    return true;
+}
+
+int main(int argc, char ** argv) {
+    // ggml_time_init();
+
+    // const int64_t t_main_start_us = ggml_time_us();
+
+    gpt_params params;
+    params.model = "models/gpt-2-117M/ggml-model.bin";
+
+    if (gpt_params_parse(argc, argv, params) == false) {
+        return 1;
+    }
+
+    if (params.seed < 0) {
+        params.seed = time(NULL);
+    }
+
+    printf("%s: seed = %d\n", __func__, params.seed);
+
+    std::mt19937 rng(params.seed);
+    if (params.prompt.empty()) {
+        params.prompt = gpt_random_prompt(rng);
+    }
+
+    // int64_t t_load_us = 0;
+
+    gpt_vocab vocab;
+    unity_model model;
+
+    // load the model
+    {
+        // const int64_t t_start_us = ggml_time_us();
+
+        if (!unity_model_load(params.model, model, vocab)) {
+            fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
+            return 1;
+        }
+
+        // t_load_us = ggml_time_us() - t_start_us;
+
+        // test_gpt_tokenizer(vocab, params.token_test);
+    }
+
+    // keep this buffer alive while evaluating the model
+    // std::vector<uint8_t> compute_buffer;
+
+    // struct ggml_allocr * allocr = NULL;
+    // // allocate the compute buffer
+    // {
+    //     allocr = ggml_allocr_new_measure(GGML_MEM_ALIGN);
+
+    //     // create the worst case graph for memory usage estimation
+    //     int n_tokens = std::min(model.hparams.n_ctx, params.n_batch);
+    //     int n_past = model.hparams.n_ctx - n_tokens;
+    //     struct ggml_cgraph * gf = gpt2_graph(model, allocr, n_past, std::vector<gpt_vocab::id>(n_tokens, 0));
+
+    //     // compute the required memory
+    //     size_t mem_size = ggml_allocr_alloc_graph(allocr, gf) + GGML_MEM_ALIGN;
+
+    //     // recreate the allocator with the required memory
+    //     ggml_allocr_free(allocr);
+    //     compute_buffer.resize(mem_size);
+    //     allocr = ggml_allocr_new(compute_buffer.data(), mem_size, GGML_MEM_ALIGN);
+
+    //     fprintf(stderr, "%s: compute buffer size: %.2f MB\n", __func__, mem_size/1024.0/1024.0);
+    // }
+
+    ggml_free(model.ctx);
+
+    return 0;
+}
