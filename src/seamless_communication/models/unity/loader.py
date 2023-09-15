@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, Mapping, Union, final
 
+import numpy as np
 import torch
 from fairseq2.assets import AssetStore, download_manager
 from fairseq2.assets.card import AssetCard
@@ -90,6 +91,15 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
 
         if config.use_text_encoder:
             state_dict["text_encoder_frontend.embed.weight"] = embeds
+
+        # TODO: Remove this hack once we get the correct char SPM .model file.
+        char_embeds = state_dict.get(
+            "t2u_model.decoder_frontend.embed_char.weight", None
+        )
+        if char_embeds is not None:
+            vocab_size = char_embeds.shape[0]
+            index_mapping = np.load("/checkpoint/krs/unity2/char_dict_mapping.npy")
+            char_embeds[torch.arange(vocab_size)] = char_embeds[index_mapping]
 
         # The embedding positions of the control symbols in fairseq's dict do
         # not match the SentencePiece model of the tokenizer.

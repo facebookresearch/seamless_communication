@@ -108,12 +108,6 @@ class NARDecoderFrontend(Module):
         self.char_tokenizer = char_tokenizer
         self.tag_manager = TagManager(text_tokenizer)
 
-        # TODO: Remove this hack once we get the correct char SPM .model file.
-        from fairseq.data import Dictionary
-
-        dict_file = "/checkpoint/krs/unity2/unity2_data/spm_char_lang38_tc.txt"
-        self.char_dict = Dictionary.load(dict_file)
-
         self.unk_idx = self.text_tokenizer.vocab_info.unk_idx
         self.pad_idx = self.text_tokenizer.vocab_info.pad_idx
 
@@ -270,12 +264,10 @@ class NARDecoderFrontend(Module):
                     char_ids = [self.unk_idx]
                 else:
                     # Get char token indices corresponding to the subwords.
-                    # char_ids = [
-                    #     self.char_tokenizer.model.token_to_index(ch)
-                    #     for ch in list(subword)
-                    # ]
-                    # TODO: Remove this hack once we get the correct char SPM .model file.
-                    char_ids = [self.char_dict.index(ch) for ch in list(subword)]
+                    char_ids = [
+                        self.char_tokenizer.model.token_to_index(ch)
+                        for ch in list(subword)
+                    ]
                 char_seq_len = len(char_ids)
                 char_seqs[b, total : total + char_seq_len] = torch.tensor(char_ids).to(
                     char_seqs
@@ -298,7 +290,6 @@ class NARDecoderFrontend(Module):
         )
 
         char_embeds = self.embed_char(char_seqs)
-        print(f"char_embeds: {char_embeds.sum()}, {char_embeds.shape}")
 
         if self.scale != 1.0:
             char_embeds *= self.scale
