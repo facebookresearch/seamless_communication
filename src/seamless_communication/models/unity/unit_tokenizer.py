@@ -186,7 +186,7 @@ class UnitTokenDecoder:
 
         # Remove the prefix EOS symbol. The language symbol is still expected to
         # be part of the decoded output.
-        units = token_indices[:, 1:].clone().detach()
+        units = token_indices.clone().detach()
 
         # Also, replace EOS with PAD at sequence ends.
         units[units == self.eos_idx] = self.pad_idx
@@ -194,6 +194,6 @@ class UnitTokenDecoder:
         units[units == self.pad_idx] = self.pad_idx + 4
 
         # Remove offset of control symbols (exclude language symbol).
-        units[:, 1:] -= 4
+        units -= 4
 
         return units

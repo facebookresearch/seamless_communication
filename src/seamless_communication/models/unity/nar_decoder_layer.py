@@ -165,7 +165,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         encoder_padding_mask: Optional[Tensor] = None,
         state_bag: Optional[IncrementalStateBag] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
-        seqs = self._forward_self_attn(seqs, padding_mask, self_attn_mask)
+        seqs = self._forward_self_attn(seqs, padding_mask)
 
         seqs = self._forward_conv1d(seqs)
 
@@ -175,7 +175,6 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         self,
         seqs: Tensor,
         padding_mask: Optional[Tensor],
-        self_attn_mask: Optional[Tensor],
     ) -> Tensor:
         residual = seqs
 
@@ -184,7 +183,6 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
             padding_mask,
             keys=seqs,
             values=seqs,
-            attn_mask=self_attn_mask,
             key_padding_mask=padding_mask,
         )
 
@@ -210,9 +208,3 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         seqs = self.conv1d_layer_norm(seqs)
 
         return seqs
-
-    def extra_repr(self) -> str:
-        """:meta private:"""
-        s = super().extra_repr()
-
-        return s + f", norm_order={self.norm_order}"
