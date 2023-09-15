@@ -82,6 +82,8 @@ struct unity_model {
     // audio encoder
     struct ggml_tensor * post_extract_proj;
     struct ggml_tensor * audio_enc_pos_conv;
+    struct ggml_tensor * memory_k;
+    struct ggml_tensor * memory_v;
     std::vector<audio_enc_layer> audio_enc_layers;
 
     // text encoder
@@ -166,6 +168,7 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
         const int n_audio_enc_dim  = hparams.n_audio_enc_dim;
         const int n_audio_enc_ffn_dim  = hparams.n_audio_enc_ffn_dim;
         const int n_audio_enc_layer = hparams.n_audio_enc_layer;
+        const int n_ctx = 1500;  // 20ms * 1500 = 30s
         // const int n_text_vocab = hparams.n_text_vocab;
         const int kernel_size = 31;
 
@@ -191,6 +194,9 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
 
         ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // final_layer_norm_w
         ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // final_layer_norm_b
+
+        ctx_size += n_ctx*n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // memory_k
+        ctx_size += n_ctx*n_audio_enc_layer*n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32); // memory_v
 
         // Adaptor
         // ctx_size += n_audio_enc_layer*(n_audio_enc_dim*ggml_type_sizef(GGML_TYPE_F32)); // conv_ln
@@ -401,7 +407,9 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
             }
 
             fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
-
+            // for (int i = 0; i < 10; ++i) {
+            //     std::cout << ((float *)(tensor->data))[i] << std::endl;
+            // } // debug
             total_size += ggml_nbytes(tensor);
         }
 
@@ -413,13 +421,105 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
     return true;
 }
 
+// build the computation graph
+struct ggml_cgraph * unity_graph(
+        const unity_model & model,
+        struct ggml_allocr * allocr) {
+
+    const auto & hparams = model.hparams;
+
+    const int n_audio_enc_dim  = hparams.n_audio_enc_dim;
+    const int n_audio_enc_ffn_dim  = hparams.n_audio_enc_ffn_dim;
+    const int n_audio_enc_layer = hparams.n_audio_enc_layer;
+    // const int n_text_vocab = hparams.n_text_vocab;
+    const int kernel_size = 31;
+
+    // since we are using ggml-alloc, this buffer only needs enough space to hold the ggml_tensor and ggml_cgraph structs, but not the tensor data
+    static size_t buf_size = ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead();
+    static std::vector<uint8_t> buf(buf_size);
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf.data(),
+        /*.no_alloc   =*/ true, // the tensors will be allocated later by ggml_allocr_alloc_graph()
+    };
+
+    struct ggml_context * ctx0 = ggml_init(params);
+
+    struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
+    
+    /// For dev, load an example input before conformer blocks
+    auto file = std::ifstream("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_conformer_block.bin", std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open binary file." << std::endl;
+    }
+    struct ggml_tensor * inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1024, 137);
+    inpL->data = malloc(ggml_nbytes(inpL));
+    file.read(reinterpret_cast<char *>(inpL->data), ggml_nbytes(inpL));
+    
+    for (int il = 0; il < n_audio_enc_layer; ++il) {
+        struct ggml_tensor * cur = inpL;
+        cur = ggml_norm(ctx0, cur, hparams.eps);
+        cur = ggml_add(ctx0,
+                ggml_mul(ctx0,
+                    ggml_repeat(ctx0, model.audio_enc_layers[il].ffn1_layer_norm_w, cur),
+                    cur),
+                ggml_repeat(ctx0, model.audio_enc_layers[il].ffn1_layer_norm_b, cur));
+        
+        // self_attn
+        
+        // conv
+        
+        // ffn2
+        
+        // norm
+        
+        inpL = cur;
+    }
+
+    ggml_build_forward_expand(gf, inpL);
+    ggml_free(ctx0);
+
+    return gf;
+}
+
+bool unity_eval(
+        const unity_model & model,
+        struct ggml_allocr * allocr,
+        const int n_threads) {
+
+    const auto & hparams = model.hparams;
+
+    // reset the allocator to free all the memory allocated during the previous inference
+    ggml_allocr_reset(allocr);
+
+    struct ggml_cgraph * gf = unity_graph(model, allocr);
+
+    // allocate tensors
+    ggml_allocr_alloc_graph(allocr, gf);
+
+    // run the computation
+    struct ggml_cplan plan = ggml_graph_plan(gf, n_threads);
+    static std::vector<uint8_t> work_buffer;
+    work_buffer.resize(plan.work_size);
+    plan.work_data = work_buffer.data();
+    ggml_graph_compute(gf, &plan);
+
+    // in this case, the output tensor is the last one in the graph
+    struct ggml_tensor * inpL = gf->nodes[gf->n_nodes - 1];
+    for (int i = 0; i < 10; ++i) {
+        printf("%8.4f ", ((float *)(inpL->data))[i]);
+    }
+
+    return true;
+}
+
 int main(int argc, char ** argv) {
     // ggml_time_init();
 
     // const int64_t t_main_start_us = ggml_time_us();
 
     gpt_params params;
-    params.model = "models/gpt-2-117M/ggml-model.bin";
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
@@ -436,48 +536,41 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    // int64_t t_load_us = 0;
-
     gpt_vocab vocab;
     unity_model model;
 
     // load the model
     {
-        // const int64_t t_start_us = ggml_time_us();
-
         if (!unity_model_load(params.model, model, vocab)) {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
-
-        // t_load_us = ggml_time_us() - t_start_us;
-
-        // test_gpt_tokenizer(vocab, params.token_test);
     }
 
     // keep this buffer alive while evaluating the model
-    // std::vector<uint8_t> compute_buffer;
+    std::vector<uint8_t> compute_buffer;
+    struct ggml_allocr * allocr = NULL;
+    // allocate the compute buffer
+    {
+        allocr = ggml_allocr_new_measure(GGML_MEM_ALIGN);
+        struct ggml_cgraph * gf = unity_graph(model, allocr);
+        
 
-    // struct ggml_allocr * allocr = NULL;
-    // // allocate the compute buffer
-    // {
-    //     allocr = ggml_allocr_new_measure(GGML_MEM_ALIGN);
+        // compute the required memory
+        size_t mem_size = ggml_allocr_alloc_graph(allocr, gf) + GGML_MEM_ALIGN;
 
-    //     // create the worst case graph for memory usage estimation
-    //     int n_tokens = std::min(model.hparams.n_ctx, params.n_batch);
-    //     int n_past = model.hparams.n_ctx - n_tokens;
-    //     struct ggml_cgraph * gf = gpt2_graph(model, allocr, n_past, std::vector<gpt_vocab::id>(n_tokens, 0));
+        // recreate the allocator with the required memory
+        ggml_allocr_free(allocr);
+        compute_buffer.resize(mem_size);
+        allocr = ggml_allocr_new(compute_buffer.data(), mem_size, GGML_MEM_ALIGN);
 
-    //     // compute the required memory
-    //     size_t mem_size = ggml_allocr_alloc_graph(allocr, gf) + GGML_MEM_ALIGN;
+        fprintf(stderr, "%s: compute buffer size: %.2f MB\n", __func__, mem_size/1024.0/1024.0);
+    }
 
-    //     // recreate the allocator with the required memory
-    //     ggml_allocr_free(allocr);
-    //     compute_buffer.resize(mem_size);
-    //     allocr = ggml_allocr_new(compute_buffer.data(), mem_size, GGML_MEM_ALIGN);
-
-    //     fprintf(stderr, "%s: compute buffer size: %.2f MB\n", __func__, mem_size/1024.0/1024.0);
-    // }
+    if (!unity_eval(model, allocr, 1)) {
+        printf("Failed to predict\n");
+        return 1;
+    }
 
     ggml_free(model.ctx);
 
