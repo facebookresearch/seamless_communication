@@ -244,7 +244,7 @@ class UnitYT2UBuilder:
 
         decoder = self.build_decoder()
 
-        final_proj = TiedProjection(embed_unit.weight)
+        final_proj = TiedProjection(embed_unit.weight, bias=None)
 
         if self.config.nar_decoder_config is None:
             decoder_frontend = self.build_decoder_frontend(embed_unit)
@@ -507,6 +507,7 @@ class UnitYT2UBuilder:
         return StandardFeedForwardNetwork(
             self.config.model_dim,
             self.config.ffn_inner_dim,
+            bias=True,
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,

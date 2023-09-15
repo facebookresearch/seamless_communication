@@ -11,7 +11,8 @@ from torch.nn import Conv1d, Dropout, Module, ReLU, Sequential
 from typing import Optional, Tuple
 
 from fairseq2.typing import DataType, Device
-from fairseq2.nn.normalization import StandardLayerNorm
+from fairseq2.nn.transformer import create_default_layer_norm
+from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.projection import Linear
 
 
@@ -41,10 +42,10 @@ class VariancePredictor(Module):
     :cite:t:`https://arxiv.org/pdf/2006.04558.pdf`"""
 
     conv1: Sequential
-    ln1: StandardLayerNorm
+    ln1: LayerNorm
     dropout_module: Dropout
     conv2: Sequential
-    ln2: StandardLayerNorm
+    ln2: LayerNorm
     proj: Linear
 
     def __init__(
@@ -73,7 +74,9 @@ class VariancePredictor(Module):
             ReLU(),
         )
 
-        self.ln1 = StandardLayerNorm(var_pred_hidden_dim, device=device, dtype=dtype)
+        layer_norm_fn = create_default_layer_norm
+
+        self.ln1 = layer_norm_fn(var_pred_hidden_dim, device=device, dtype=dtype)
 
         self.dropout_module = Dropout(p=var_pred_dropout)
 
@@ -91,7 +94,7 @@ class VariancePredictor(Module):
             ReLU(),
         )
 
-        self.ln2 = StandardLayerNorm(var_pred_hidden_dim, device=device, dtype=dtype)
+        self.ln2 = layer_norm_fn(var_pred_hidden_dim, device=device, dtype=dtype)
 
         self.proj = Linear(
             var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype

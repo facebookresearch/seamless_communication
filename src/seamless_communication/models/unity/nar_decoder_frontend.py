@@ -14,8 +14,9 @@ from fairseq2.data.text import TextTokenizer
 from fairseq2.models.mbart.tokenizer import mBartTokenizer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
-from fairseq2.nn.normalization import StandardLayerNorm
+from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.position_encoder import PositionEncoder
+from fairseq2.nn.transformer import create_default_layer_norm
 from fairseq2.nn.utils.mask import to_padding_mask
 from fairseq2.typing import DataType, Device, finaloverride
 
@@ -73,6 +74,16 @@ class TagManager:
 class NARDecoderFrontend(Module):
     """Represents a Non-autoregressive decoder front-end."""
 
+    char_pos_encoder: PositionEncoder
+    pos_emb_alpha_char: Parameter
+    unit_pos_encoder: PositionEncoder
+    pos_emb_alpha: Parameter
+    scale: float
+    char_length_regulator: HardUpsampling
+    variance_adaptor: VarianceAdaptor
+    layer_norm: Optional[LayerNorm]
+    dropout: Optional[Dropout]
+
     def __init__(
         self,
         embed: Embedding,
@@ -82,6 +93,7 @@ class NARDecoderFrontend(Module):
         unit_pos_encoder: PositionEncoder,
         char_pos_encoder: PositionEncoder,
         variance_adaptor: VarianceAdaptor,
+        no_scale: bool = False,
         layer_norm: bool = False,
         dropout_p: float = 0.1,
         device: Optional[Device] = None,
@@ -119,16 +131,19 @@ class NARDecoderFrontend(Module):
             )
 
         self.unit_pos_encoder = unit_pos_encoder
+
         self.pos_emb_alpha = Parameter(torch.ones(1, device=device, dtype=dtype))
         self.char_pos_encoder = char_pos_encoder
+
         self.pos_emb_alpha_char = Parameter(torch.ones(1, device=device, dtype=dtype))
-        self.embed_scale = math.sqrt(self.model_dim)
+        self.scale = 1.0 if no_scale else math.sqrt(self.model_dim)
+
         self.char_length_regulator = HardUpsampling()
 
         self.variance_adaptor = variance_adaptor
 
         if layer_norm:
-            self.layer_norm = StandardLayerNorm(
+            self.layer_norm = create_default_layer_norm(
                 self.model_dim, device=device, dtype=dtype
             )
         else:
@@ -284,8 +299,12 @@ class NARDecoderFrontend(Module):
         )
 
         char_embeds = self.embed_char(char_seqs)
+        print(f"char_embeds: {char_embeds.sum()}, {char_embeds.shape}")
 
-        pos_embeds += self.embed_scale * char_embeds
+        if self.scale != 1.0:
+            char_embeds *= self.scale
+
+        pos_embeds += char_embeds
 
         seqs += pos_embeds
 

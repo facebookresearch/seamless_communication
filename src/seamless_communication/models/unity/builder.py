@@ -387,12 +387,22 @@ def create_unity_model(
     if isinstance(config.mt_model_config, NllbConfig):
         nllb_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
         unity_builder = UnitYBuilder(
-            config, w2v2_encoder_builder, nllb_builder, t2u_builder, device, dtype
+            config,
+            w2v2_encoder_builder,
+            nllb_builder,
+            t2u_builder,
+            device=device,
+            dtype=dtype,
         )
     else:
         mbart_builder = mBartBuilder(config.mt_model_config, device=device, dtype=dtype)
         unity_builder = UnitYBuilder(
-            config, w2v2_encoder_builder, mbart_builder, t2u_builder, device=device, dtype=dtype
+            config,
+            w2v2_encoder_builder,
+            mbart_builder,
+            t2u_builder,
+            device=device,
+            dtype=dtype,
         )
 
     return unity_builder.build_model()

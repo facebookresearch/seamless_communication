@@ -193,12 +193,9 @@ class UnitYGenerator:
 
         text_seqs, text_seq_lens = text_output.generator_output.collate()
 
-        # Manually trim the final EOS token.
+        # Manually trim the final EOS token to be consistent with fairseq.
         if text_seq_lens is not None:
             text_seq_lens -= 1
-
-            # TODO: Remove this hack.
-            text_seqs = text_seqs[:, : text_seq_lens[0]]
 
         # Use the output of the text generator to compute the decoder output.
         decoder_output, decoder_padding_mask = self.model.decode(

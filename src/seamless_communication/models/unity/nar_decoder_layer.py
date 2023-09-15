@@ -14,10 +14,10 @@ from fairseq2.nn.transformer import (
     TransformerDecoderLayer,
     MultiheadAttention,
 )
-from fairseq2.nn.normalization import StandardLayerNorm
 from fairseq2.typing import DataType, Device, finaloverride
 
 from fairseq2.nn.incremental_state import IncrementalStateBag
+from fairseq2.nn.transformer import create_default_layer_norm
 from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.typing import DataType, Device, finaloverride
 
@@ -138,9 +138,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("self_attn_dropout", None)
 
-        self.self_attn_layer_norm = StandardLayerNorm(
-            model_dim, device=device, dtype=dtype
-        )
+        layer_norm_fn = create_default_layer_norm
+
+        self.self_attn_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         self.conv1d = conv1d
 
@@ -149,9 +149,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("conv1d_dropout", None)
 
-        self.conv1d_layer_norm = StandardLayerNorm(
-            model_dim, device=device, dtype=dtype
-        )
+        self.conv1d_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         check_model_dim(self)
 
