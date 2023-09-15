@@ -45,6 +45,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self,
         inner: TransformerEncoder,
         adaptor_layers: Iterable[TransformerEncoderLayer],
+        *,
         inner_layer_norm: bool = False,
         layer_norm_fn: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
@@ -99,9 +100,12 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self,
         seqs: Tensor,
         padding_mask: Optional[Tensor],
+        *
         layer_output_hook: Optional[EncoderLayerOutputHook] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
-        seqs, padding_mask = self.inner(seqs, padding_mask, layer_output_hook)
+        seqs, padding_mask = self.inner(
+            seqs, padding_mask, layer_output_hook=layer_output_hook
+        )
 
         if self.inner_layer_norm is not None:
             seqs = self.inner_layer_norm(seqs)
@@ -153,8 +157,9 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         self,
         self_attn: MultiheadAttention,
         ffn: FeedForwardNetwork,
-        kernel_size: int = 8,
-        stride: int = 8,
+        kernel_size: int,
+        stride: int,
+        *,
         dropout_p: float = 0.1,
         layer_norm_fn: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
@@ -331,8 +336,9 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
     def __init__(
         self,
         block: ConformerBlock,
-        kernel_size: int = 8,
-        stride: int = 8,
+        kernel_size: int,
+        stride: int,
+        *,
         layer_norm: bool = False,
         layer_norm_fn: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
