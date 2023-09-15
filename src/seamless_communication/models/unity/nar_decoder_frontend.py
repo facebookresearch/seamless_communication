@@ -4,14 +4,13 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, Union, final
+from typing import List, Optional, Tuple, final
 
 from torch import Tensor
 from torch.nn import Dropout, Module, Parameter
 
 from fairseq2.data import VocabularyInfo
 from fairseq2.data.text import TextTokenizer
-from fairseq2.models.mbart.tokenizer import mBartTokenizer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
 from fairseq2.nn.normalization import LayerNorm
@@ -88,7 +87,7 @@ class NARDecoderFrontend(Module):
         self,
         embed: Embedding,
         embed_char: Embedding,
-        text_tokenizer: Union[NllbTokenizer, mBartTokenizer],
+        text_tokenizer: NllbTokenizer,
         char_tokenizer: CharTokenizer,
         unit_pos_encoder: PositionEncoder,
         char_pos_encoder: PositionEncoder,

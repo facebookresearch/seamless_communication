@@ -5,11 +5,10 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
-from fairseq2.models.mbart import mBartBuilder, mBartConfig
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.models.wav2vec2 import Wav2Vec2EncoderBuilder, Wav2Vec2EncoderConfig
@@ -49,7 +48,7 @@ class UnitYConfig:
     w2v2_encoder_config: Wav2Vec2EncoderConfig
     """The configuration of the underlying wav2vec 2.0 encoder."""
 
-    mt_model_config: Union[NllbConfig, mBartConfig]
+    mt_model_config: NllbConfig
     """The configuration of the underlying MT text encoder-decoder."""
 
     t2u_config: Optional[UnitYT2UConfig]
@@ -172,7 +171,7 @@ class UnitYBuilder:
 
     config: UnitYConfig
     w2v2_encoder_builder: Wav2Vec2EncoderBuilder
-    mt_model_builder: Union[NllbBuilder, mBartBuilder]
+    mt_model_builder: NllbBuilder
     t2u_builder: Optional["UnitYT2UBuilder"]
     device: Optional[Device]
     dtype: Optional[DataType]
@@ -181,7 +180,7 @@ class UnitYBuilder:
         self,
         config: UnitYConfig,
         w2v2_encoder_builder: Wav2Vec2EncoderBuilder,
-        mt_model_builder: Union[NllbBuilder, mBartBuilder],
+        mt_model_builder: NllbBuilder,
         t2u_builder: Optional["UnitYT2UBuilder"],
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -384,25 +383,14 @@ def create_unity_model(
     else:
         t2u_builder = UnitYT2UBuilder(config.t2u_config, device=device, dtype=dtype)
 
-    if isinstance(config.mt_model_config, NllbConfig):
-        nllb_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
-        unity_builder = UnitYBuilder(
-            config,
-            w2v2_encoder_builder,
-            nllb_builder,
-            t2u_builder,
-            device=device,
-            dtype=dtype,
-        )
-    else:
-        mbart_builder = mBartBuilder(config.mt_model_config, device=device, dtype=dtype)
-        unity_builder = UnitYBuilder(
-            config,
-            w2v2_encoder_builder,
-            mbart_builder,
-            t2u_builder,
-            device=device,
-            dtype=dtype,
-        )
+    nllb_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
+    unity_builder = UnitYBuilder(
+        config,
+        w2v2_encoder_builder,
+        nllb_builder,
+        t2u_builder,
+        device=device,
+        dtype=dtype,
+    )
 
     return unity_builder.build_model()
