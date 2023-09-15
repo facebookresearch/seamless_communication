@@ -100,7 +100,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self,
         seqs: Tensor,
         padding_mask: Optional[Tensor],
-        *
+        *,
         layer_output_hook: Optional[EncoderLayerOutputHook] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
         seqs, padding_mask = self.inner(
