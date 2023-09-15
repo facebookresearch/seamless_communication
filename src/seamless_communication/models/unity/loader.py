@@ -231,7 +231,11 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
 
 
 load_unity_model = UnitYLoader(
-    asset_store, download_manager, create_unity_model, unity_archs
+    asset_store,
+    download_manager,
+    create_unity_model,
+    unity_archs,
+    restrict_checkpoints=False,
 )
 
 

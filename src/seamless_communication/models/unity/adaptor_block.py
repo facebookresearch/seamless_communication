@@ -70,7 +70,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self.inner = inner
 
         if inner_layer_norm:
-            self.inner_layer_norm = layer_norm_fn(model_dim, device, dtype)
+            self.inner_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
         else:
             self.register_module("inner_layer_norm", None)
 
@@ -90,7 +90,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
 
         self.adaptor_layers = layer_list
 
-        self.layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         check_model_dim(self)
 
@@ -185,7 +185,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         self.kernel_size = kernel_size
         self.stride = stride
 
-        self.residual_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.residual_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         self.residual_conv = Conv1d(
             model_dim,
@@ -199,7 +199,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
 
         self.residual_activation = GLU(dim=1)
 
-        self.self_attn_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.self_attn_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         self.self_attn_conv = Conv1d(
             model_dim,
@@ -220,7 +220,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         else:
             self.register_module("self_attn_dropout", None)
 
-        self.ffn_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.ffn_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
 
         self.ffn = ffn
 

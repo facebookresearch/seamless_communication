@@ -218,7 +218,7 @@ class UnitYBuilder:
             text_encoder_frontend = None
             text_encoder = None
 
-        final_proj = TiedProjection(text_embed.weight)
+        final_proj = TiedProjection(text_embed.weight, bias=None)
 
         if self.t2u_builder is None:
             t2u_model = None
@@ -271,6 +271,7 @@ class UnitYBuilder:
         ffn = StandardFeedForwardNetwork(
             self.config.model_dim,
             self.w2v2_encoder_builder.config.ffn_inner_dim,
+            bias=True,
             device=self.device,
             dtype=self.dtype,
         )
@@ -353,18 +354,23 @@ def create_unity_model(
         The data type of module parameters and buffers.
     """
     w2v2_encoder_builder = Wav2Vec2EncoderBuilder(
-        config.w2v2_encoder_config, device, dtype
+        config.w2v2_encoder_config, device=device, dtype=dtype
     )
 
-    nllb_builder = NllbBuilder(config.nllb_config, device, dtype)
+    nllb_builder = NllbBuilder(config.nllb_config, device=device, dtype=dtype)
 
     if config.t2u_config is None:
         t2u_builder = None
     else:
-        t2u_builder = UnitYT2UBuilder(config.t2u_config, device, dtype)
+        t2u_builder = UnitYT2UBuilder(config.t2u_config, device=device, dtype=dtype)
 
     unity_builder = UnitYBuilder(
-        config, w2v2_encoder_builder, nllb_builder, t2u_builder, device, dtype
+        config,
+        w2v2_encoder_builder,
+        nllb_builder,
+        t2u_builder,
+        device=device,
+        dtype=dtype,
     )
 
     return unity_builder.build_model()
@@ -486,7 +492,7 @@ class UnitYT2UBuilder:
         decoder_frontend = self.build_decoder_frontend(embed)
         decoder = self.build_decoder()
 
-        final_proj = TiedProjection(embed.weight)
+        final_proj = TiedProjection(embed.weight, bias=None)
 
         return UnitYT2UModel(
             encoder,
@@ -603,6 +609,7 @@ class UnitYT2UBuilder:
         return StandardFeedForwardNetwork(
             self.config.model_dim,
             self.config.ffn_inner_dim,
+            bias=True,
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
