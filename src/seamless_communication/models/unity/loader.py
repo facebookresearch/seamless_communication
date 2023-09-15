@@ -311,7 +311,9 @@ class UnitYUnitTokenizerLoader:
             card = self.asset_store.retrieve_card(model_name_or_card)
 
         return UnitTokenizer(
-            card.field("num_units").as_(int), card.field("unit_langs").as_list(str)
+            card.field("num_units").as_(int),
+            card.field("unit_langs").as_list(str),
+            card.field("model_arch").as_(str),
         )
 
 

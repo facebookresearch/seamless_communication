@@ -148,6 +148,8 @@ class NARDecoderFrontend(Module):
             self.register_module("dropout", None)
 
     def indices_to_subwords(self, text_seqs: Tensor) -> List[List[str]]:
+        # TODO: To be replaced with fairseq2's indices_to_tokens SPM model method
+        # once implemented.
         N, seq_len = text_seqs.shape
         subwords_batch = []
         for b in range(N):

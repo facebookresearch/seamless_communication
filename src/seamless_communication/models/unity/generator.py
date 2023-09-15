@@ -16,12 +16,10 @@ from fairseq2.generation import (
     SequenceToTextGenerator,
     SequenceToTextOutput,
 )
-from fairseq2.models.seq2seq import Seq2SeqBatch
 from seamless_communication.models.unity.model import (
     UnitYModel,
     UnitYX2TModel,
     UnitYT2UModel,
-    UnitYNART2UModel,
 )
 from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenDecoder,
