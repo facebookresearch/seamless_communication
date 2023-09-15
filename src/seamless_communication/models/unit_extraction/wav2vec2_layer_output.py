@@ -118,11 +118,16 @@ class Wav2Vec2LayerOutputModel(nn.Module):
             layer_output: Tensor,
             layer_padding_mask: Optional[Tensor],
             num_layers: int,
-        ) -> None:
+        ) -> bool:
             nonlocal w2v2_layer_output
 
             if layer_idx == out_layer_idx:
                 w2v2_layer_output = layer_output
+
+                # We don't need to execute the remaining layers.
+                return False
+
+            return True
 
         _, _ = self.encoder(seqs, padding_mask, layer_output_hook)
 
