@@ -255,7 +255,7 @@ class UnitYBuilder:
         return UnitYEncoderAdaptor(
             w2v2_encoder,
             layers,
-            self.config.adaptor_layer_norm,
+            inner_layer_norm=self.config.adaptor_layer_norm,
             device=self.device,
             dtype=self.dtype,
         )
@@ -281,7 +281,7 @@ class UnitYBuilder:
             ffn,
             self.config.adaptor_kernel_size,
             self.config.adaptor_stride,
-            self.config.adaptor_dropout_p,
+            dropout_p=self.config.adaptor_dropout_p,
             device=self.device,
             dtype=self.dtype,
         )
@@ -321,7 +321,7 @@ class UnitYBuilder:
             block,
             self.config.adaptor_kernel_size,
             self.config.adaptor_stride,
-            layer_norm,
+            layer_norm=layer_norm,
             device=self.device,
             dtype=self.dtype,
         )
