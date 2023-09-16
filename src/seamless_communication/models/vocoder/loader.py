@@ -23,7 +23,7 @@ class VocoderLoader(ModelLoader[Vocoder, VocoderConfig]):
     """Loads Vocoder models."""
 
     @finaloverride
-    def _upgrade_checkpoint(
+    def _convert_checkpoint(
         self, checkpoint: Mapping[str, Any], config: VocoderConfig
     ) -> Mapping[str, Any]:
         old_state_dict = checkpoint["generator"]

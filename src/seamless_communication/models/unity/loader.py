@@ -29,7 +29,7 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
     """Loads UnitY models."""
 
     @finaloverride
-    def _upgrade_checkpoint(
+    def _convert_checkpoint(
         self, checkpoint: Mapping[str, Any], config: UnitYConfig
     ) -> Mapping[str, Any]:
         state_dict = checkpoint["model"]
