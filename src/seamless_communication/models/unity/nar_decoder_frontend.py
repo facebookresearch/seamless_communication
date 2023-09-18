@@ -10,7 +10,6 @@ from torch import Tensor
 from torch.nn import Dropout, Module, Parameter
 
 from fairseq2.data import VocabularyInfo
-from fairseq2.data.text import TextTokenizer
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
 from fairseq2.nn.normalization import LayerNorm
