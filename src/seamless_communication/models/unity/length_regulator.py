@@ -101,7 +101,10 @@ class VariancePredictor(Module):
             var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype
         )
 
-    def forward(self, seqs: Tensor) -> Tensor:
+    def forward(self, seqs: Tensor, padding_mask: Optional[Tensor]) -> Tensor:
+        # Ensure that we do not leak padded positions in the convolution layer.
+        seqs = apply_padding_mask(seqs, padding_mask)
+
         # (N, S, M) -> (N, M, S)
         seqs = seqs.transpose(1, 2)
 
@@ -114,6 +117,8 @@ class VariancePredictor(Module):
         seqs = self.ln1(seqs)
 
         seqs = self.dropout_module(seqs)
+
+        seqs = apply_padding_mask(seqs, padding_mask)
 
         # (N, S, H) -> (N, H, S)
         seqs = seqs.transpose(1, 2)
@@ -128,8 +133,12 @@ class VariancePredictor(Module):
 
         seqs = self.dropout_module(seqs)
 
+        seqs = apply_padding_mask(seqs, padding_mask)
+
         # (N, S, H) -> (N, S, 1) -> (N, S)
         seqs = self.proj(seqs).squeeze(dim=2)
+
+        seqs = apply_padding_mask(seqs, padding_mask)
 
         return seqs
 
@@ -172,13 +181,14 @@ class VarianceAdaptor(Module):
         duration_factor: float = 1.0,
         min_duration: int = 0,
     ) -> Tuple[Tensor, Tensor]:
-        log_durations = self.duration_predictor(seqs)
+        log_durations = self.duration_predictor(seqs, padding_mask)
 
         durations = torch.clamp(
             torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
             min=min_duration,
         )
 
+        # We need to apply the padding_mask again since we clamp by min_duration.
         durations = apply_padding_mask(durations, padding_mask)
 
         # TODO: Implement pitch, energy predictors.
