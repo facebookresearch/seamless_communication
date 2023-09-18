@@ -261,14 +261,14 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
             layer.self_attn_linear_out_b   = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
             layer.self_attn_linear_pos_w   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_dim);
 
-            layer.self_attn_pos_bias_u = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_head, n_audio_enc_dim / n_audio_enc_head);
-            layer.self_attn_pos_bias_v = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_head, n_audio_enc_dim / n_audio_enc_head);
+            layer.self_attn_pos_bias_u = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim / n_audio_enc_head, n_audio_enc_head);
+            layer.self_attn_pos_bias_v = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim / n_audio_enc_head, n_audio_enc_head);
 
             layer.conv_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
             layer.conv_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
 
-            layer.conv_pointwise_conv1_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 2*n_audio_enc_dim, n_audio_enc_dim);
-            layer.conv_depthwise_conv_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, 31);
+            layer.conv_pointwise_conv1_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, 2*n_audio_enc_dim);
+            layer.conv_depthwise_conv_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 31, n_audio_enc_dim);
 
             layer.conv_batch_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
             layer.conv_batch_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
@@ -281,19 +281,19 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
             layer.ffn1_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
             layer.ffn1_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
 
-            layer.ffn1_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
+            layer.ffn1_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
             layer.ffn1_b1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim);
 
-            layer.ffn1_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
+            layer.ffn1_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
             layer.ffn1_b2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
 
             layer.ffn2_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
             layer.ffn2_layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
 
-            layer.ffn2_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
+            layer.ffn2_w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
             layer.ffn2_b1 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim);
 
-            layer.ffn2_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_dim, n_audio_enc_ffn_dim);
+            layer.ffn2_w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_enc_ffn_dim, n_audio_enc_dim);
             layer.ffn2_b2 = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
 
             layer.final_layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_enc_dim);
@@ -456,25 +456,80 @@ struct ggml_cgraph * unity_graph(
     struct ggml_tensor * inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1024, 137);
     inpL->data = malloc(ggml_nbytes(inpL));
     file.read(reinterpret_cast<char *>(inpL->data), ggml_nbytes(inpL));
+    struct ggml_tensor * ffn_scale = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1, 1);
+    ffn_scale->data = malloc(ggml_nbytes(ffn_scale));
+    ggml_set_f32(ffn_scale, 0.5f);
     
     for (int il = 0; il < n_audio_enc_layer; ++il) {
         struct ggml_tensor * cur = inpL;
+        struct ggml_tensor * residual = cur;
+        const audio_enc_layer layer = model.audio_enc_layers[il];
+        // FFN1: layernorm
         cur = ggml_norm(ctx0, cur, hparams.eps);
         cur = ggml_add(ctx0,
                 ggml_mul(ctx0,
-                    ggml_repeat(ctx0, model.audio_enc_layers[il].ffn1_layer_norm_w, cur),
+                    ggml_repeat(ctx0, layer.ffn1_layer_norm_w, cur),
                     cur),
-                ggml_repeat(ctx0, model.audio_enc_layers[il].ffn1_layer_norm_b, cur));
+                ggml_repeat(ctx0, layer.ffn1_layer_norm_b, cur));
+        // FFN1: proj
+        cur = ggml_mul_mat(ctx0, layer.ffn1_w1, cur);
+        cur = ggml_add(ctx0, ggml_repeat(ctx0, layer.ffn1_b1, cur), cur);
+        cur = ggml_silu(ctx0, cur);
+        cur = ggml_mul_mat(ctx0, layer.ffn1_w2, cur);
+        cur = ggml_add(ctx0, ggml_repeat(ctx0, layer.ffn1_b2, cur), cur);
+        // FFN1: * 0.5
+        cur = ggml_mul(ctx0, ggml_repeat(ctx0, ffn_scale, cur), cur);
+        // FFN1: + residual
+        cur = ggml_add(ctx0, cur, residual);
+
+        // TODO: Opportunity to optimize attn calculation (1) For num_threads > 1 (2) Flash attn. See https://github.com/ggerganov/ggml/blob/main/examples/gpt-2/main.cpp 
+
+        // self_attn: layernorm
+        cur = ggml_norm(ctx0, cur, hparams.eps);
+        cur = ggml_add(ctx0,
+                ggml_mul(ctx0,
+                    ggml_repeat(ctx0, layer.self_attn_layer_norm_w, cur),
+                    cur),
+                ggml_repeat(ctx0, layer.self_attn_layer_norm_b, cur));
         
-        // self_attn
+        // self_attn: qkv
+        struct ggml_tensor * Qcur = ggml_mul_mat(ctx0,
+                layer.self_attn_linear_q_w,
+                cur);
+
+        Qcur = ggml_add(ctx0,
+                ggml_repeat(ctx0,
+                    layer.self_attn_linear_q_b,
+                    Qcur),
+                Qcur);
+
+        struct ggml_tensor * Kcur = ggml_mul_mat(ctx0,
+                layer.self_attn_linear_k_w,
+                cur);
+        Kcur = ggml_add(ctx0,
+                ggml_repeat(ctx0,
+                    layer.self_attn_linear_k_b,
+                    Kcur),
+                Kcur);
+
+        struct ggml_tensor * Vcur = ggml_mul_mat(ctx0,
+                layer.self_attn_linear_v_w,
+                cur);
+
+        Vcur = ggml_add(ctx0,
+                ggml_repeat(ctx0,
+                    layer.self_attn_linear_v_b,
+                    Vcur),
+                Vcur);
+        // self_attn: rel_pos SDPA
         
         // conv
         
         // ffn2
         
         // norm
-        
         inpL = cur;
+        break; // debug
     }
 
     ggml_build_forward_expand(gf, inpL);

@@ -71,7 +71,7 @@ for name in list_vars.keys():
     str_ = state_map[name].encode('utf-8')
     fout.write(struct.pack("iii", n_dims, len(str_), ftype))
     for i in range(n_dims):
-        fout.write(struct.pack("i", data.shape[i]))
+        fout.write(struct.pack("i", data.shape[n_dims-1-i]))
     fout.write(str_)
 
     # data
