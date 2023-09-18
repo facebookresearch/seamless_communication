@@ -133,12 +133,8 @@ class VariancePredictor(Module):
 
         seqs = self.dropout_module(seqs)
 
-        seqs = apply_padding_mask(seqs, padding_mask)
-
         # (N, S, H) -> (N, S, 1) -> (N, S)
         seqs = self.proj(seqs).squeeze(dim=2)
-
-        seqs = apply_padding_mask(seqs, padding_mask)
 
         return seqs
 

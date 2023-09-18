@@ -103,8 +103,6 @@ class Conv1dBlock(Module):
         # (N, M, S) -> (N, S, M)
         seqs = seqs.transpose(1, 2)
 
-        seqs = apply_padding_mask(seqs, padding_mask)
-
         return seqs
 
 
