@@ -62,8 +62,11 @@ class TagManager:
         """Add back 0s in place of the prefix, suffix tokens."""
         N = dur_or_len.shape[0]
 
-        prefix = dur_or_len.new_zeros((N, self.prefix_len))
-        suffix = dur_or_len.new_zeros((N, self.suffix_len))
+        # prefix = dur_or_len.new_zeros((N, self.prefix_len))
+        # suffix = dur_or_len.new_zeros((N, self.suffix_len))
+
+        prefix = dur_or_len.new_zeros((N, 1))
+        suffix = dur_or_len.new_zeros((N, 1))
 
         dur_or_len = torch.cat([prefix, dur_or_len, suffix], dim=1)
         return dur_or_len

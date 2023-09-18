@@ -14,6 +14,7 @@ from fairseq2.typing import DataType, Device
 from fairseq2.nn.transformer import create_default_layer_norm
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.projection import Linear
+from fairseq2.nn.utils.mask import apply_padding_mask
 
 
 class HardUpsampling(Module):
@@ -177,8 +178,8 @@ class VarianceAdaptor(Module):
             torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
             min=min_duration,
         )
-        if padding_mask is not None:
-            durations.masked_fill_(padding_mask, 0)
+
+        durations = apply_padding_mask(durations, padding_mask)
 
         # TODO: Implement pitch, energy predictors.
         # TODO: Implement GaussianUpsampling.

@@ -219,7 +219,7 @@ class UnitYGenerator:
             )
             unit_seqs, _ = unit_gen_output.collate()
         else:
-            unit_decoder_output = self.model.t2u_model(
+            unit_decoder_output, decoder_padding_mask = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 target_seqs=None,
@@ -228,6 +228,8 @@ class UnitYGenerator:
             )
             # (B, S_unit, V_unit)
             unit_seqs = unit_decoder_output.logits.argmax(dim=2)
+            # Apply the padding mask to the generated units.
+            unit_seqs[decoder_padding_mask == -torch.inf] = unit_decoder_output.pad_idx
 
         # Convert to speech units.
         units = self.unit_decoder(unit_seqs)
