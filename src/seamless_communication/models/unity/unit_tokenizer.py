@@ -69,7 +69,12 @@ class UnitTokenizer:
 
     def index_to_lang(self, idx: int) -> str:
         """Return the language of the specified language symbol index."""
-        relative_idx = idx - self.num_units - 5
+        relative_idx = (
+            idx
+            - self.num_units
+            - (self.lang_symbol_repititions - 1) * len(self.langs)
+            - 5
+        )
 
         if relative_idx < 0 or relative_idx >= len(self.langs):
             raise ValueError(

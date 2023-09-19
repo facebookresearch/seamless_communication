@@ -383,11 +383,11 @@ def create_unity_model(
     else:
         t2u_builder = UnitYT2UBuilder(config.t2u_config, device=device, dtype=dtype)
 
-    nllb_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
+    mt_model_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
     unity_builder = UnitYBuilder(
         config,
         w2v2_encoder_builder,
-        nllb_builder,
+        mt_model_builder,
         t2u_builder,
         device=device,
         dtype=dtype,
