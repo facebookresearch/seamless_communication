@@ -53,7 +53,7 @@ exclude_list = []
 exclude_list += [f"encoder.w2v_encoder.w2v_model.encoder.layers.{i}.conv_module.batch_norm.num_batches_tracked" for i in range(24)]
 
 for name in list_vars.keys():
-    if list_vars[name] is None or name in exclude_list or "adaptor" in name:
+    if list_vars[name] is None or name in exclude_list or "adaptor" in name or "mask_emb" in name:
         continue
     data = list_vars[name].squeeze().numpy()
     print("Processing variable: " , name ,  " with shape: ", data.shape)
@@ -71,6 +71,8 @@ for name in list_vars.keys():
     str_ = state_map[name].encode('utf-8')
     fout.write(struct.pack("iii", n_dims, len(str_), ftype))
     for i in range(n_dims):
+        if '.layer_norm.weight' in name:
+            print(data.shape)
         fout.write(struct.pack("i", data.shape[n_dims-1-i]))
     fout.write(str_)
 
