@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -6,9 +6,11 @@
 
 from typing import Any, Dict, Mapping, Union, final
 
+import numpy as np
 import torch
 from fairseq2.assets import AssetStore, download_manager
 from fairseq2.assets.card import AssetCard
+from fairseq2.models.nllb import NllbConfig
 from fairseq2.models.nllb.loader import NllbTokenizerLoader
 from seamless_communication.models.unity.builder import (
     UnitYConfig,
@@ -57,11 +59,28 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         # Remnant of wav2vec2 pretraining, not needed for eval or fine-tuning.
         del state_dict["encoder.w2v_encoder.w2v_model.mask_emb"]
 
+        # Delete AlignmentEncoder keys for inference.
+        alignment_encoder_keys = [
+            key for key in state_dict if key.startswith("decoder.alignment_encoder.")
+        ]
+        for key in alignment_encoder_keys:
+            del state_dict[key]
+
+        # Delete character-level projection for inference.
+        for key in [
+            "decoder_target_letter_decoder.proj.weight",
+            "decoder_target_letter_decoder.proj.bias",
+        ]:
+            if key in state_dict:
+                del state_dict[key]
+
         embeds = state_dict["final_proj.weight"]
 
         # fairseq had a bug that accidentally introduced a dummy token in the
         # embedding table of NLLB-100. We just discard it.
-        if embeds.size(0) == 256103:  # means NLLB-100
+        if (
+            isinstance(config.mt_model_config, NllbConfig) and embeds.size(0) == 256103
+        ):  # means NLLB-100
             embeds = embeds[:-1]
 
             state_dict["final_proj.weight"] = embeds
@@ -72,6 +91,15 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
 
         if config.use_text_encoder:
             state_dict["text_encoder_frontend.embed.weight"] = embeds
+
+        # TODO: Remove this hack once we get the correct char SPM .model file.
+        char_embeds = state_dict.get(
+            "t2u_model.decoder_frontend.embed_char.weight", None
+        )
+        if char_embeds is not None:
+            vocab_size = char_embeds.shape[0]
+            index_mapping = np.load("/checkpoint/krs/unity2/char_dict_mapping.npy")
+            char_embeds[torch.arange(vocab_size)] = char_embeds[index_mapping]
 
         # The embedding positions of the control symbols in fairseq's dict do
         # not match the SentencePiece model of the tokenizer.
@@ -84,7 +112,8 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             # use a single embedding table in fairseq2.
             embeds = state_dict["t2u_model.final_proj.weight"]
 
-            state_dict["t2u_model.decoder_frontend.embed.weight"] = embeds
+            if "t2u_model.decoder_frontend.embed.weight" in state_dict:
+                state_dict["t2u_model.decoder_frontend.embed.weight"] = embeds
 
         return checkpoint
 
@@ -97,6 +126,10 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             r"^encoder\.w2v_encoder\.w2v_model\.encoder\.pos_conv\.0\.":                                    r"speech_encoder_frontend.pos_encoder.conv.",
             r"^encoder\.w2v_encoder\.w2v_model\.layer_norm\.":                                              r"speech_encoder_frontend.post_extract_layer_norm.",
             r"^encoder\.w2v_encoder\.w2v_model\.post_extract_proj\.":                                       r"speech_encoder_frontend.model_dim_proj.",
+            r"^encoder\.w2v_encoder\.w2v_model\.feature_extractor\.conv_layers\.([0-9]+)\.0\.":             r"speech_encoder_frontend.feature_extractor.layers.\1.conv.",
+            r"^encoder\.w2v_encoder\.w2v_model\.feature_extractor\.conv_layers\.([0-9]+)\.2\.1\.":          r"speech_encoder_frontend.feature_extractor.layers.\1.layer_norm.",
+            r"^encoder\.w2v_encoder\.w2v_model\.feature_extractor\.conv_layers\.0\.2\.":                    r"speech_encoder_frontend.feature_extractor.layers.0.group_norm.",
+
             r"^encoder\.w2v_encoder\.w2v_model\.encoder\.layers\.([0-9]+)\.conv_module\.batch_norm\.":      r"speech_encoder.inner.layers.\1.conv.batch_norm.",
             r"^encoder\.w2v_encoder\.w2v_model\.encoder\.layers\.([0-9]+)\.conv_module\.depthwise_conv\.":  r"speech_encoder.inner.layers.\1.conv.depthwise_conv.",
             r"^encoder\.w2v_encoder\.w2v_model\.encoder\.layers\.([0-9]+)\.conv_module\.layer_norm\.":      r"speech_encoder.inner.layers.\1.conv_layer_norm.",
@@ -157,17 +190,28 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             r"^synthesizer_encoder\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.encoder.layers.\1.ffn_layer_norm.",
             r"^synthesizer_encoder\.layer_norm\.":                                r"t2u_model.encoder.layer_norm.",
 
+            # T2U Decoder frontend
+            r"^decoder\.embed_tokens_text\.":                           r"t2u_model.decoder_frontend.embed_char.",
+            r"^decoder\.embed_tokens_unit\.":                           r"t2u_model.decoder_frontend.embed.",
+            r"^decoder\.embed_tokens\.":                                r"t2u_model.decoder_frontend.embed.",
+            r"^decoder\.var_adaptor\.duration_predictor\.":             r"t2u_model.decoder_frontend.variance_adaptor.duration_predictor.",
+            r"^decoder\.dec_pos_emb_alpha":                             r"t2u_model.decoder_frontend.pos_emb_alpha",
+            r"^decoder\.dec_pos_emb_alpha_char":                        r"t2u_model.decoder_frontend.pos_emb_alpha_char",
+
             # T2U Decoder
-            r"^decoder\.embed_tokens\.":                              r"t2u_model.decoder_frontend.embed.",
             r"^decoder\.layers\.([0-9]+)\.self_attn\.out_proj\.":     r"t2u_model.decoder.layers.\1.self_attn.output_proj.",
             r"^decoder\.layers\.([0-9]+)\.self_attn\.":               r"t2u_model.decoder.layers.\1.self_attn.",
             r"^decoder\.layers\.([0-9]+)\.self_attn_layer_norm\.":    r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
+            r"^decoder\.layers\.([0-9]+)\.layer_norm\.":              r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
             r"^decoder\.layers\.([0-9]+)\.encoder_attn\.out_proj\.":  r"t2u_model.decoder.layers.\1.encoder_decoder_attn.output_proj.",
             r"^decoder\.layers\.([0-9]+)\.encoder_attn\.":            r"t2u_model.decoder.layers.\1.encoder_decoder_attn.",
             r"^decoder\.layers\.([0-9]+)\.encoder_attn_layer_norm\.": r"t2u_model.decoder.layers.\1.encoder_decoder_attn_layer_norm.",
             r"^decoder\.layers\.([0-9]+)\.fc1\.":                     r"t2u_model.decoder.layers.\1.ffn.inner_proj.",
             r"^decoder\.layers\.([0-9]+)\.fc2\.":                     r"t2u_model.decoder.layers.\1.ffn.output_proj.",
             r"^decoder\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.decoder.layers.\1.ffn_layer_norm.",
+            r"^decoder\.layers\.([0-9]+)\.ffn\.ffn\.0\.":             r"t2u_model.decoder.layers.\1.conv1d.conv1.",
+            r"^decoder\.layers\.([0-9]+)\.ffn\.ffn\.2\.":             r"t2u_model.decoder.layers.\1.conv1d.conv2.",
+            r"^decoder\.layers\.([0-9]+)\.ffn\.layer_norm\.":         r"t2u_model.decoder.layers.\1.conv1d_layer_norm.",
             r"^decoder\.layer_norm\.":                                r"t2u_model.decoder.layer_norm.",
             r"^decoder\.output_projection\.":                         r"t2u_model.final_proj.",
             # fmt: on
@@ -267,7 +311,9 @@ class UnitYUnitTokenizerLoader:
             card = self.asset_store.retrieve_card(model_name_or_card)
 
         return UnitTokenizer(
-            card.field("num_units").as_(int), card.field("unit_langs").as_list(str)
+            card.field("num_units").as_(int),
+            card.field("unit_langs").as_list(str),
+            card.field("model_arch").as_(str),
         )
 
 

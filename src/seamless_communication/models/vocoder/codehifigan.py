@@ -8,50 +8,9 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torch.nn import Dropout
 
 from seamless_communication.models.vocoder.hifigan import Generator
-
-
-class VariancePredictor(nn.Module):
-    def __init__(
-        self,
-        encoder_embed_dim: int,
-        var_pred_hidden_dim: int,
-        var_pred_kernel_size: int,
-        var_pred_dropout: float,
-    ):
-        super().__init__()
-        self.conv1 = nn.Sequential(
-            nn.Conv1d(
-                encoder_embed_dim,
-                var_pred_hidden_dim,
-                kernel_size=var_pred_kernel_size,
-                padding=(var_pred_kernel_size - 1) // 2,
-            ),
-            nn.ReLU(),
-        )
-        self.ln1 = nn.LayerNorm(var_pred_hidden_dim)
-        self.dropout_module = Dropout(p=var_pred_dropout)
-        self.conv2 = nn.Sequential(
-            nn.Conv1d(
-                var_pred_hidden_dim,
-                var_pred_hidden_dim,
-                kernel_size=var_pred_kernel_size,
-                padding=1,
-            ),
-            nn.ReLU(),
-        )
-        self.ln2 = nn.LayerNorm(var_pred_hidden_dim)
-        self.proj = nn.Linear(var_pred_hidden_dim, 1)
-
-    def forward(self, x: Tensor) -> Any:
-        # Input: B x T x C; Output: B x T
-        x = self.conv1(x.transpose(1, 2)).transpose(1, 2)
-        x = self.dropout_module(self.ln1(x))
-        x = self.conv2(x.transpose(1, 2)).transpose(1, 2)
-        x = self.dropout_module(self.ln2(x))
-        return self.proj(x).squeeze(dim=2)
+from seamless_communication.models.unity import VariancePredictor
 
 
 class CodeGenerator(Generator):
@@ -119,7 +78,7 @@ class CodeGenerator(Generator):
 
         if self.dur_predictor and dur_prediction:
             assert x.size(0) == 1, "only support single sample"
-            log_dur_pred = self.dur_predictor(x.transpose(1, 2))
+            log_dur_pred = self.dur_predictor(x.transpose(1, 2), None)
             dur_out = torch.clamp(
                 torch.round((torch.exp(log_dur_pred) - 1)).long(), min=1
             )

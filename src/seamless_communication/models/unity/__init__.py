@@ -7,20 +7,27 @@
 from seamless_communication.models.unity.builder import UnitYBuilder as UnitYBuilder
 from seamless_communication.models.unity.builder import UnitYConfig as UnitYConfig
 from seamless_communication.models.unity.builder import (
-    UnitYT2UBuilder as UnitYT2UBuilder,
-)
-from seamless_communication.models.unity.builder import UnitYT2UConfig as UnitYT2UConfig
-from seamless_communication.models.unity.builder import (
     create_unity_model as create_unity_model,
-)
-from seamless_communication.models.unity.builder import (
-    create_unity_t2u_model as create_unity_t2u_model,
 )
 from seamless_communication.models.unity.builder import unity_arch as unity_arch
 from seamless_communication.models.unity.builder import unity_archs as unity_archs
-from seamless_communication.models.unity.builder import unity_t2u_arch as unity_t2u_arch
-from seamless_communication.models.unity.builder import (
-    unity_t2u_archs as unity_t2u_archs,
+from seamless_communication.models.unity.char_tokenizer import (
+    CharTokenizer as CharTokenizer,
+)
+from seamless_communication.models.unity.char_tokenizer import (
+    UnitYCharTokenizerLoader as UnitYCharTokenizerLoader,
+)
+from seamless_communication.models.unity.char_tokenizer import (
+    load_unity_char_tokenizer as load_unity_char_tokenizer,
+)
+from seamless_communication.models.unity.length_regulator import (
+    HardUpsampling as HardUpsampling,
+)
+from seamless_communication.models.unity.length_regulator import (
+    VariancePredictor as VariancePredictor,
+)
+from seamless_communication.models.unity.length_regulator import (
+    VarianceAdaptor as VarianceAdaptor,
 )
 from seamless_communication.models.unity.loader import UnitYLoader as UnitYLoader
 from seamless_communication.models.unity.loader import (
@@ -34,7 +41,32 @@ from seamless_communication.models.unity.loader import (
 )
 from seamless_communication.models.unity.model import UnitYModel as UnitYModel
 from seamless_communication.models.unity.model import UnitYX2TModel as UnitYX2TModel
+from seamless_communication.models.unity.model import UnitYT2UModel as UnitYT2UModel
+from seamless_communication.models.unity.model import (
+    UnitYNART2UModel as UnitYNART2UModel,
+)
 from seamless_communication.models.unity.model import UnitYOutput as UnitYOutput
+from seamless_communication.models.unity.nar_decoder_frontend import (
+    NARDecoderFrontend as NARDecoderFrontend,
+)
+from seamless_communication.models.unity.nar_decoder_layer import (
+    NARTransformerDecoderLayer as NARTransformerDecoderLayer,
+)
+from seamless_communication.models.unity.t2u_builder import (
+    UnitYT2UBuilder as UnitYT2UBuilder,
+)
+from seamless_communication.models.unity.t2u_builder import (
+    UnitYT2UConfig as UnitYT2UConfig,
+)
+from seamless_communication.models.unity.t2u_builder import (
+    create_unity_t2u_model as create_unity_t2u_model,
+)
+from seamless_communication.models.unity.t2u_builder import (
+    unity_t2u_arch as unity_t2u_arch,
+)
+from seamless_communication.models.unity.t2u_builder import (
+    unity_t2u_archs as unity_t2u_archs,
+)
 from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenDecoder as UnitTokenDecoder,
 )

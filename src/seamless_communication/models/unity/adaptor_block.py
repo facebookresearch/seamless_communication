@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -365,7 +365,7 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
         self.stride = stride
 
         if layer_norm:
-            self.layer_norm = layer_norm_fn(self.model_dim, device, dtype)
+            self.layer_norm = layer_norm_fn(self.model_dim, device=device, dtype=dtype)
         else:
             self.register_module("layer_norm", None)
 
