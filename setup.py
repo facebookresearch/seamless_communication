@@ -45,7 +45,7 @@ setup(
     name="seamless_communication",
     version="1.0.0",
     packages=find_packages(where="src")
-    + ["m4t_scripts.finetune", "m4t_scripts.predict"],
+    + ["m4t_scripts.finetune", "m4t_scripts.predict", "m4t_scripts.audio_to_units"],
     package_dir={
         "m4t_scripts": "scripts/m4t",
         "seamless_communication": "src/seamless_communication",
