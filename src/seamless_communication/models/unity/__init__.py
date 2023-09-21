@@ -51,6 +51,9 @@ from seamless_communication.models.unity.loader import (
 from seamless_communication.models.unity.loader import (
     load_unity_unit_tokenizer as load_unity_unit_tokenizer,
 )
+from seamless_communication.models.unity.loader import (
+    load_unity_config as load_unity_config
+)
 from seamless_communication.models.unity.model import UnitYModel as UnitYModel
 from seamless_communication.models.unity.model import (
     UnitYNART2UModel as UnitYNART2UModel,
