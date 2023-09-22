@@ -9,8 +9,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from fairseq2.nn.ops import repeat_interleave
-
 from seamless_communication.models.vocoder.hifigan import Generator
 from seamless_communication.models.unity import VariancePredictor
 
@@ -85,7 +83,7 @@ class CodeGenerator(Generator):
                 torch.round((torch.exp(log_dur_pred) - 1)).long(), min=1
             )
             # B x C x T
-            x = repeat_interleave(x, dim=2, repeat=dur_out.view(-1))
+            x = torch.repeat_interleave(x, dur_out.view(-1), dim=2)
 
         spkr = self.spkr(sample["spkr"].to(self.spkr.weight.device)).transpose(1, 2)
         spkr = self._upsample(spkr, x.shape[-1])
