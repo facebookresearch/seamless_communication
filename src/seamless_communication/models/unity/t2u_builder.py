@@ -333,7 +333,6 @@ class UnitYT2UBuilder:
             self.config.unit_max_seq_len,
             _legacy_pad_idx=self.config.unit_pad_idx,
             device=self.device,
-            dtype=self.dtype,
         )
         return TransformerEmbeddingFrontend(
             embed_unit,
@@ -353,7 +352,6 @@ class UnitYT2UBuilder:
             self.config.unit_max_seq_len,
             _legacy_pad_idx=self.config.unit_pad_idx,
             device=self.device,
-            dtype=self.dtype,
         )
 
         char_tokenizer = load_unity_char_tokenizer(
@@ -374,7 +372,6 @@ class UnitYT2UBuilder:
             self.config.nar_decoder_config.char_max_seq_len,
             _legacy_pad_idx=text_pad_idx,
             device=self.device,
-            dtype=self.dtype,
         )
 
         embed_char = Embedding(
