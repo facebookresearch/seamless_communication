@@ -19,6 +19,7 @@ Links:
 - [Paper](https://dl.fbaipublicfiles.com/seamless/seamless_m4t_paper.pdf)
 - [Demo](https://seamless.metademolab.com/)
 - [🤗 Hugging Face space](https://huggingface.co/spaces/facebook/seamless_m4t)
+- [Replicate Demo and API](https://replicate.com/cjwbw/seamless_communication)
 
 # Quick Start
 ## Installation

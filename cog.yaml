@@ -1,0 +1,20 @@
+# Configuration for Cog ⚙️
+# Reference: https://github.com/replicate/cog/blob/main/docs/yaml.md
+
+build:
+  gpu: true
+  system_packages:
+    - "ffmpeg"
+  python_version: "3.10"
+  python_packages:
+    - "fairseq2==0.1.0"
+    - "git+https://github.com/facebookresearch/seamless_communication"
+    - "huggingface_hub==0.16.4"
+    - "torch==2.0.1"
+    - "torchaudio==2.0.2"
+    - "librosa==0.10.1"
+    - "soundfile==0.12.1"
+    - ipython
+  run:
+   - apt-get update && apt-get install libsndfile1 -y
+predict: "predict.py:Predictor"
