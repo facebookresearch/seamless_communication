@@ -10,6 +10,7 @@ Ctx = ggml.ggml_context_p
 
 PARAMS_16MB = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
 
+
 @pytest.fixture(name="ctx")
 def _ctx() -> Iterator[Ctx]:
     """Allocate a new context with 16 MB of memory"""
@@ -132,19 +133,12 @@ def test_unity_model_load() -> None:
         mem_size = ggml.ggml_allocr_alloc_graph(arena.ptr, graph) + ggml.GGML_MEM_ALIGN
 
     compute_buffer = torch.zeros(mem_size, dtype=torch.uint8)
-    allocr = NativeObj(
-        "ggml_allocr",
-        ggml.ggml_allocr_new(compute_buffer.data_ptr(), mem_size, ggml.GGML_MEM_ALIGN),
-    )
-    print(
-        f"unity_graph: compute buffer size: {mem_size/1024/1024} MB  @0x{compute_buffer.data_ptr():x}"
-    )
+    with ggml.FixedSizeArena(mem_size) as allocr:
+        print(f"unity_graph: compute buffer size: {mem_size/1024/1024} MB")
 
-    eval_res_ptr = ggml.unity_eval(model, allocr, 1)
-    eval_res = eval_res_ptr.contents
-    inpL = ggml.to_numpy(eval_res.nodes[eval_res.n_nodes - 1])
-    expected_raw = (
-        "-0.1308,0.0346,-0.2656,0.2873,-0.0104,0.0574,0.4033,-0.1125,-0.0460,-0.0496"
-    )
-    expected = map(float, expected_raw.split(","))
-    assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
+        eval_res_ptr = ggml.unity_eval(model, allocr, 1)
+        eval_res = eval_res_ptr.contents
+        inpL = ggml.to_numpy(eval_res.nodes[eval_res.n_nodes - 1])
+        expected_raw = "-0.1308,0.0346,-0.2656,0.2873,-0.0104,0.0574,0.4033,-0.1125,-0.0460,-0.0496"
+        expected = map(float, expected_raw.split(","))
+        assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
