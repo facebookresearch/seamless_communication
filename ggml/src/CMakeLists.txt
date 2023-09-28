@@ -249,6 +249,11 @@ endif()
 add_library(${TARGET}
     ggml.c
     ggml-alloc.c
+    ../examples/unity/model_loader.cpp
+    ../examples/unity/unity_model_loader.cpp
+    ../examples/unity/unity.cpp
+    ../examples/common.cpp
+    ../examples/common-ggml.cpp
     ../include/ggml/ggml.h
     ../include/ggml/ggml-alloc.h
     ${GGML_CUDA_SOURCES}
@@ -260,6 +265,7 @@ target_include_directories(${TARGET} PUBLIC
     .
     ../include
     ../include/ggml
+    ../examples/
     ${GGML_EXTRA_INCS}
     )
 

@@ -7,7 +7,7 @@
 #pragma once
 
 #include <vector>
-#include "ggml/examples/unity/model_loader.h"
+#include "model_loader.h"
 
 
 // TODO Merge with Ning implementation

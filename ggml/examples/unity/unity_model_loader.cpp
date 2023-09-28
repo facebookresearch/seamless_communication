@@ -10,7 +10,7 @@
 #include "common.h"
 #include "common-ggml.h"
 
-#include "ggml/examples/unity/unity_model_loader.h"
+#include "unity_model_loader.h"
 
 
 void

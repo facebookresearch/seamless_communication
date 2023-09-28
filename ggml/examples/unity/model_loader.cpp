@@ -14,7 +14,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "ggml/examples/unity/model_loader.h"
+#include "model_loader.h"
 
 
 template<typename T>

@@ -111,13 +111,30 @@ struct unity_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
-// model load
-bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab & vocab) {
-    printf("%s: loading model from '%s'\n", __func__, fname.c_str());
+extern "C" unity_model* alloc_unity_model() {
+    return new unity_model;
+}
 
-    auto fin = std::ifstream(fname, std::ios::binary);
+extern "C" void free_unity_model(unity_model* model) {
+    delete model;
+}
+
+extern "C" gpt_vocab* alloc_gpt_vocab() {
+    return new gpt_vocab;
+}
+
+extern "C" void free_gpt_vocab(gpt_vocab* vocab) {
+    delete vocab;
+}
+
+// model load
+extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_vocab& raw_vocab) {
+    // unity_model& model = *raw_model;
+    printf("%s: loading model from '%s'\n", __func__, fname);
+
+    auto fin = std::ifstream(std::string(fname), std::ios::binary);
     if (!fin) {
-        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
+        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname);
         return false;
     }
 
@@ -126,7 +143,7 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
         uint32_t magic;
         fin.read((char *) &magic, sizeof(magic));
         if (magic != GGML_FILE_MAGIC) {
-            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname.c_str());
+            fprintf(stderr, "%s: invalid model file '%s' (bad magic)\n", __func__, fname);
             return false;
         }
     }
@@ -162,7 +179,7 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
     ggml_type wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
     if (wtype == GGML_TYPE_COUNT) {
         fprintf(stderr, "%s: invalid model file '%s' (bad ftype value %d)\n",
-                __func__, fname.c_str(), model.hparams.ftype);
+                __func__, fname, model.hparams.ftype);
         return false;
     }
 
@@ -420,7 +437,7 @@ bool unity_model_load(const std::string & fname, unity_model & model, gpt_vocab 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
                 fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
                         __func__, name.c_str(), (int) tensor->ne[0], (int) tensor->ne[1], ne[0], ne[1]);
-                return false;
+                // return false;
             }
 
             // for debugging
@@ -481,7 +498,11 @@ struct ggml_cgraph * unity_graph(
     /// For dev, load an example input before conformer blocks
     auto file = std::ifstream("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_conformer_block.bin", std::ios::binary);
     if (!file) {
-        std::cerr << "Failed to open binary file." << std::endl;
+        file = std::ifstream("/home/guw/github/seamless_communication/ggml/examples/unity/models/unity-large/seqs_before_conformer_block.bin", std::ios::binary);
+        if (!file) {
+            std::cerr << "Failed to open binary file." << std::endl;
+            exit(1);
+        }
     }
     struct ggml_tensor * inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1024, 137);
     inpL->data = malloc(ggml_nbytes(inpL));
@@ -582,7 +603,7 @@ struct ggml_cgraph * unity_graph(
     return gf;
 }
 
-bool unity_eval(
+extern "C" bool unity_eval(
         const unity_model & model,
         struct ggml_allocr * allocr,
         const int n_threads) {
@@ -640,7 +661,7 @@ int main(int argc, char ** argv) {
 
     // load the model
     {
-        if (!unity_model_load(params.model, model, vocab)) {
+        if (!unity_model_load(params.model.c_str(), &model, &vocab)) {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }
