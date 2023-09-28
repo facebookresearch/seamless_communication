@@ -1,12 +1,26 @@
 import ggml
 import ctypes
+import torch
+import pytest
+import numpy as np
+from typing import Iterator
+from ggml import NativeObj
+
+Ctx = ggml.ggml_context_p
+
+PARAMS_16MB = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
+
+@pytest.fixture(name="ctx")
+def _ctx() -> Iterator[Ctx]:
+    """Allocate a new context with 16 MB of memory"""
+    try:
+        ctx = ggml.ggml_init(params=PARAMS_16MB)
+        yield ctx
+    finally:
+        ggml.ggml_free(ctx)
 
 
-def test_ggml_bindings_work() -> None:
-    # Allocate a new context with 16 MB of memory
-    params = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
-    ctx = ggml.ggml_init(params=params)
-
+def test_ggml_bindings_work(ctx: Ctx) -> None:
     # Instantiate tensors
     x = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 1)
     a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 1)
@@ -30,8 +44,79 @@ def test_ggml_bindings_work() -> None:
     output = ggml.ggml_get_f32_1d(f, 0)
     assert output == 16.0
 
-    # Free the context
-    ggml.ggml_free(ctx)
+
+def test_shape_works(ctx: Ctx) -> None:
+    a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
+    assert ggml.shape(a) == (10,)
+
+    b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 11, 21)
+    assert ggml.shape(b) == (11, 21)
+
+    c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
+    assert ggml.shape(c) == (12, 22, 32)
+
+
+@pytest.mark.xfail(
+    reason="TODO: understand diff between ggml strides and numpy strides"
+)
+def test_strides_works(ctx: Ctx) -> None:
+    a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
+    assert ggml.strides(a) == np.ones((10,), dtype=np.float32).strides
+
+    b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 11, 21)
+    assert ggml.strides(b) == np.ones((11, 21), dtype=np.float32).strides
+
+    c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
+    assert ggml.strides(c) == np.ones((12, 22, 32), dtype=np.float32).strides
+
+
+def test_to_numpy_works_with_f32(ctx: Ctx) -> None:
+    a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
+    a = ggml.ggml_set_f32(a, 2.14)
+    assert np.allclose(ggml.to_numpy(a), np.ones((10,)) * 2.14)
+    b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 11, 21)
+    assert np.allclose(ggml.to_numpy(b), np.zeros((11, 21)))
+    c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
+    assert np.allclose(ggml.to_numpy(c), np.zeros((12, 22, 32)))
+
+
+def test_from_numpy_works_with_f32(ctx: Ctx) -> None:
+    a = np.random.normal(size=(10,)).astype(dtype=np.float32)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
+    a = np.random.normal(size=(11, 21)).astype(dtype=np.float32)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
+    a = np.random.normal(size=(12, 22, 32)).astype(dtype=np.float32)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
+
+
+def test_to_numpy_works_with_f16(ctx: Ctx) -> None:
+    # We explicitly fill the tensor otherwise they might have non-zero values in them.
+    a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F16, 10)
+    a = ggml.ggml_set_f32(a, 2.14)
+    assert np.allclose(ggml.to_numpy(a), np.ones((10,), dtype=np.float16) * 2.14)
+
+    b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F16, 11, 21)
+    b = ggml.ggml_set_f32(b, 4.18)
+    assert np.allclose(ggml.to_numpy(b), np.ones((11, 21), dtype=np.float16) * 4.18)
+
+    c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F16, 12, 22, 32)
+    c = ggml.ggml_set_f32(c, 3.16)
+    assert np.allclose(ggml.to_numpy(c), np.ones((12, 22, 32), dtype=np.float16) * 3.16)
+
+
+def test_from_numpy_works_with_f16(ctx: Ctx) -> None:
+    a = np.random.normal(size=(10,)).astype(dtype=np.float16)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
+    a = np.random.normal(size=(11, 21)).astype(dtype=np.float16)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
+    a = np.random.normal(size=(12, 22, 32)).astype(dtype=np.float16)
+    ga = ggml.from_numpy(ctx, a)
+    assert np.allclose(a, ggml.to_numpy(ga))
 
 
 def test_unity_model_load() -> None:
@@ -39,3 +124,27 @@ def test_unity_model_load() -> None:
         "examples/unity/models/unity-large/ggml-model.bin"
     )
     print(model, vocab)
+    with ggml.MeasureArena() as arena:
+        # compute graph
+        graph = ggml.unity_graph(model, arena)
+        # required memory
+        # TODO: why the extra padding ?
+        mem_size = ggml.ggml_allocr_alloc_graph(arena.ptr, graph) + ggml.GGML_MEM_ALIGN
+
+    compute_buffer = torch.zeros(mem_size, dtype=torch.uint8)
+    allocr = NativeObj(
+        "ggml_allocr",
+        ggml.ggml_allocr_new(compute_buffer.data_ptr(), mem_size, ggml.GGML_MEM_ALIGN),
+    )
+    print(
+        f"unity_graph: compute buffer size: {mem_size/1024/1024} MB  @0x{compute_buffer.data_ptr():x}"
+    )
+
+    eval_res_ptr = ggml.unity_eval(model, allocr, 1)
+    eval_res = eval_res_ptr.contents
+    inpL = ggml.to_numpy(eval_res.nodes[eval_res.n_nodes - 1])
+    expected_raw = (
+        "-0.1308,0.0346,-0.2656,0.2873,-0.0104,0.0574,0.4033,-0.1125,-0.0460,-0.0496"
+    )
+    expected = map(float, expected_raw.split(","))
+    assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)

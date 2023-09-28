@@ -111,19 +111,19 @@ struct unity_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
-extern "C" unity_model* alloc_unity_model() {
+extern "C" unity_model* unity_model_alloc() {
     return new unity_model;
 }
 
-extern "C" void free_unity_model(unity_model* model) {
+extern "C" void unity_model_free(unity_model* model) {
     delete model;
 }
 
-extern "C" gpt_vocab* alloc_gpt_vocab() {
+extern "C" gpt_vocab* gpt_vocab_alloc() {
     return new gpt_vocab;
 }
 
-extern "C" void free_gpt_vocab(gpt_vocab* vocab) {
+extern "C" void gpt_vocab_free(gpt_vocab* vocab) {
     delete vocab;
 }
 
@@ -469,7 +469,7 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
 }
 
 // build the computation graph
-struct ggml_cgraph * unity_graph(
+extern "C" struct ggml_cgraph * unity_graph(
         const unity_model & model,
         struct ggml_allocr * allocr) {
 
@@ -603,12 +603,12 @@ struct ggml_cgraph * unity_graph(
     return gf;
 }
 
-extern "C" bool unity_eval(
+extern "C" struct ggml_cgraph * unity_eval(
         const unity_model & model,
         struct ggml_allocr * allocr,
         const int n_threads) {
 
-    const auto & hparams = model.hparams;
+    // const auto & hparams = model.hparams;
 
     // reset the allocator to free all the memory allocated during the previous inference
     ggml_allocr_reset(allocr);
@@ -627,11 +627,13 @@ extern "C" bool unity_eval(
 
     // in this case, the output tensor is the last one in the graph
     struct ggml_tensor * inpL = gf->nodes[gf->n_nodes - 1];
+    printf("gf: %p, gf.nodes: %p, gf.n_nodes: %p", (void *)gf, (void *)gf->nodes, (void *)&(gf->n_nodes));
     for (int i = 0; i < 10; ++i) {
         printf("%8.4f ", ((float *)(inpL->data))[i]);
     }
+    printf("\n");
 
-    return true;
+    return gf;
 }
 
 int main(int argc, char ** argv) {
@@ -661,7 +663,7 @@ int main(int argc, char ** argv) {
 
     // load the model
     {
-        if (!unity_model_load(params.model.c_str(), &model, &vocab)) {
+        if (!unity_model_load(params.model.c_str(), model, vocab)) {
             fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
             return 1;
         }

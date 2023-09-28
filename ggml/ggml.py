@@ -54,12 +54,20 @@ import sys
 import ctypes
 import pathlib
 import importlib.resources
+import numpy as np
+from typing import Union
+from typing import Type
+from typing import Callable
 from typing import Tuple
 from typing import Dict
+from typing import Self
 from typing import Any
 from pathlib import Path
 from typing import List, Optional, Sequence, Union
 from typing_extensions import TypeAlias
+
+NULL: ctypes.c_void_p = None  # ignore: type
+GGML_MEM_ALIGN = 16
 
 
 # Load the library
@@ -8045,36 +8053,116 @@ if GGML_USE_CLBLAST:
     ]
     lib.ggml_cl_transform_tensor.restype = None
 
+### Helpers
+
+
+def numpy_dtype(ggml_type: ctypes.c_int) -> Type:
+    if ggml_type == 0:
+        # GGML_TYPE_F32  = 0,
+        return np.float32
+
+    if ggml_type == 1:
+        # GGML_TYPE_F16  = 1,
+        return np.float16
+
+    raise NotImplementedError(f"Can't convert GGML_TYPE({ggml_type}) to a numpy.dtype")
+
+
+def from_numpy_dtype(dtype: np.dtype) -> ctypes.c_int:
+    if dtype == np.float32:
+        return ctypes.c_int(0)
+    elif dtype == np.float16:
+        return ctypes.c_int(1)
+    raise NotImplementedError(f"Can't convert {dtype} to a GGML_TYPE")
+
+
+def shape(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
+    if isinstance(tensor, ctypes._Pointer):
+        tensor = tensor.contents
+    ndims = tensor.n_dims
+    return tuple([tensor.ne[i] for i in range(ndims)])
+
+
+def strides(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
+    if isinstance(tensor, ctypes._Pointer):
+        tensor = tensor.contents
+    ndims = tensor.n_dims
+    return tuple([tensor.nb[i] for i in range(ndims)])
+
+
+def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
+    if isinstance(tensor, ctypes._Pointer):
+        tensor = tensor.contents
+
+    t_shape = shape(tensor)
+
+    # Convert the ggml data pointer to a pointer to ints with the same size (float16 -> uint16)
+    # This is needed because Python ctypes doesn't have "float16", and as_array only works with ctypes pointer
+    type_size = ggml_type_size(tensor.type)
+    int_width: Type[Any] = getattr(ctypes, f"c_uint{8 * type_size}")
+    ptr = ctypes.cast(tensor.data, ctypes.POINTER(int_width))
+    # Create a numpy array with the wrong dtype
+    int_arr = np.ctypeslib.as_array(ptr, shape=t_shape)
+    # Reinterpret it to the right dtype
+    res = np.frombuffer(int_arr, dtype=numpy_dtype(tensor.type)).reshape(t_shape)
+
+    # TODO: assert strides / check contiguous
+    # assert strides(tensor) == res.strides, "TODO: support strided tensor"
+    return res
+
+
+GgmlShape = ctypes.c_int64 * GGML_MAX_DIMS
+
+
+def from_numpy(ctx: ggml_context_p, array: np.ndarray) -> ggml_tensor_p:
+    tensor_p = ggml_new_tensor(
+        ctx, from_numpy_dtype(array.dtype), 1, GgmlShape(0, 0, 0, 0)
+    )
+    tensor_p.contents.n_dims = array.ndim
+    tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
+    tensor_p.contents.ne = GgmlShape(*array.shape)
+    # print(f"array: {array.shape} @0x{array.ctypes.data_as(ctypes.c_void_p)}")
+    # print(f"tensor_p: {shape(tensor_p)} @0x{tensor_p.contents.data:x}")
+    return tensor_p
+
 
 class NativeObj:
-    _cache: Dict[str, Any] = {}
+    AllocFn = Callable[[], ctypes.c_void_p]
+    FreeFn = Callable[[ctypes.c_void_p], None]
+    _cache: Dict[str, Tuple[AllocFn, FreeFn]] = {}
 
     @classmethod
-    def _init_c_func(cls, kind: str) -> Any:
+    def _init_c_func(cls, kind: str) -> Tuple[AllocFn, FreeFn]:
         if kind in cls._cache:
             return cls._cache[kind]
 
-        alloc_fn = getattr(lib, f"alloc_{kind}")
+        alloc_fn = getattr(lib, f"{kind}_alloc")
         alloc_fn.argtypes = []
         alloc_fn.restype = ctypes.c_void_p
 
-        free_fn = getattr(lib, f"free_{kind}")
+        free_fn = getattr(lib, f"{kind}_free")
         free_fn.argtypes = [ctypes.c_void_p]
         free_fn.restype = None
 
         cls._cache[kind] = (alloc_fn, free_fn)
         return (alloc_fn, free_fn)
 
-    def __init__(self, kind: str):
+    def __init__(self, kind: str, ptr: ctypes.c_void_p = NULL):
         self.kind = kind
         alloc_fn, self._free_fn = self._init_c_func(kind)
-        self.ptr = alloc_fn()
+        self.ptr = alloc_fn() if ptr is None else ptr
         print(self)
 
     def free(self) -> None:
         if self.ptr is not None:
             self._free_fn(self.ptr)
-            self.ptr = None
+            self.ptr = NULL
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.free()
 
     def __del__(self) -> None:
         self.free()
@@ -8083,12 +8171,27 @@ class NativeObj:
         return f"<{self.kind} native object at 0x{self.ptr:x}>"
 
 
+### unity.cpp stuff
+
+
 def UnityModel() -> NativeObj:
     return NativeObj("unity_model")
 
 
 def GptVocab() -> NativeObj:
     return NativeObj("gpt_vocab")
+
+
+def MeasureArena() -> NativeObj:
+    return NativeObj("ggml_allocr", ggml_allocr_new_measure(GGML_MEM_ALIGN))
+
+
+def FixedSizeArena(mem_size: int) -> NativeObj:
+    memory = np.zeros(mem_size, dtype=np.uint8)
+    allocr = ggml_allocr_new(
+        memory.ctypes.data_as(ctypes.POINTER(ctypes.c_byte)), mem_size, GGML_MEM_ALIGN
+    )
+    return NativeObj("ggml_allocr", allocr)
 
 
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
@@ -8103,3 +8206,19 @@ def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
         vocab.ptr,
     )
     return model, vocab
+
+
+lib.unity_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+lib.unity_graph.restype = ctypes.POINTER(ggml_cgraph)
+
+
+def unity_graph(model: NativeObj, allocr: NativeObj) -> ggml_cgraph_p:
+    return lib.unity_graph(model.ptr, allocr.ptr)  # type: ignore
+
+
+lib.unity_eval.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+lib.unity_eval.restype = ctypes.POINTER(ggml_cgraph)
+
+
+def unity_eval(model: NativeObj, allocr: NativeObj, n_threads: int) -> ggml_cgraph_p:
+    return lib.unity_eval(model.ptr, allocr.ptr, n_threads)
