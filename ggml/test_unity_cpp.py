@@ -131,12 +131,12 @@ def test_unity_model_load(ctx: Ctx) -> None:
     example = ggml.from_file(ctx, UNITY_MODELS / "unity-large/seqs_before_conformer_block.bin", (1024, 137))
 
     with ggml.MeasureArena() as arena:
-        graph = ggml.unity_graph(model, example)
+        graph = ggml.unity_audio_encoder_graph(model, example)
         # TODO: why the extra memory ?
         mem_size = ggml.ggml_allocr_alloc_graph(arena.ptr, graph) + ggml.GGML_MEM_ALIGN
 
     with ggml.FixedSizeArena(mem_size) as allocr:
-        print(f"unity_graph: compute buffer size: {mem_size/1024/1024} MB")
+        print(f"unity_audio_encoder_graph: compute buffer size: {mem_size/1024/1024} MB")
 
         eval_res_ptr = ggml.unity_eval(allocr, model, example, 1)
         eval_res = eval_res_ptr.contents

@@ -469,7 +469,7 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
 }
 
 // build the computation graph
-extern "C" ggml_cgraph* unity_graph(
+extern "C" ggml_cgraph* unity_audio_encoder_graph(
     const unity_model & model,
     ggml_tensor* input
 ) {
@@ -603,7 +603,7 @@ extern "C" struct ggml_cgraph* unity_eval(
     // reset the allocator to free all the memory allocated during the previous inference
     ggml_allocr_reset(allocr);
 
-    struct ggml_cgraph * gf = unity_graph(model, input);
+    struct ggml_cgraph * gf = unity_audio_encoder_graph(model, input);
 
     // allocate tensors
     ggml_allocr_alloc_graph(allocr, gf);
@@ -678,7 +678,7 @@ int main(int argc, char ** argv) {
     // allocate the compute buffer
     {
         allocr = ggml_allocr_new_measure(GGML_MEM_ALIGN);
-        struct ggml_cgraph * gf = unity_graph(model, input);
+        struct ggml_cgraph * gf = unity_audio_encoder_graph(model, input);
 
         // compute the required memory
         size_t mem_size = ggml_allocr_alloc_graph(allocr, gf) + GGML_MEM_ALIGN;

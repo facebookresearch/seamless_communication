@@ -191,12 +191,12 @@ def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
     return model, vocab
 
 
-lib.unity_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-lib.unity_graph.restype = ctypes.POINTER(ggml_cgraph)
+lib.unity_audio_encoder_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+lib.unity_audio_encoder_graph.restype = ctypes.POINTER(ggml_cgraph)
 
 
-def unity_graph(model: NativeObj, tensor: ggml_tensor_p) -> ggml_cgraph_p:
-    return lib.unity_graph(model.ptr, tensor)  # type: ignore
+def unity_audio_encoder_graph(model: NativeObj, tensor: ggml_tensor_p) -> ggml_cgraph_p:
+    return lib.unity_audio_encoder_graph(model.ptr, tensor)  # type: ignore
 
 
 lib.unity_eval.argtypes = [
