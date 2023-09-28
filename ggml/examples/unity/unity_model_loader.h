@@ -216,6 +216,8 @@ void init_attention_head(
     init_ffn_layer(head->ffn, model_ctx, prefix + ".ffn");
 }
 
+// TODO: attention_head_compute_graph
+
 // Text Decoder
 
 struct text_decoder {

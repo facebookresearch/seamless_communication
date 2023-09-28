@@ -3,11 +3,13 @@ import ctypes
 import torch
 import pytest
 import numpy as np
+from pathlib import Path
 from typing import Iterator
 from ggml import NativeObj
 
 Ctx = ggml.ggml_context_p
 
+UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
 PARAMS_16MB = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
 
 
@@ -120,25 +122,26 @@ def test_from_numpy_works_with_f16(ctx: Ctx) -> None:
     assert np.allclose(a, ggml.to_numpy(ga))
 
 
-def test_unity_model_load() -> None:
+def test_unity_model_load(ctx: Ctx) -> None:
     model, vocab = ggml.unity_model_load(
-        "examples/unity/models/unity-large/ggml-model.bin"
+        UNITY_MODELS / "unity-large/ggml-model.bin"
     )
     print(model, vocab)
+
+    example = ggml.from_file(ctx, UNITY_MODELS / "unity-large/seqs_before_conformer_block.bin", (1024, 137))
+
     with ggml.MeasureArena() as arena:
-        # compute graph
-        graph = ggml.unity_graph(model, arena)
-        # required memory
-        # TODO: why the extra padding ?
+        graph = ggml.unity_graph(model, example)
+        # TODO: why the extra memory ?
         mem_size = ggml.ggml_allocr_alloc_graph(arena.ptr, graph) + ggml.GGML_MEM_ALIGN
 
-    compute_buffer = torch.zeros(mem_size, dtype=torch.uint8)
     with ggml.FixedSizeArena(mem_size) as allocr:
         print(f"unity_graph: compute buffer size: {mem_size/1024/1024} MB")
 
-        eval_res_ptr = ggml.unity_eval(model, allocr, 1)
+        eval_res_ptr = ggml.unity_eval(allocr, model, example, 1)
         eval_res = eval_res_ptr.contents
         inpL = ggml.to_numpy(eval_res.nodes[eval_res.n_nodes - 1])
         expected_raw = "-0.1308,0.0346,-0.2656,0.2873,-0.0104,0.0574,0.4033,-0.1125,-0.0460,-0.0496"
         expected = map(float, expected_raw.split(","))
         assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
+

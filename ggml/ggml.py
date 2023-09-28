@@ -78,15 +78,33 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
 GgmlShape = ctypes.c_int64 * GGML_MAX_DIMS
 
 
+def from_file(
+    ctx: ggml_context_p, file: Path, shape: Tuple[int, ...], dtype: type = np.float32
+) -> ggml_tensor_p:
+    data = np.fromfile(str(file), dtype=dtype).reshape(shape)  # type: ignore
+    return from_numpy(ctx, data)
+
+
+def _pad_shape(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
+    if len(shape) >= 4:
+        return shape
+
+    padding = (1,) * (4 - len(shape))
+    return shape + padding  # type: ignore
+
+
 def from_numpy(ctx: ggml_context_p, array: np.ndarray) -> ggml_tensor_p:
     tensor_p = ggml_new_tensor(
-        ctx, from_numpy_dtype(array.dtype), 1, GgmlShape(0, 0, 0, 0)
+        ctx, from_numpy_dtype(array.dtype), 1, GgmlShape()
     )
     tensor_p.contents.n_dims = array.ndim
     tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
-    tensor_p.contents.ne = GgmlShape(*array.shape)
+    tensor_p.contents.ne = GgmlShape(*_pad_shape(array.shape))
     # print(f"array: {array.shape} @0x{array.ctypes.data_as(ctypes.c_void_p)}")
     # print(f"tensor_p: {shape(tensor_p)} @0x{tensor_p.contents.data:x}")
+
+    # prevent the underlying numpy array to be freed
+    setattr(tensor_p, "__data", array)
     return tensor_p
 
 
@@ -142,7 +160,9 @@ def MeasureArena() -> NativeObj:
 
 def FixedSizeArena(mem_size: int) -> NativeObj:
     memory = torch.zeros(mem_size, dtype=torch.uint8)
-    allocr = ggml_allocr_new(ctypes.c_void_p(memory.data_ptr()), mem_size, GGML_MEM_ALIGN)
+    allocr = ggml_allocr_new(
+        ctypes.c_void_p(memory.data_ptr()), mem_size, GGML_MEM_ALIGN
+    )
     arena = NativeObj("ggml_allocr", allocr)
     # Add a reference from the arena object to the underlying tensor, otherwise it will be freed to early.
     setattr(arena, "__memory", memory)
@@ -155,7 +175,6 @@ def UnityModel() -> NativeObj:
 
 def GptVocab() -> NativeObj:
     return NativeObj("gpt_vocab")
-
 
 
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
@@ -176,13 +195,20 @@ lib.unity_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 lib.unity_graph.restype = ctypes.POINTER(ggml_cgraph)
 
 
-def unity_graph(model: NativeObj, allocr: NativeObj) -> ggml_cgraph_p:
-    return lib.unity_graph(model.ptr, allocr.ptr)  # type: ignore
+def unity_graph(model: NativeObj, tensor: ggml_tensor_p) -> ggml_cgraph_p:
+    return lib.unity_graph(model.ptr, tensor)  # type: ignore
 
 
-lib.unity_eval.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+lib.unity_eval.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.POINTER(ggml_tensor),
+    ctypes.c_int,
+]
 lib.unity_eval.restype = ctypes.POINTER(ggml_cgraph)
 
 
-def unity_eval(model: NativeObj, allocr: NativeObj, n_threads: int) -> ggml_cgraph_p:
-    return lib.unity_eval(model.ptr, allocr.ptr, n_threads)
+def unity_eval(
+    allocr: NativeObj, model: NativeObj, tensor: ggml_tensor_p, n_threads: int
+) -> ggml_cgraph_p:
+    return lib.unity_eval(allocr.ptr, model.ptr, tensor, n_threads)

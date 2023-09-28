@@ -469,9 +469,10 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
 }
 
 // build the computation graph
-extern "C" struct ggml_cgraph * unity_graph(
-        const unity_model & model,
-        struct ggml_allocr * allocr) {
+extern "C" ggml_cgraph* unity_graph(
+    const unity_model & model,
+    ggml_tensor* input
+) {
 
     const auto & hparams = model.hparams;
 
@@ -494,23 +495,11 @@ extern "C" struct ggml_cgraph * unity_graph(
     struct ggml_context * ctx0 = ggml_init(params);
 
     struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
-    
-    /// For dev, load an example input before conformer blocks
-    auto file = std::ifstream("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_conformer_block.bin", std::ios::binary);
-    if (!file) {
-        file = std::ifstream("/home/guw/github/seamless_communication/ggml/examples/unity/models/unity-large/seqs_before_conformer_block.bin", std::ios::binary);
-        if (!file) {
-            std::cerr << "Failed to open binary file." << std::endl;
-            exit(1);
-        }
-    }
-    struct ggml_tensor * inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1024, 137);
-    inpL->data = malloc(ggml_nbytes(inpL));
-    file.read(reinterpret_cast<char *>(inpL->data), ggml_nbytes(inpL));
     struct ggml_tensor * ffn_scale = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1, 1);
     ffn_scale->data = malloc(ggml_nbytes(ffn_scale));
     ggml_set_f32(ffn_scale, 0.5f);
     
+    ggml_tensor* inpL = input;
     for (int il = 0; il < n_audio_enc_layer; ++il) {
         struct ggml_tensor * cur = inpL;
         struct ggml_tensor * residual = cur;
@@ -603,9 +592,10 @@ extern "C" struct ggml_cgraph * unity_graph(
     return gf;
 }
 
-extern "C" struct ggml_cgraph * unity_eval(
-        const unity_model & model,
-        struct ggml_allocr * allocr,
+extern "C" struct ggml_cgraph* unity_eval(
+        ggml_allocr* allocr,
+        const unity_model& model,
+        ggml_tensor* input,
         const int n_threads) {
 
     // const auto & hparams = model.hparams;
@@ -613,7 +603,7 @@ extern "C" struct ggml_cgraph * unity_eval(
     // reset the allocator to free all the memory allocated during the previous inference
     ggml_allocr_reset(allocr);
 
-    struct ggml_cgraph * gf = unity_graph(model, allocr);
+    struct ggml_cgraph * gf = unity_graph(model, input);
 
     // allocate tensors
     ggml_allocr_alloc_graph(allocr, gf);
@@ -669,14 +659,26 @@ int main(int argc, char ** argv) {
         }
     }
 
+    /// For dev, load an example input before conformer blocks
+    auto file = std::ifstream("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_conformer_block.bin", std::ios::binary);
+    if (!file) {
+        file = std::ifstream("/home/guw/github/seamless_communication/ggml/examples/unity/models/unity-large/seqs_before_conformer_block.bin", std::ios::binary);
+        if (!file) {
+            std::cerr << "Failed to open binary file." << std::endl;
+            exit(1);
+        }
+    }
+    struct ggml_tensor * input = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, 1024, 137);
+    input->data = malloc(ggml_nbytes(input));
+    file.read(reinterpret_cast<char *>(input->data), ggml_nbytes(input));
+
     // keep this buffer alive while evaluating the model
     std::vector<uint8_t> compute_buffer;
     struct ggml_allocr * allocr = NULL;
     // allocate the compute buffer
     {
         allocr = ggml_allocr_new_measure(GGML_MEM_ALIGN);
-        struct ggml_cgraph * gf = unity_graph(model, allocr);
-        
+        struct ggml_cgraph * gf = unity_graph(model, input);
 
         // compute the required memory
         size_t mem_size = ggml_allocr_alloc_graph(allocr, gf) + GGML_MEM_ALIGN;
@@ -689,7 +691,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: compute buffer size: %.2f MB\n", __func__, mem_size/1024.0/1024.0);
     }
 
-    if (!unity_eval(model, allocr, 1)) {
+    if (!unity_eval(allocr, model, input, 1)) {
         printf("Failed to predict\n");
         return 1;
     }
