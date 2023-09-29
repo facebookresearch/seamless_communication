@@ -363,6 +363,8 @@ extern "C" {
         GGML_OP_REPEAT,
         GGML_OP_REPEAT_BACK,
         GGML_OP_CONCAT,
+        GGML_OP_REMOVE_HEAD_ROW,
+        GGML_OP_GET_FIRST_COLS_BY_ROWS,
         GGML_OP_SILU_BACK,
         GGML_OP_NORM, // normalize
         GGML_OP_RMS_NORM,
@@ -838,6 +840,14 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_remove_head_row(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_get_first_cols_by_rows(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
 
     GGML_API struct ggml_tensor * ggml_abs(
             struct ggml_context * ctx,

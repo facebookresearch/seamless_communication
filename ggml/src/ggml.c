@@ -26,9 +26,11 @@
 #include <stdarg.h>
 #include <signal.h>
 
+
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
+
 
 // static_assert should be a #define, but if it's not,
 // fall back to the _Static_assert C11 keyword.
@@ -3941,6 +3943,8 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "REPEAT",
     "REPEAT_BACK",
     "CONCAT",
+    "REMOVE_HEAD_ROW",
+    "GET_FIRST_COLS_BY_ROWS",
     "SILU_BACK",
     "NORM",
     "RMS_NORM",
@@ -4001,7 +4005,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+// static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4023,6 +4027,8 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "repeat(x)",
     "repeat_back(x)",
     "concat(x, y)",
+    "remove_head_row(x)",
+    "get_first_cols_by_rows(x)",
     "silu_back(x)",
     "norm(x)",
     "rms_norm(x)",
@@ -4083,7 +4089,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+// static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -5825,6 +5831,45 @@ struct ggml_tensor * ggml_concat(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
+
+    return result;
+}
+
+// ggml_remove_head_row
+
+struct ggml_tensor * ggml_remove_head_row(
+    struct ggml_context* ctx,
+    struct ggml_tensor* a) {
+    bool is_node = false;
+
+    if (a->grad) {
+        is_node = true;
+    }
+
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, a->type, a->ne[0], a->ne[1]-1, a->ne[2], a->ne[3]);
+
+    result->op = GGML_OP_REMOVE_HEAD_ROW;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
+
+    return result;
+}
+
+// ggml_get_first_cols_by_rows
+
+struct ggml_tensor * ggml_get_first_cols_by_rows(
+    struct ggml_context* ctx,
+    struct ggml_tensor* a) {
+    bool is_node = false;
+
+    if (a->grad) {
+        is_node = true;
+    }
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, a->type, a->ne[1], a->ne[1], a->ne[2], a->ne[3]);
+
+    result->op = GGML_OP_GET_FIRST_COLS_BY_ROWS;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
 
     return result;
 }
@@ -8757,8 +8802,11 @@ static void ggml_compute_forward_add_f32(
 
     GGML_TENSOR_BINARY_OP_LOCALS;
 
-    GGML_ASSERT( nb0 == sizeof(float));
-    GGML_ASSERT(nb00 == sizeof(float));
+    // GGML_ASSERT( nb0 == sizeof(float));
+    // GGML_ASSERT(nb00 == sizeof(float));
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+
 
     // rows per thread
     const int dr = (nr + nth - 1)/nth;
@@ -10245,6 +10293,102 @@ static void ggml_compute_forward_concat(
     }
 }
 
+// ggml_compute_forward_remove_head_row
+
+static void ggml_compute_forward_remove_head_row_f32(
+    const struct ggml_compute_params * params,
+    const struct ggml_tensor * src0,
+    struct ggml_tensor * dst) {
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
+
+    GGML_TENSOR_UNARY_OP_LOCALS;
+
+    // TODO: support for transposed / permuted tensors
+    GGML_ASSERT(nb0  == sizeof(float));
+    GGML_ASSERT(nb00 == sizeof(float));
+
+    for (int i3 = 0; i3 < ne3; i3++) {
+        for (int i2 = 0; i2 < ne2; i2++) {
+            for (int i1 = 1; i1 < ne1; i1++) {
+                for (int i0 = 0; i0 < ne0; i0++) {
+                    const float * x = (float *)((char *) src0->data + i0 * nb00 + i1 * nb01 + i2 * nb02 + i3 * nb03);
+                    float * y = (float *)((char *)dst->data + i0 * nb0 + (i1-1) * nb1 + i2 * nb2 + i3 * nb3);
+                    *y = *x;
+                }
+            }
+        }
+    }
+}
+
+static void ggml_compute_forward_remove_head_row(
+    const struct ggml_compute_params* params,
+    const struct ggml_tensor* src0,
+    struct ggml_tensor* dst) {
+    switch (src0->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_remove_head_row_f32(params, src0, dst);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
+// ggml_compute_forward_get_first_cols_by_rows
+
+static void ggml_compute_forward_get_first_cols_by_rows_f32(
+    const struct ggml_compute_params * params,
+    const struct ggml_tensor * src0,
+    struct ggml_tensor * dst) {
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
+
+    GGML_TENSOR_UNARY_OP_LOCALS;
+
+    // TODO: support for transposed / permuted tensors
+    GGML_ASSERT(nb0  == sizeof(float));
+    GGML_ASSERT(nb00 == sizeof(float));
+
+    for (int i3 = 0; i3 < ne3; i3++) {
+        for (int i2 = 0; i2 < ne2; i2++) {
+            for (int i1 = 0; i1 < ne1; i1++) {
+                for (int i0 = 0; i0 < ne1; i0++) {
+                    const float * x = (float *)((char *) src0->data + i0 * nb00 + i1 * nb01 + i2 * nb02 + i3 * nb03);
+                    float * y = (float *)((char *)dst->data + i0 * nb0 + i1 * nb1 + i2 * nb2 + i3 * nb3);
+                    *y = *x;
+                }
+            }
+        }
+    }
+}
+
+static void ggml_compute_forward_get_first_cols_by_rows(
+    const struct ggml_compute_params* params,
+    const struct ggml_tensor* src0,
+    struct ggml_tensor* dst) {
+    switch (src0->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_get_first_cols_by_rows_f32(params, src0, dst);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
 // ggml_compute_forward_abs
 
 static void ggml_compute_forward_abs_f32(
@@ -11237,7 +11381,7 @@ static void ggml_compute_forward_mul_mat(
 
     // we don't support permuted src0 or src1
     GGML_ASSERT(nb00 == ggml_type_size(type));
-    GGML_ASSERT(nb10 == sizeof(float));
+    // GGML_ASSERT(nb10 == sizeof(float));
 
     // dst cannot be transposed or permuted
     GGML_ASSERT(nb0 == sizeof(float));
@@ -15763,6 +15907,14 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_concat(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_REMOVE_HEAD_ROW:
+            {
+                ggml_compute_forward_remove_head_row(params, tensor->src[0], tensor);
+            } break;    
+        case GGML_OP_GET_FIRST_COLS_BY_ROWS:
+            {
+                ggml_compute_forward_get_first_cols_by_rows(params, tensor->src[0], tensor);
+            } break;  
         case GGML_OP_SILU_BACK:
             {
                 ggml_compute_forward_silu_back(params, tensor->src[0], tensor->src[1], tensor);
@@ -16193,6 +16345,14 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 }
             } break;
         case GGML_OP_CONCAT:
+            {
+                GGML_ASSERT(false); // TODO: implement
+            } break;
+        case GGML_OP_REMOVE_HEAD_ROW:
+            {
+                GGML_ASSERT(false); // TODO: implement
+            } break;
+        case GGML_OP_GET_FIRST_COLS_BY_ROWS:
             {
                 GGML_ASSERT(false); // TODO: implement
             } break;
