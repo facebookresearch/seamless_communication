@@ -1,15 +1,21 @@
+#pragma once
+
 #include <map>
 #include <string>
+#include <vector>
 #include "ggml.h"
 
 
 struct fairseq2_model {
     ggml_context* ctx;
     std::map<std::string, struct ggml_tensor *> tensors;
+    void* arch;
     void* hparams;
 };
 
-fairseq2_model fairseq2_model_alloc(ggml_context* ctx, void* hparams);
+/// allocate the fairseq2 model and hyperparameters
+extern "C" fairseq2_model* fairseq2_model_alloc();
+extern "C" void fairseq2_model_free(fairseq2_model* model);
 
 struct Linear {
     struct ggml_tensor* weight;  // out_dim * in_dim
@@ -17,7 +23,7 @@ struct Linear {
 };
 
 std::size_t Linear_size(int32_t input_dim, int32_t output_dim);
-void Linear_init(Linear* self,fairseq2_model& model, const std::string &prefix, int input_dim, int output_dim, bool bias);
+void Linear_init(Linear& self,fairseq2_model& model, const std::string &prefix, int input_dim, int output_dim, bool bias);
 
 // LayerNorm
 
@@ -28,7 +34,23 @@ struct LayerNorm {
 
 std::size_t LayerNorm_size(int32_t dim);
 
-void LayerNorm_init(LayerNorm* self, fairseq2_model& model, const std::string &prefix, int dim);
+void LayerNorm_init(LayerNorm& self, fairseq2_model& model, const std::string &prefix, int dim);
+
+// ConformerConvolution
+// struct ConformerConvolution {
+//     // pointwise_conv1: Conv1d
+//     // pointwise_conv1_activation: GLU
+//     // depthwise_conv: Conv1d
+//     // batch_norm: BatchNorm1d
+//     // depthwise_activation: Module
+//     // pointwise_conv2: Conv1d
+// };
+
+// std::size_t ConformerConvolution_size(int32_t dim);
+
+// void ConformerConvolution_init(ConformerConvolution* self, fairseq2_model& model, const std::string &prefix, int dim);
+
+
 
 struct MultiheadAttention {
     // num_key_value_heads: int
@@ -43,6 +65,8 @@ struct MultiheadAttention {
     struct Linear output_proj;
 };
 
+void MultiheadAttention_init(MultiheadAttention& self, fairseq2_model& model, const std::string &prefix, int model_dim, int num_heads);
+
 struct StandardFeedForwardNetwork {
     struct Linear inner_proj; // ffn_inner_dim x model_dim
     // inner_activation -> Relu for unity
@@ -54,7 +78,7 @@ struct StandardFeedForwardNetwork {
 std::size_t StandardFeedForwardNetwork_size(int32_t dim, int32_t inner_dim);
 
 void StandardFeedForwardNetwork_init(
-    StandardFeedForwardNetwork* self,
+    StandardFeedForwardNetwork& self,
     fairseq2_model& model,
     const std::string &prefix,
     int model_dim,
@@ -65,6 +89,15 @@ ggml_tensor* StandardFeedForwardNetwork_forward(
     StandardFeedForwardNetwork* self,
     ggml_tensor* seqs
 );
+
+// Transformer
+
+enum TransformerNormOrder {
+    TRANSFORMER_NORM_ORDER_POST = 0,
+    TRANSFORMER_NORM_ORDER_PRE = 1,
+    TRANSFORMER_NORM_ORDER_PRE_WITH_NORMFORMER = 2
+};
+
 
 struct TransformerDecoderLayer {
     struct MultiheadAttention self_attn;
@@ -80,3 +113,20 @@ struct TransformerDecoderLayer {
     struct LayerNorm ffn_layer_norm;
     // norm_order: TransformerNormOrder
 };
+
+void TransformerDecoderLayer_init();
+
+
+struct TransformerDecoder {
+    std::vector<TransformerDecoderLayer> layers;
+    struct LayerNorm layer_norm;
+};
+
+// std::size_t TransformerDecoder_size(int32_t input_dim, int32_t output_dim);
+// void TransformerDecoder_init(TransformerEncoder* self, fairseq2_model& model, const std::string &prefix, TransformerNormOrder norm_order);
+
+
+// std::size_t TransformerEncoder_size(int32_t input_dim, int32_t output_dim);
+// void TransformerEncoder_init(TransformerEncoder* self, fairseq2_model& model, const std::string &prefix, TransformerNormOrder norm_order);
+
+//

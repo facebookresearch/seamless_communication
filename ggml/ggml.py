@@ -175,6 +175,10 @@ def GptVocab() -> NativeObj:
     return NativeObj("gpt_vocab")
 
 
+def Fairseq2Model() -> NativeObj:
+    return NativeObj("fairseq2_model")
+
+
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
 
 
@@ -189,15 +193,16 @@ def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
     return model, vocab
 
 
-lib.load_unity_ggml_file.argtypes = [ctypes.c_char_p, ggml_context_p]
-lib.load_unity_ggml_file.restype = ctypes.c_void_p
+lib.load_unity_ggml_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+lib.load_unity_ggml_file.restype = None
 
 
-def load_unity_ggml_file(model_file: Path) -> ctypes.c_void_p:
-    model = UnityModel()
-    return lib.load_unity_ggml_file(
-        ctypes.create_string_buffer(str(model_file).encode("utf-8")), ctx
+def load_unity_ggml_file(model_file: Path) -> NativeObj:
+    model = Fairseq2Model()
+    lib.load_unity_ggml_file(
+        model.ptr, ctypes.create_string_buffer(str(model_file).encode("utf-8"))
     )
+    return model
 
 
 lib.unity_audio_encoder_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]

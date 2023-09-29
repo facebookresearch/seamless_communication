@@ -21,17 +21,13 @@ class model_loader {
 public:
     virtual ~model_loader() {};
 
-    virtual fairseq2_model& alloc_model(ggml_context* ctx) = 0;
-
     virtual void load_hparams(fairseq2_model& model, std::ifstream &fin) = 0;
 
-    virtual void load_model_weights(fairseq2_model &model, std::ifstream &fin);
+    virtual std::size_t compute_context_size(void *raw_hparams) = 0;
 
-    virtual std::size_t
-    compute_context_size(void *raw_hparams) = 0;
+    virtual void tensors_alloc(fairseq2_model& model) = 0;
 
-    virtual void
-    init_model_tensors(fairseq2_model &model) = 0;
+    void load_model_weights(fairseq2_model &model, std::ifstream &fin);
 
 private:
     ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);
@@ -41,25 +37,24 @@ private:
     std::string get_name(std::ifstream &fin);
 };
 
-/// allocate the fairseq2 model and hyperparameters into the ggml context
-template<typename T>
-fairseq2_model& alloc_fairseq2_model(ggml_context* ctx) {
-    auto hparams = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, sizeof(T))->data;
-    auto& model = (fairseq2_model&)ggml_new_tensor_1d(ctx, GGML_TYPE_I8, sizeof(fairseq2_model))->data;
-
-    model.ctx = ctx;
-    model.hparams = hparams;
-    return model;
-};
-
 std::ifstream open_ggml_file(const char* fname);
 
 template<typename T>
-fairseq2_model& load_fairseq2_ggml_file(ggml_context* ctx, const char* fname) {
+void load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
     T loader;
-    fairseq2_model& model = loader.alloc_model(ctx);
     auto fin = open_ggml_file(fname);
     loader.load_hparams(model, fin);
-    loader.load_model_weights(model, fin);
-    return model;
+
+    std::size_t ctx_size = loader.compute_context_size(model.hparams);
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ ctx_size,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false,
+    };
+    model.ctx = ggml_init(params);
+
+    // TODO: should we delay weights loading/allocating ?
+    loader.tensors_alloc(model);
+    loader.load_model_weights(model, fin);;
 }
+

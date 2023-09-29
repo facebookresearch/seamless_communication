@@ -123,12 +123,12 @@ def test_from_numpy_works_with_f16(ctx: Ctx) -> None:
 
 
 def test_unity_model_load(ctx: Ctx) -> None:
-    model, vocab = ggml.unity_model_load(
-        UNITY_MODELS / "unity-large/ggml-model.bin"
-    )
+    model, vocab = ggml.unity_model_load(UNITY_MODELS / "unity-large/ggml-model.bin")
     print(model, vocab)
 
-    example = ggml.from_file(ctx, UNITY_MODELS / "unity-large/seqs_before_conformer_block.bin", (1024, 137))
+    example = ggml.from_file(
+        ctx, UNITY_MODELS / "unity-large/seqs_before_conformer_block.bin", (1024, 137)
+    )
 
     with ggml.MeasureArena() as arena:
         graph = ggml.unity_audio_encoder_graph(model, example)
@@ -136,7 +136,9 @@ def test_unity_model_load(ctx: Ctx) -> None:
         mem_size = ggml.ggml_allocr_alloc_graph(arena.ptr, graph) + ggml.GGML_MEM_ALIGN
 
     with ggml.FixedSizeArena(mem_size) as allocr:
-        print(f"unity_audio_encoder_graph: compute buffer size: {mem_size/1024/1024} MB")
+        print(
+            f"unity_audio_encoder_graph: compute buffer size: {mem_size/1024/1024} MB"
+        )
 
         eval_res_ptr = ggml.unity_eval(allocr, model, example, 1)
         eval_res = eval_res_ptr.contents
@@ -146,10 +148,6 @@ def test_unity_model_load(ctx: Ctx) -> None:
         assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
 
 
-# def test_unity_model_load2(ctx: Ctx) -> None:
-#     model = ggml.unity_model_load(
-#         UNITY_MODELS / "unity-large/ggml-model.bin"
-#     )
-#     print(model, vocab)
-#
-#
+def test_unity_model_load2(ctx: Ctx) -> None:
+    model = ggml.load_unity_ggml_file(UNITY_MODELS / "unity-large/ggml-model.bin")
+    print(model)

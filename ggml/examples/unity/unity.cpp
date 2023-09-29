@@ -180,8 +180,6 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
         return false;
     }
 
-    auto & ctx = model.ctx;
-
     size_t ctx_size = 0;
 
     {
@@ -245,6 +243,7 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
             return false;
         }
     }
+    auto & ctx = model.ctx;
 
     // prepare memory for the weights
     {
@@ -494,7 +493,8 @@ extern "C" ggml_cgraph* unity_audio_encoder_graph(
     // const int n_text_vocab = hparams.n_text_vocab;
     const int kernel_size = 31;
 
-    // since we are using ggml-alloc, this buffer only needs enough space to hold the ggml_tensor and ggml_cgraph structs, but not the tensor data
+    // since we are using ggml-alloc, this buffer only needs enough space to hold
+    // the ggml_tensor and ggml_cgraph structs, but not the tensor data
     static size_t buf_size = ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead();
     static std::vector<uint8_t> buf(buf_size);
 

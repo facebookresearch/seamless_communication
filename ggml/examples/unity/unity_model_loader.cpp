@@ -12,68 +12,9 @@
 
 #include "unity_model_loader.h"
 
-struct audio_enc_layer {
-    struct LayerNorm self_attn_layer_norm;
-
-    struct ggml_tensor * self_attn_linear_k_w;
-    struct ggml_tensor * self_attn_linear_k_b;
-    struct ggml_tensor * self_attn_linear_q_w;
-    struct ggml_tensor * self_attn_linear_q_b;
-    struct ggml_tensor * self_attn_linear_v_w;
-    struct ggml_tensor * self_attn_linear_v_b;
-    struct ggml_tensor * self_attn_linear_out_w;
-    struct ggml_tensor * self_attn_linear_out_b;
-    struct ggml_tensor * self_attn_linear_pos_w;
-
-    struct ggml_tensor * self_attn_pos_bias_u;
-    struct ggml_tensor * self_attn_pos_bias_v;
-
-    struct LayerNorm conv_layer_norm;
-
-    struct ggml_tensor * conv_pointwise_conv1_w;
-    struct ggml_tensor * conv_depthwise_conv_w;
-    struct ggml_tensor * conv_batch_norm_w;
-    struct ggml_tensor * conv_batch_norm_b;
-    struct ggml_tensor * conv_batch_norm_running_mean;
-    struct ggml_tensor * conv_batch_norm_running_var;
-    struct ggml_tensor * conv_batch_norm_num_batches_tracked;
-    struct ggml_tensor * conv_pointwise_conv2_w;
-
-    struct LayerNorm ffn1_layer_norm;
-    struct ggml_tensor * ffn1_w1;
-    struct ggml_tensor * ffn1_b1;
-    struct ggml_tensor * ffn1_w2;
-    struct ggml_tensor * ffn1_b2;
-
-    struct LayerNorm ffn2_layer_norm;
-    struct ggml_tensor * ffn2_w1;
-    struct ggml_tensor * ffn2_b1;
-    struct ggml_tensor * ffn2_w2;
-    struct ggml_tensor * ffn2_b2;
-
-    struct LayerNorm final_layer_norm;
-};
-
-
-struct unity_model {
-    unity_hparams* hparams;
-    // audio encoder
-    struct ggml_tensor * post_extract_proj_w;
-    struct ggml_tensor * post_extract_proj_b;
-    struct ggml_tensor * audio_enc_pos_conv_wg;
-    struct ggml_tensor * audio_enc_pos_conv_wv;
-    struct ggml_tensor * audio_enc_pos_conv_b;
-    struct LayerNorm audio_enc_layer_norm;
-    struct ggml_tensor * audio_enc_pos_enc_w;
-    struct LayerNorm layer_norm;
-    struct ggml_tensor * memory_k;
-    struct ggml_tensor * memory_v;
-    std::vector<audio_enc_layer> audio_enc_layers;
-};
-
 void unity_model_loader::load_hparams(fairseq2_model& model, std::ifstream &fin)
 {
-    auto hparams = (unity_hparams&)model.hparams;
+    auto& hparams = (unity_hparams&)model.hparams;
 
     fin.read((char*) &hparams.model_dim, sizeof(hparams.model_dim));
     fin.read((char*) &hparams.w2v2_encoder_config__model_dim, sizeof(hparams.w2v2_encoder_config__model_dim));
@@ -134,14 +75,52 @@ unity_model_loader::compute_context_size(void* raw_hparams)
 {
     // TODO
     auto hparams = (unity_hparams&)raw_hparams;
+    return hparams.model_dim * 1024 * 100;
 };
 
-void
-unity_model_loader::init_model_tensors(fairseq2_model &model)
+struct UnityArch {
+    struct TransformerDecoder text_decoder;
+};
+
+void unity_model_loader::tensors_alloc(fairseq2_model &model)
 {
-    // TODO
+    auto hparams = (unity_hparams&)model.hparams;
+    auto& arch = (UnityArch&)model.arch;
+    const auto ctx = model.ctx;
+    auto tensors = model.tensors;
+
+    const auto vocab_size = hparams.nllb_config__vocabulary_size;
+    const auto model_dim = hparams.nllb_config__model_dim;
+
+    // This can be simplified by adding syntax sugar
+
+    // frontend
+    // arch.frontend_embed_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, vocab_size, dim);
+    // tensor_map["text_decoder_frontend.embed.weight"] = arch.frontend_embed_w;
+
+    // layers
+    {
+        const auto n_layers = hparams.nllb_config__num_decoder_layers;
+        arch.text_decoder.layers = std::vector<TransformerDecoderLayer>(n_layers);
+        auto layers = arch.text_decoder.layers;
+        auto num_heads = hparams.nllb_config__num_decoder_attn_heads;
+        for (int i = 0; i < n_layers; ++i) {
+            auto prefix = "text_decoder.layers." + std::to_string(i);
+            MultiheadAttention_init(layers[i].self_attn, model, prefix + "self_attn", model_dim, num_heads);
+            LayerNorm_init(layers[i].self_attn_norm, model, prefix + "self_attn_norm", model_dim);
+        }
+    }
+
+    // // layer_norm
+    // arch.layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, dim);
+    // tensor_map["text_decoder.layer_norm.weight"] = arch.layer_norm_w;
+    // arch.layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, dim);
+    // tensor_map["text_decoder.layer_norm.bias"] = arch.layer_norm_b;
 };
 
-// extern "C" fairseq2_model<unity_hparams>* unity_model_load2(const char* fname, ggml_context* ctx) {
-//     return nullptr;
-// }
+extern "C" void load_unity_ggml_file(fairseq2_model& model, const char* fname) {
+    return load_fairseq2_ggml_file<unity_model_loader>(model, fname);
+}
+
+
+

@@ -93,7 +93,7 @@ model_loader::load_tensor_value(std::ifstream &fin, ggml_tensor *tensor)
 std::string
 model_loader::get_name(std::ifstream& fin)
 {
-    int32_t length;
+    std::uint32_t length;
     fin.read(reinterpret_cast<char *>(&length), sizeof(length));
     std::string name(length, 0);
     fin.read(&name[0], length);
