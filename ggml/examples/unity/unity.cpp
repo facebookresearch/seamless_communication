@@ -556,7 +556,7 @@ struct ggml_cgraph * unity_graph(
         int32_t S = cur->ne[1];
         int32_t H = n_audio_enc_head;
         int32_t K_h = n_audio_enc_dim / H;
-
+        
         int32_t start_index = n_ctx - S;
         int32_t end_index = n_ctx + S - 1;
 
