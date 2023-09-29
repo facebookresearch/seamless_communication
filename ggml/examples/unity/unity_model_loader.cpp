@@ -12,10 +12,69 @@
 
 #include "unity_model_loader.h"
 
+struct audio_enc_layer {
+    struct LayerNorm self_attn_layer_norm;
 
-void
-unity_model_loader::load_hparams(std::ifstream& fin, unity_hparams& hparams)
+    struct ggml_tensor * self_attn_linear_k_w;
+    struct ggml_tensor * self_attn_linear_k_b;
+    struct ggml_tensor * self_attn_linear_q_w;
+    struct ggml_tensor * self_attn_linear_q_b;
+    struct ggml_tensor * self_attn_linear_v_w;
+    struct ggml_tensor * self_attn_linear_v_b;
+    struct ggml_tensor * self_attn_linear_out_w;
+    struct ggml_tensor * self_attn_linear_out_b;
+    struct ggml_tensor * self_attn_linear_pos_w;
+
+    struct ggml_tensor * self_attn_pos_bias_u;
+    struct ggml_tensor * self_attn_pos_bias_v;
+
+    struct LayerNorm conv_layer_norm;
+
+    struct ggml_tensor * conv_pointwise_conv1_w;
+    struct ggml_tensor * conv_depthwise_conv_w;
+    struct ggml_tensor * conv_batch_norm_w;
+    struct ggml_tensor * conv_batch_norm_b;
+    struct ggml_tensor * conv_batch_norm_running_mean;
+    struct ggml_tensor * conv_batch_norm_running_var;
+    struct ggml_tensor * conv_batch_norm_num_batches_tracked;
+    struct ggml_tensor * conv_pointwise_conv2_w;
+
+    struct LayerNorm ffn1_layer_norm;
+    struct ggml_tensor * ffn1_w1;
+    struct ggml_tensor * ffn1_b1;
+    struct ggml_tensor * ffn1_w2;
+    struct ggml_tensor * ffn1_b2;
+
+    struct LayerNorm ffn2_layer_norm;
+    struct ggml_tensor * ffn2_w1;
+    struct ggml_tensor * ffn2_b1;
+    struct ggml_tensor * ffn2_w2;
+    struct ggml_tensor * ffn2_b2;
+
+    struct LayerNorm final_layer_norm;
+};
+
+
+struct unity_model {
+    unity_hparams* hparams;
+    // audio encoder
+    struct ggml_tensor * post_extract_proj_w;
+    struct ggml_tensor * post_extract_proj_b;
+    struct ggml_tensor * audio_enc_pos_conv_wg;
+    struct ggml_tensor * audio_enc_pos_conv_wv;
+    struct ggml_tensor * audio_enc_pos_conv_b;
+    struct LayerNorm audio_enc_layer_norm;
+    struct ggml_tensor * audio_enc_pos_enc_w;
+    struct LayerNorm layer_norm;
+    struct ggml_tensor * memory_k;
+    struct ggml_tensor * memory_v;
+    std::vector<audio_enc_layer> audio_enc_layers;
+};
+
+void unity_model_loader::load_hparams(fairseq2_model& model, std::ifstream &fin)
 {
+    auto hparams = (unity_hparams&)model.hparams;
+
     fin.read((char*) &hparams.model_dim, sizeof(hparams.model_dim));
     fin.read((char*) &hparams.w2v2_encoder_config__model_dim, sizeof(hparams.w2v2_encoder_config__model_dim));
     fin.read((char*) &hparams.w2v2_encoder_config__max_seq_len, sizeof(hparams.w2v2_encoder_config__max_seq_len));
@@ -71,13 +130,18 @@ unity_model_loader::load_hparams(std::ifstream& fin, unity_hparams& hparams)
 };
 
 std::size_t
-unity_model_loader::compute_context_size(unity_hparams &hparams)
+unity_model_loader::compute_context_size(void* raw_hparams)
+{
+    // TODO
+    auto hparams = (unity_hparams&)raw_hparams;
+};
+
+void
+unity_model_loader::init_model_tensors(fairseq2_model &model)
 {
     // TODO
 };
 
-void
-unity_model_loader::init_model_tensors(fairseq2_model<unity_hparams> &model)
-{
-    // TODO
-};
+// extern "C" fairseq2_model<unity_hparams>* unity_model_load2(const char* fname, ggml_context* ctx) {
+//     return nullptr;
+// }

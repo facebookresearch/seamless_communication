@@ -145,3 +145,11 @@ def test_unity_model_load(ctx: Ctx) -> None:
         expected = map(float, expected_raw.split(","))
         assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
 
+
+# def test_unity_model_load2(ctx: Ctx) -> None:
+#     model = ggml.unity_model_load(
+#         UNITY_MODELS / "unity-large/ggml-model.bin"
+#     )
+#     print(model, vocab)
+#
+#

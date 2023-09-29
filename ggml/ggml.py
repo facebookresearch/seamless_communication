@@ -94,9 +94,7 @@ def _pad_shape(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
 
 
 def from_numpy(ctx: ggml_context_p, array: np.ndarray) -> ggml_tensor_p:
-    tensor_p = ggml_new_tensor(
-        ctx, from_numpy_dtype(array.dtype), 1, GgmlShape()
-    )
+    tensor_p = ggml_new_tensor(ctx, from_numpy_dtype(array.dtype), 1, GgmlShape())
     tensor_p.contents.n_dims = array.ndim
     tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
     tensor_p.contents.ne = GgmlShape(*_pad_shape(array.shape))
@@ -189,6 +187,17 @@ def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
         vocab.ptr,
     )
     return model, vocab
+
+
+lib.load_unity_ggml_file.argtypes = [ctypes.c_char_p, ggml_context_p]
+lib.load_unity_ggml_file.restype = ctypes.c_void_p
+
+
+def load_unity_ggml_file(model_file: Path) -> ctypes.c_void_p:
+    model = UnityModel()
+    return lib.load_unity_ggml_file(
+        ctypes.create_string_buffer(str(model_file).encode("utf-8")), ctx
+    )
 
 
 lib.unity_audio_encoder_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]

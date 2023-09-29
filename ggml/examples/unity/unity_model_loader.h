@@ -66,72 +66,13 @@ struct unity_hparams {
     float adaptor_dropout_p;
 };
 
-// Methods
+
 
 // Embedding
 std::size_t compute_embed_size(int32_t vocab_size, int32_t dim)
 {
     return vocab_size * dim * ggml_type_size(GGML_TYPE_F32);
 };
-
-// Projection
-std::size_t compute_projection_size(int32_t in_dim, int32_t out_dim)
-{
-    return (in_dim * out_dim * ggml_type_size(GGML_TYPE_F32)) // weight
-        + (out_dim * ggml_type_size(GGML_TYPE_F32)); // bias
-};
-
-// LayerNorm
-std::size_t compute_layer_norm_size(int32_t dim)
-{
-    return 2 * dim * ggml_type_size(GGML_TYPE_F32); // weight and bias
-};
-
-// FFN Layer
-
-struct ffn_layer {
-    struct ggml_tensor* layer_norm_w; // model_dim
-    struct ggml_tensor* layer_norm_b; // model_dim
-
-    struct ggml_tensor* inner_proj_w; // ffn_inner_dim x model_dim
-    struct ggml_tensor* inner_proj_b; // ffn_inner_dim
-
-    struct ggml_tensor* output_proj_w; // model_dim x ffn_inner_dim
-    struct ggml_tensor* output_proj_b; // model_dim
-};
-
-std::size_t compute_ffn_layer_size(int32_t dim, int32_t inner_dim)
-{
-    return compute_layer_norm_size(dim)
-        + compute_projection_size(dim, inner_dim)
-        + compute_projection_size(inner_dim, dim);
-};
-
-void init_ffn_layer(
-    ffn_layer *layer,
-    fairseq2_model<unity_hparams> &model_ctx,
-    const std::string &prefix)
-{
-    const auto dim = model_ctx.hparams.nllb_config__model_dim;
-    const auto inner_dim = model_ctx.hparams.nllb_config__ffn_inner_dim;
-    auto ctx = model_ctx.ctx;
-    auto &tensor_map = model_ctx.tensors;
-
-    layer->layer_norm_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, dim);
-    tensor_map[prefix + "_layer_norm.weight"] = layer->layer_norm_w;
-    layer->layer_norm_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, dim);
-    tensor_map[prefix + "_layer_norm.bias"] = layer->layer_norm_b;
-
-    layer->inner_proj_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, inner_dim, dim);
-    tensor_map[prefix + ".inner_proj.weight"] = layer->inner_proj_w;
-    layer->inner_proj_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, inner_dim);
-    tensor_map[prefix + ".inner_proj.bias"] = layer->inner_proj_b;
-
-    layer->output_proj_w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, dim, inner_dim);
-    tensor_map[prefix + ".output_proj.weight"] = layer->output_proj_w;
-    layer->output_proj_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, dim);
-    tensor_map[prefix + ".output_proj.bias"] = layer->output_proj_b;
-}
 
 // Attention Layer
 
@@ -152,16 +93,17 @@ struct attention_layer {
 
 std::size_t compute_attention_layer_size(int32_t dim)
 {
-    return compute_layer_norm_size(dim)
-        + 4 * compute_projection_size(dim, dim); // q, k, v, and out
+    return LayerNorm_size(dim)
+        + 4 * Linear_size(dim, dim); // q, k, v, and out
 };
 
 void init_attention_layer(
     attention_layer *layer,
-    fairseq2_model<unity_hparams> &model_ctx,
+    fairseq2_model &model_ctx,
     const std::string &prefix)
 {
-    const auto dim = model_ctx.hparams.nllb_config__model_dim;
+    auto hparams = (unity_hparams&)model_ctx.hparams;
+    const auto dim = hparams.nllb_config__model_dim;
     auto ctx = model_ctx.ctx;
     auto &tensor_map = model_ctx.tensors;
 
@@ -197,23 +139,23 @@ void init_attention_layer(
 struct attention_head {
     struct attention_layer* self_attn; // model_dim
     struct attention_layer* encoder_decoder_attn; // model_dim
-    struct ffn_layer* ffn;
+    struct StandardFeedForwardNetwork* ffn;
 };
 
 std::size_t compute_attention_head_size(int32_t dim, int32_t inner_dim)
 {
-    return 2 * compute_attention_layer_size(dim)
-        + compute_ffn_layer_size(dim, inner_dim);
+    return 2 * compute_attention_layer_size(dim) + StandardFeedForwardNetwork_size(dim, inner_dim);
 };
 
 void init_attention_head(
     attention_head *head,
-    fairseq2_model<unity_hparams> &model_ctx,
+    fairseq2_model &model_ctx,
     const std::string &prefix)
 {
+    auto hparams = (unity_hparams&)model_ctx.hparams;
     init_attention_layer(head->self_attn, model_ctx, prefix + ".self_attn");
     init_attention_layer(head->encoder_decoder_attn, model_ctx, prefix + ".encoder_decoder_attn");
-    init_ffn_layer(head->ffn, model_ctx, prefix + ".ffn");
+    StandardFeedForwardNetwork_init(head->ffn, model_ctx, prefix + ".ffn", hparams.nllb_config__model_dim, hparams.nllb_config__ffn_inner_dim);
 }
 
 // TODO: attention_head_compute_graph
@@ -227,8 +169,9 @@ struct text_decoder {
     struct ggml_tensor* layer_norm_b;
 };
 
-std::size_t compute_context_size(unity_hparams &hparams)
+std::size_t compute_context_size(void* raw_hparams)
 {
+    auto hparams = (unity_hparams&)raw_hparams;
     const auto vocab_size = hparams.nllb_config__vocabulary_size;
     const auto dim = hparams.nllb_config__model_dim;
     const auto inner_dim = hparams.nllb_config__ffn_inner_dim;
@@ -238,17 +181,17 @@ std::size_t compute_context_size(unity_hparams &hparams)
 
     return compute_embed_size(vocab_size, dim)
         + n_layers * compute_attention_head_size(dim, inner_dim)
-        + compute_layer_norm_size(dim)
+        + LayerNorm_size(dim)
         + overhead;
 };
 
 void init_model_tensors(
     text_decoder &model,
-    fairseq2_model<unity_hparams> &model_ctx,
+    fairseq2_model &model_ctx,
     const std::string &prefix)
 {
     const auto ctx = model_ctx.ctx;
-    const auto hparams = model_ctx.hparams;
+    auto hparams = (unity_hparams&)model_ctx.hparams;
     auto tensor_map = model_ctx.tensors;
 
     const auto vocab_size = hparams.nllb_config__vocabulary_size;
@@ -277,16 +220,19 @@ void init_model_tensors(
 };
 
 
+class unity_model_loader: public model_loader {
+    public:
+    fairseq2_model& alloc_model(ggml_context* ctx) {
+        return alloc_fairseq2_model<unity_hparams>(ctx);
+    };
 
-// Model
-class unity_model_loader: public model_loader<unity_hparams> {
-protected:
-    void
-    load_hparams(std::ifstream &fin, unity_hparams &hparams);
+    void load_hparams(fairseq2_model& model, std::ifstream &fin);
 
-    std::size_t
-    compute_context_size(unity_hparams &hparams) = 0;
+    std::size_t compute_context_size(void* raw_hparams);
 
-    void
-    init_model_tensors(fairseq2_model<unity_hparams> &model);
+    void init_model_tensors(fairseq2_model &model);
 };
+
+extern "C" fairseq2_model& load_unity_ggml_file(ggml_context* ctx, const char* fname) {
+    return load_fairseq2_ggml_file<unity_model_loader>(ctx, fname);
+}

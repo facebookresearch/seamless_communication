@@ -249,6 +249,7 @@ endif()
 add_library(${TARGET}
     ggml.c
     ggml-alloc.c
+    ../examples/unity/fairseq2.cpp
     ../examples/unity/model_loader.cpp
     ../examples/unity/unity_model_loader.cpp
     ../examples/unity/unity.cpp
