@@ -199,9 +199,8 @@ lib.load_unity_ggml_file.restype = None
 
 def load_unity_ggml_file(model_file: Path) -> NativeObj:
     model = Fairseq2Model()
-    lib.load_unity_ggml_file(
-        model.ptr, ctypes.create_string_buffer(str(model_file).encode("utf-8"))
-    )
+    bytes_file = ctypes.create_string_buffer(str(model_file).encode("utf-8"))
+    lib.load_unity_ggml_file(model.ptr, bytes_file)
     return model
 
 

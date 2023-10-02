@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 from typing import Iterator
 from ggml import NativeObj
+from ggml_convert import convert_model
 
 Ctx = ggml.ggml_context_p
 
@@ -148,6 +149,16 @@ def test_unity_model_load(ctx: Ctx) -> None:
         assert np.allclose(inpL[0, :10], list(expected), atol=1e-4)
 
 
-def test_unity_model_load2(ctx: Ctx) -> None:
-    model = ggml.load_unity_ggml_file(UNITY_MODELS / "unity-large/ggml-model.bin")
+def test_unity_model_load2(ctx: Ctx, tmp_path: Path) -> None:
+
+    model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
+    if not model_file.exists():
+        convert_model("seamlessM4T_medium", model_file)
+    hparams_header_file = model_file.with_suffix(".hparams.h")
+    hparams_struct = hparams_header_file.read_text().strip()
+    actual_code = (UNITY_MODELS.parent / "unity_model_loader.h").read_text()
+    # breakpoint()
+    # assert hparams_struct in actual_code
+
+    model = ggml.load_unity_ggml_file(model_file)
     print(model)
