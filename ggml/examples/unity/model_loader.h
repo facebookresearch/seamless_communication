@@ -32,10 +32,10 @@ public:
 private:
     ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);
 
-    // TODO Move these two to helpers
-    void load_tensor_value(std::ifstream &fin, ggml_tensor *tensor);
     std::string get_name(std::ifstream &fin);
 };
+
+ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx);
 
 std::ifstream open_ggml_file(const char* fname);
 
@@ -53,8 +53,6 @@ void load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
     };
     model.ctx = ggml_init(params);
 
-    // TODO: should we delay weights loading/allocating ?
-    loader.tensors_alloc(model);
     loader.load_model_weights(model, fin);;
 }
 
