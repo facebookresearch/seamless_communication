@@ -415,7 +415,7 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
             std::string name(length, 0);
             fin.read(&name[0], length);
 
-            std::cout << "loading " << name << " " << n_dims << std::endl;
+            // std::cout << "loading " << name << " " << n_dims << std::endl;
 
             if (model.tensors.find(name) == model.tensors.end()) {
                 fprintf(stderr, "%s: unknown tensor '%s' in model file\n", __func__, name.c_str());

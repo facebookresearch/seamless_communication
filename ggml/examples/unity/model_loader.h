@@ -27,7 +27,7 @@ public:
 
     virtual void tensors_alloc(fairseq2_model& model) = 0;
 
-    void load_model_weights(fairseq2_model &model, std::ifstream &fin);
+    int load_model_weights(fairseq2_model &model, std::ifstream &fin);
 
 private:
     ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);
@@ -40,7 +40,7 @@ ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx);
 std::ifstream open_ggml_file(const char* fname);
 
 template<typename T>
-void load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
+int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
     T loader;
     auto fin = open_ggml_file(fname);
     loader.load_hparams(model, fin);
@@ -53,6 +53,6 @@ void load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
     };
     model.ctx = ggml_init(params);
 
-    loader.load_model_weights(model, fin);;
+    return loader.load_model_weights(model, fin);;
 }
 

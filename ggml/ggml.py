@@ -8,7 +8,6 @@ import ctypes
 import torch
 import functools
 from pathlib import Path
-from typing import Self
 from typing import Dict
 from typing import Callable
 from typing import Any
@@ -48,11 +47,20 @@ def shape(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
     return tuple([tensor.ne[i] for i in range(ndims)])
 
 
+def nb(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
+    if isinstance(tensor, ctypes._Pointer):
+        tensor = tensor.contents
+    return tuple([tensor.nb[i] for i in range(4)])
+
+
 def strides(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
+    raise NotImplementedError()
     if isinstance(tensor, ctypes._Pointer):
         tensor = tensor.contents
     ndims = tensor.n_dims
-    return tuple([tensor.nb[i] for i in range(ndims)])
+    num_bytes = tuple([tensor.nb[i] for i in range(ndims)])
+    # TODO: convert to numpy strides
+    return num_bytes
 
 
 def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
@@ -77,6 +85,7 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
 
 
 GgmlShape = ctypes.c_int64 * GGML_MAX_DIMS
+GgmlNBytes = ctypes.c_uint64 * GGML_MAX_DIMS
 
 
 def from_file(
@@ -88,19 +97,37 @@ def from_file(
 
 def _pad_shape(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
     if len(shape) >= 4:
-        return shape
+        return shape  # type: ignore
 
     padding = (1,) * (4 - len(shape))
     return shape + padding  # type: ignore
 
 
-def from_numpy(ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"]) -> ggml_tensor_p:
+def _compute_nbytes(
+    ne: Tuple[int, int, int, int], type: ctypes.c_int
+) -> Tuple[int, int, int, int]:
+    nb0 = ggml_type_size(type)
+    nb1 = nb0 * (ne[0] // ggml_blck_size(type))
+    nb2 = nb1 * ne[1]
+    nb3 = nb2 * ne[2]
+    return (nb0, nb1, nb2, nb3)
+
+
+def from_numpy(
+    ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"]
+) -> ggml_tensor_p:
     if type(array).__name__ == "Tensor":
         array = array.numpy()
-    tensor_p = ggml_new_tensor(ctx, from_numpy_dtype(array.dtype), 1, GgmlShape())
+    # Create an empty tensor so we don't allocate memory for the data pointer
+    gtype = from_numpy_dtype(array.dtype)
+    tensor_p = ggml_new_tensor_1d(ctx, gtype, 0)
+    # Fill out the correct dimensions and shape.
     tensor_p.contents.n_dims = array.ndim
+    shape = _pad_shape(array.shape)
+    tensor_p.contents.ne = GgmlShape(*shape)
+    tensor_p.contents.nb = GgmlNBytes(*_compute_nbytes(shape, gtype))
+    # point the tensor data to the content of the numpy array.
     tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
-    tensor_p.contents.ne = GgmlShape(*_pad_shape(array.shape))
     # print(f"array: {array.shape} @0x{array.ctypes.data_as(ctypes.c_void_p)}")
     # print(f"tensor_p: {shape(tensor_p)} @0x{tensor_p.contents.data:x}")
 
@@ -181,11 +208,13 @@ def GptVocab() -> NativeObj:
 def Fairseq2Model() -> NativeObj:
     return NativeObj("fairseq2_model")
 
+
 lib.std_string_alloc.argtypes = [ctypes.c_char_p]
 lib.std_string_alloc.restype = ctypes.c_void_p
 lib.std_string_free.argtypes = [ctypes.c_void_p]
 lib.std_string_free.restype = None
 NativeObj._cache["std_string"] = (lib.std_string_alloc, lib.std_string_free)
+
 
 @functools.lru_cache(1024)
 def CppStr(content: str) -> NativeObj:
@@ -195,7 +224,6 @@ def CppStr(content: str) -> NativeObj:
 
 
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
-
 
 def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
     model = UnityModel()
@@ -209,13 +237,15 @@ def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
 
 
 lib.load_unity_ggml_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-lib.load_unity_ggml_file.restype = None
+lib.load_unity_ggml_file.restype = ctypes.c_int
 
 
 def load_unity_ggml_file(model_file: Path) -> NativeObj:
     model = Fairseq2Model()
     bytes_file = ctypes.create_string_buffer(str(model_file).encode("utf-8"))
-    lib.load_unity_ggml_file(model.ptr, bytes_file)
+    err = lib.load_unity_ggml_file(model.ptr, bytes_file)
+    if err:
+        raise Exception("Failed to load model")
     return model
 
 
@@ -242,7 +272,7 @@ def unity_eval(
     return lib.unity_eval(allocr, model.ptr, tensor, n_threads)
 
 
-_FORWARD_CACHE: Dict[str, Callable[[...], ggml_tensor_p]] = {}
+_FORWARD_CACHE: Dict[str, Callable[..., ggml_tensor_p]] = {}
 
 
 def forward(

@@ -94,7 +94,10 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
     """
     for key, value in state_dict.items():
         write_string(out, key)
-        write_tensor(out, value)
+        if key.endswith(".bias") and value.ndim == 1:
+            # GGML broadcasting isn't as strong as numpy
+            value = value.reshape(1, -1)
+        write_tensor(out, value.contiguous())
 
 
 def write_string(out: BufferedWriter, value: str) -> None:

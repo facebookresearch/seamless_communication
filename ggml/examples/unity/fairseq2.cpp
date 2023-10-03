@@ -50,15 +50,21 @@ void Linear_init(
     }
 }
 
-extern "C" ggml_tensor* Linear_forward(
+extern "C" ggml_tensor*
+Linear_forward(
     fairseq2_model& model,
     const std::string &prefix,
-    ggml_tensor* input
+    ggml_tensor* input  // (d_in)
 ) {
-    ggml_tensor* weight = model.tensors[prefix + ".weight"];
-    ggml_tensor* bias = model.tensors[prefix + ".bias"];
+    // Note: for now we assumed un-batched input
+    ggml_tensor* weight = model.tensors[prefix + ".weight"];  // (d_in, d_out)
+    ggml_tensor* bias = model.tensors[prefix + ".bias"];  // (d_out)
 
-    return ggml_add(model.ctx, ggml_mul_mat(model.ctx, weight, input), bias);
+    return ggml_add(
+        model.ctx,
+        ggml_mul_mat(model.ctx, weight, input),  // (d_out)
+        bias
+    );
 }
 
 // LayerNorm

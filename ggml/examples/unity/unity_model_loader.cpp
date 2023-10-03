@@ -68,7 +68,7 @@ void unity_model_loader::tensors_alloc(fairseq2_model &model)
     // tensor_map["text_decoder.layer_norm.bias"] = arch.layer_norm_b;
 };
 
-extern "C" void load_unity_ggml_file(fairseq2_model& model, const char* fname) {
+extern "C" int load_unity_ggml_file(fairseq2_model& model, const char* fname) {
     return load_fairseq2_ggml_file<unity_model_loader>(model, fname);
 }
 

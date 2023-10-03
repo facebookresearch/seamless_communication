@@ -63,9 +63,18 @@ def test_shape_works(ctx: Ctx) -> None:
     assert ggml.shape(c) == (12, 22, 32)
 
 
-@pytest.mark.xfail(
-    reason="TODO: understand diff between ggml strides and numpy strides"
-)
+def test_nb_works(ctx: Ctx) -> None:
+    a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
+    assert ggml.nb(a) == (4, 40, 40, 40)
+
+    b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F16, 11, 21)
+    assert ggml.nb(b) == (2, 22, 462, 462)
+
+    c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
+    assert ggml.nb(c) == (4, 48, 1056, 33792)
+
+
+@pytest.mark.xfail(reason="TODO: fix strides")
 def test_strides_works(ctx: Ctx) -> None:
     a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
     assert ggml.strides(a) == np.ones((10,), dtype=np.float32).strides
@@ -81,21 +90,37 @@ def test_to_numpy_works_with_f32(ctx: Ctx) -> None:
     a = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10)
     a = ggml.ggml_set_f32(a, 2.14)
     assert np.allclose(ggml.to_numpy(a), np.ones((10,)) * 2.14)
+
     b = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 11, 21)
-    assert np.allclose(ggml.to_numpy(b), np.zeros((11, 21)))
+    b = ggml.ggml_set_f32(b, 2.14)
+    assert np.allclose(ggml.to_numpy(b), np.ones((11, 21)) * 2.14)
+
     c = ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
-    assert np.allclose(ggml.to_numpy(c), np.zeros((12, 22, 32)))
+    c = ggml.ggml_set_f32(c, 2.14)
+    assert np.allclose(ggml.to_numpy(c), np.ones((12, 22, 32)) * 2.14)
 
 
 def test_from_numpy_works_with_f32(ctx: Ctx) -> None:
     a = np.random.normal(size=(10,)).astype(dtype=np.float32)
     ga = ggml.from_numpy(ctx, a)
+    assert ggml.shape(ga) == (10,)
+    assert ggml.nb(ga) == ggml.nb(ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_F32, 10))
     assert np.allclose(a, ggml.to_numpy(ga))
+
     a = np.random.normal(size=(11, 21)).astype(dtype=np.float32)
     ga = ggml.from_numpy(ctx, a)
+    assert ggml.shape(ga) == (11, 21)
+    assert ggml.nb(ga) == ggml.nb(
+        ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 11, 21)
+    )
     assert np.allclose(a, ggml.to_numpy(ga))
+
     a = np.random.normal(size=(12, 22, 32)).astype(dtype=np.float32)
     ga = ggml.from_numpy(ctx, a)
+    assert ggml.shape(ga) == (12, 22, 32)
+    assert ggml.nb(ga) == ggml.nb(
+        ggml.ggml_new_tensor_3d(ctx, ggml.GGML_TYPE_F32, 12, 22, 32)
+    )
     assert np.allclose(a, ggml.to_numpy(ga))
 
 
@@ -163,9 +188,11 @@ def g_model() -> NativeObj:
 @pytest.fixture(scope="module")
 def pt_model() -> Iterator[Any]:
     model = load_unity_model("seamlessM4T_medium")
+    print(model)
     model.eval()
     with torch.inference_mode():
         yield model
+
 
 @pytest.mark.xfail(reason="TODO")
 def test_hparams_code_is_up_to_date() -> None:
@@ -177,8 +204,8 @@ def test_hparams_code_is_up_to_date() -> None:
     assert hparams_struct in actual_code
 
 
-def test_unity_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
-    x = torch.empty((1024,))
+def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
+    x = torch.empty((1024))
     torch.nn.init.uniform_(x, -1, 1)
 
     # Test FFN without LayerNorm
@@ -196,15 +223,13 @@ def test_unity_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     assert np.allclose(y_exp, y, rtol=1e-3)
 
 
-def test_unity_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
+def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     x = torch.empty((1024,))
     torch.nn.init.uniform_(x, -1, 1)
 
     y_exp = pt_model.text_encoder.layers[0].ffn_layer_norm(x).numpy()
     gx = ggml.from_numpy(ctx, x)
-    gy = ggml.forward(
-        "LayerNorm", g_model, "text_encoder.layers.0.ffn_layer_norm", gx
-    )
+    gy = ggml.forward("LayerNorm", g_model, "text_encoder.layers.0.ffn_layer_norm", gx)
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
