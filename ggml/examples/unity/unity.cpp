@@ -464,7 +464,7 @@ extern "C" bool unity_model_load(const char* fname, unity_model& model, gpt_voca
     return true;
 }
 
-extern "C" ggml_tensor* LayerNorm_forward(
+ggml_tensor* LayerNorm_forward(
     const LayerNorm& layer,
     ggml_context* ctx,
     ggml_tensor* cur,
@@ -505,7 +505,6 @@ extern "C" ggml_cgraph* unity_audio_encoder_graph(
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
-
     struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
     struct ggml_tensor * ffn_scale = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 1, 1);
     ffn_scale->data = malloc(ggml_nbytes(ffn_scale));

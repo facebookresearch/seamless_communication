@@ -17,6 +17,10 @@ struct fairseq2_model {
 extern "C" fairseq2_model* fairseq2_model_alloc();
 extern "C" void fairseq2_model_free(fairseq2_model* model);
 
+extern "C" std::string* std_string_alloc(char* c_str);
+extern "C" void std_string_free(std::string* str);
+
+
 struct Linear {
     struct ggml_tensor* weight;  // out_dim * in_dim
     struct ggml_tensor* bias;  // out_dim
@@ -85,9 +89,10 @@ void StandardFeedForwardNetwork_init(
     int inner_dim
 );
 
-ggml_tensor* StandardFeedForwardNetwork_forward(
-    StandardFeedForwardNetwork* self,
-    ggml_tensor* seqs
+extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* input
 );
 
 // Transformer

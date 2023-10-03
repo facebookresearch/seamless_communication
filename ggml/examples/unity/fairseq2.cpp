@@ -16,6 +16,15 @@ extern "C" void fairseq2_model_free(fairseq2_model* model) {
     delete model;
 };
 
+extern "C" std::string* std_string_alloc(char* c_str) {
+    return new std::string(c_str);
+}
+
+extern "C" void std_string_free(std::string* str) {
+    delete str;
+}
+
+
 
 // Linear
 
@@ -41,6 +50,17 @@ void Linear_init(
     }
 }
 
+extern "C" ggml_tensor* Linear_forward(
+    fairseq2_model& model,
+    const std::string &prefix,
+    ggml_tensor* input
+) {
+    ggml_tensor* weight = model.tensors[prefix + ".weight"];
+    ggml_tensor* bias = model.tensors[prefix + ".bias"];
+
+    return ggml_add(model.ctx, ggml_mul_mat(model.ctx, weight, input), bias);
+}
+
 // LayerNorm
 
 std::size_t LayerNorm_size(int32_t dim)
@@ -60,6 +80,24 @@ void LayerNorm_init(
     model.tensors[prefix + ".bias"] = self.bias;
 }
 
+extern "C" ggml_tensor* LayerNorm_forward(
+    fairseq2_model& model,
+    const std::string &prefix,
+    ggml_tensor* input) {
+    ggml_tensor* weight = model.tensors[prefix + ".weight"];
+    ggml_tensor* bias = model.tensors[prefix + ".bias"];
+
+    auto ctx = model.ctx;
+    // TODO: should `eps` be part of unity hparams ?
+    input = ggml_norm(ctx, input, /*eps*/1e-5);
+    return ggml_add(
+        ctx,
+        ggml_mul(ctx, ggml_repeat(ctx, weight, input), input),
+        ggml_repeat(ctx, bias, input)
+    );
+}
+
+
 std::size_t StandardFeedForwardNetwork_size(int32_t dim, int32_t inner_dim)
 {
     return LayerNorm_size(dim) + Linear_size(dim, inner_dim) + Linear_size(inner_dim, dim);
@@ -77,11 +115,23 @@ void StandardFeedForwardNetwork_init(
     Linear_init(self.output_proj, model, prefix + ".output_proj", inner_dim, model_dim, true);
 }
 
-ggml_tensor* StandardFeedForwardNetwork_forward(
-    StandardFeedForwardNetwork* self,
+extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
     ggml_tensor* seqs
 ) {
+    seqs = Linear_forward(model, prefix + ".inner_proj", seqs);
+    // inner_activation = ReLu // TODO: allow other activation
+    seqs = ggml_relu(model.ctx, seqs);
 
+    if (model.tensors.find(prefix + ".inner_layer_norm.weight") != model.tensors.end()) {
+        seqs = LayerNorm_forward(model, prefix + ".inner_layer_norm", seqs);
+    }
+
+    // TODO: inference dropout
+    // if self.inner_dropout is not None:
+    //     seqs = self.inner_dropout(seqs)
+    seqs = Linear_forward(model, prefix + ".output_proj", seqs);
     return seqs;
 }
 

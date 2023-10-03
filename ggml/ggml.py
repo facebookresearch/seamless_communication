@@ -6,6 +6,7 @@ adding a few utilities to convert between ggml and numpy tensors for testing.
 import numpy as np
 import ctypes
 import torch
+import functools
 from pathlib import Path
 from typing import Self
 from typing import Dict
@@ -93,7 +94,9 @@ def _pad_shape(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
     return shape + padding  # type: ignore
 
 
-def from_numpy(ctx: ggml_context_p, array: np.ndarray) -> ggml_tensor_p:
+def from_numpy(ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"]) -> ggml_tensor_p:
+    if type(array).__name__ == "Tensor":
+        array = array.numpy()
     tensor_p = ggml_new_tensor(ctx, from_numpy_dtype(array.dtype), 1, GgmlShape())
     tensor_p.contents.n_dims = array.ndim
     tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
@@ -139,8 +142,8 @@ class NativeObj:
             # print(f"freeing {self}")
             self.ptr = NULL
 
-    def __enter__(self) -> Self:
-        return self
+    def __enter__(self) -> ctypes.c_void_p:
+        return self.ptr
 
     def __exit__(self, *args: Any) -> None:
         self.free()
@@ -177,6 +180,18 @@ def GptVocab() -> NativeObj:
 
 def Fairseq2Model() -> NativeObj:
     return NativeObj("fairseq2_model")
+
+lib.std_string_alloc.argtypes = [ctypes.c_char_p]
+lib.std_string_alloc.restype = ctypes.c_void_p
+lib.std_string_free.argtypes = [ctypes.c_void_p]
+lib.std_string_free.restype = None
+NativeObj._cache["std_string"] = (lib.std_string_alloc, lib.std_string_free)
+
+@functools.lru_cache(1024)
+def CppStr(content: str) -> NativeObj:
+    c_str = ctypes.create_string_buffer(content.encode("utf-8"))
+    cpp_str = lib.std_string_alloc(c_str)
+    return NativeObj("std_string", cpp_str)
 
 
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
@@ -222,6 +237,26 @@ lib.unity_eval.restype = ctypes.POINTER(ggml_cgraph)
 
 
 def unity_eval(
-    allocr: NativeObj, model: NativeObj, tensor: ggml_tensor_p, n_threads: int
+    allocr: ctypes.c_void_p, model: NativeObj, tensor: ggml_tensor_p, n_threads: int
 ) -> ggml_cgraph_p:
-    return lib.unity_eval(allocr.ptr, model.ptr, tensor, n_threads)
+    return lib.unity_eval(allocr, model.ptr, tensor, n_threads)
+
+
+_FORWARD_CACHE: Dict[str, Callable[[...], ggml_tensor_p]] = {}
+
+
+def forward(
+    layer_name: str, model: NativeObj, prefix: str, *inputs: ggml_tensor_p
+) -> ggml_tensor_p:
+    fwd: Any = _FORWARD_CACHE.get(layer_name)
+    if fwd is None:
+        fwd = getattr(lib, layer_name + "_forward")
+        num_inputs = len(inputs)
+        fwd.argtypes = [ctypes.c_void_p, ctypes.c_void_p] + [
+            ctypes.POINTER(ggml_tensor)
+        ] * num_inputs
+        fwd.restype = ctypes.POINTER(ggml_tensor)
+        _FORWARD_CACHE[layer_name] = fwd
+
+    with CppStr(prefix) as std_prefix:
+        return fwd(model.ptr, std_prefix, *inputs)  # ignore: type[no-any-return]

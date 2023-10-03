@@ -28,6 +28,7 @@ def convert_model(model_name: str, out: Optional[Path] = None) -> None:
     if "unity" in model_name or "seamlessM4T" in model_name:
         model_config = load_unity_config(model_name)
         hparams = flatten_config(dataclasses.asdict(model_config), separator="__")
+        print(hparams)
         model = load_unity_model(model_name)
     else:
         raise ValueError(f"Unsupported model type: {model_name}")
@@ -49,7 +50,6 @@ def write_ggml_file(
         # Size of each tensor
         byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
         # + tensor overhead
-        breakpoint()
         byte_size += ggml.ggml_tensor_overhead() * len(state_dict)
         # + some slack cause I'm bad at math
         byte_size = int(byte_size * 1.2)

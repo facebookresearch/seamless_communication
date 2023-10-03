@@ -1,7 +1,7 @@
 #include <string>
 #include "model_loader.h"
 
-#define DEBUG 1
+#define DEBUG_MODEL_LOAD 0
 
 std::ifstream open_ggml_file(const char* fname) {
     printf("%s: loading model from '%s'\n", __func__, fname);
@@ -31,7 +31,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
             break;
         auto tensor = load_tensor_value(fin, model.ctx);
         model.tensors[name] = tensor;
-        if (DEBUG) {
+        if (DEBUG_MODEL_LOAD) {
             printf("%s [%5ld, %5ld], type = %6s, %6.2f MB, %9zu bytes\n", name.c_str(), tensor->ne[0], tensor->ne[1], ggml_type_name(tensor->type), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
         }
         total_size += ggml_nbytes(tensor);
