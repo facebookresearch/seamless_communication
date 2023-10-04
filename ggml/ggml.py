@@ -44,7 +44,7 @@ def shape(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
     if isinstance(tensor, ctypes._Pointer):
         tensor = tensor.contents
     ndims = tensor.n_dims
-    return tuple([tensor.ne[i] for i in range(ndims)])
+    return tuple([tensor.ne[i] for i in range(ndims)[::-1]])
 
 
 def nb(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
@@ -70,7 +70,7 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
     t_shape = shape(tensor)
 
     # Convert the ggml data pointer to a pointer to ints with the same size (float16 -> uint16)
-    # This is needed because Python ctypes doesn't have "float16", and as_array only works with ctypes pointer
+    # This is needed because Python ctypes doesn't have "float16", and `as_array` only works with ctypes
     type_size = ggml_type_size(tensor.type)
     int_width: type = getattr(ctypes, f"c_uint{8 * type_size}")
     ptr = ctypes.cast(tensor.data, ctypes.POINTER(int_width))
@@ -84,7 +84,7 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
     return res
 
 
-GgmlShape = ctypes.c_int64 * GGML_MAX_DIMS
+GgmlNElem = ctypes.c_int64 * GGML_MAX_DIMS
 GgmlNBytes = ctypes.c_uint64 * GGML_MAX_DIMS
 
 
@@ -95,12 +95,15 @@ def from_file(
     return from_numpy(ctx, data)
 
 
-def _pad_shape(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
-    if len(shape) >= 4:
-        return shape  # type: ignore
+def _shape_to_ne(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
+    # in GGML ne[0] indicates the contiguous dimension, ie the last one in numpy and torch
+    ne = shape[::-1]
+    if len(ne) >= GGML_MAX_DIMS:
+        return   # type: ignore
 
-    padding = (1,) * (4 - len(shape))
-    return shape + padding  # type: ignore
+    # ne is always of the same length
+    padding = (1,) * (GGML_MAX_DIMS - len(ne))
+    return ne + padding  # type: ignore
 
 
 def _compute_nbytes(
@@ -123,9 +126,9 @@ def from_numpy(
     tensor_p = ggml_new_tensor_1d(ctx, gtype, 0)
     # Fill out the correct dimensions and shape.
     tensor_p.contents.n_dims = array.ndim
-    shape = _pad_shape(array.shape)
-    tensor_p.contents.ne = GgmlShape(*shape)
-    tensor_p.contents.nb = GgmlNBytes(*_compute_nbytes(shape, gtype))
+    ne = _shape_to_ne(array.shape)
+    tensor_p.contents.ne = GgmlNElem(*ne)
+    tensor_p.contents.nb = GgmlNBytes(*_compute_nbytes(ne, gtype))
     # point the tensor data to the content of the numpy array.
     tensor_p.contents.data = array.ctypes.data_as(ctypes.c_void_p)
     # print(f"array: {array.shape} @0x{array.ctypes.data_as(ctypes.c_void_p)}")
@@ -134,6 +137,16 @@ def from_numpy(
     # prevent the underlying numpy array to be freed
     setattr(tensor_p, "__data", array)
     return tensor_p
+
+
+def ggml_can_mul_mat(t0: ggml_tensor_p, t1: ggml_tensor_p) -> bool:
+    assert GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function"
+
+    return (
+        (t0.contents.ne[0] == t1.contents.ne[0])
+        and (t1.contents.ne[2] % t0.contents.ne[2] == 0)
+        and (t1.contents.ne[3] % t0.contents.ne[3] == 0)
+    )
 
 
 class NativeObj:
@@ -224,6 +237,7 @@ def CppStr(content: str) -> NativeObj:
 
 
 lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
+
 
 def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
     model = UnityModel()

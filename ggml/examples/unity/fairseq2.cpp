@@ -162,5 +162,52 @@ void MultiheadAttention_init(
     self.bias_v = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, num_heads, 1, model_dim / num_heads);
 }
 
+ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) {
+    int slen = x->ne[0];
+    // (S, M) -> (S, K_proj)
+    x = ggml_reshape_3d(ctx, x, slen, num_heads, x->ne[1] / num_heads);
+    // (S, K_proj) -> (H, S, K_h)
+    return ggml_transpose(ctx, x);
+}
 
-// void TransformerDecoderLayer_init(TransformerDecoderLayer& self);
+
+
+extern "C" ggml_tensor* // (d_in, seq_len)
+MultiheadAttention_forward(
+    fairseq2_model& model,
+    const std::string &prefix,
+    ggml_tensor* queries,  // (d_in, len_q)
+    ggml_tensor* keys,  // (d_in, len_k)
+    ggml_tensor* values,  // (d_out, len_k)
+    ggml_tensor* mask // (seq_len, len_q)
+) {
+    int num_heads = 16;
+    ggml_context* ctx = model.ctx;
+    ggml_tensor* q = Linear_forward(model, prefix + ".q_proj", queries);
+    q = reshape_num_head(ctx, q, num_heads);
+    ggml_tensor* k = Linear_forward(model, prefix + ".k_proj", keys);
+    k = reshape_num_head(ctx, k, num_heads);
+    ggml_tensor* v = Linear_forward(model, prefix + ".q_proj", queries);
+    v = reshape_num_head(ctx, v, num_heads);
+
+    ggml_tensor* attn = ggml_flash_attn(model.ctx, q, k, v, /*masked*/true);
+    attn = Linear_forward(model, prefix + ".output_proj", attn);
+    return attn;
+    // ggml_tensor* attn = SDPA_forward(q, k, v, nullptr);
+    // // (H, S, V_h) -> (S, H, V_h)
+    // attn = ggml_transpose(ctx, attn);
+    // // (S, H, V_h) -> (S, V_proj)
+    // attn = ggml_reshape_3d()
+}
+
+// extern "C" ggml_tensor* // (d_out, seq_len)
+// SDPA_forward(
+//     fairseq2_model& model,
+//     const std::string &prefix,
+//     ggml_tensor* queries,  // (d_in, len_q)
+//     ggml_tensor* keys,  // (d_in, len_k)
+//     ggml_tensor* values,  // (d_out, len_k)
+//     ggml_tensor* mask // (seq_len, len_q)
+// ) {
+//     return queries;
+// }

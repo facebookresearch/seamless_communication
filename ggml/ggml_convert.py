@@ -50,9 +50,7 @@ def write_ggml_file(
         # Size of each tensor
         byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
         # + tensor overhead
-        byte_size += ggml.ggml_tensor_overhead() * len(state_dict)
-        # + some slack cause I'm bad at math
-        byte_size = int(byte_size * 1.2)
+        byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
         hparams["model_byte_size"] = byte_size
         logging.warning(f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3)} GGML Gb")
     # 6877961321223123048
