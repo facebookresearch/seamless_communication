@@ -31,33 +31,7 @@ extern "C" void std_string_free(std::string* str) {
 }
 
 
-
-// Linear
-
-std::size_t Linear_size(int32_t input_dim, int32_t output_dim)
-{
-    return (input_dim * output_dim * ggml_type_size(GGML_TYPE_F32)) // weight
-        + (output_dim * ggml_type_size(GGML_TYPE_F32)); // bias
-};
-
-void Linear_init(
-    Linear& self,
-    fairseq2_model& model,
-    const std::string &prefix,
-    int input_dim,
-    int output_dim,
-    bool bias
-) {
-    self.weight = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, output_dim, input_dim);
-    model.tensors[prefix + ".weight"] = self.weight;
-    if (bias) {
-        self.bias = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, output_dim);
-        model.tensors[prefix + ".inner_proj.bias"] = self.bias;
-    }
-}
-
-extern "C" ggml_tensor*
-Linear_forward(
+extern "C" ggml_tensor* Linear_forward(
     fairseq2_model& model,
     const std::string &prefix,
     ggml_tensor* input  // (d_in)
@@ -71,25 +45,6 @@ Linear_forward(
         ggml_mul_mat(model.ctx, weight, input),  // (d_out)
         bias
     );
-}
-
-// LayerNorm
-
-std::size_t LayerNorm_size(int32_t dim)
-{
-    return 2 * dim * ggml_type_size(GGML_TYPE_F32); // weight and bias
-};
-
-void LayerNorm_init(
-    LayerNorm& self,
-    fairseq2_model& model,
-    const std::string &prefix,
-    int dim
-) {
-    self.weight = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, dim);
-    model.tensors[prefix + ".weight"] = self.weight;
-    self.bias = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, dim);
-    model.tensors[prefix + ".bias"] = self.bias;
 }
 
 extern "C" ggml_tensor* LayerNorm_forward(
@@ -109,23 +64,6 @@ extern "C" ggml_tensor* LayerNorm_forward(
     );
 }
 
-
-std::size_t StandardFeedForwardNetwork_size(int32_t dim, int32_t inner_dim)
-{
-    return LayerNorm_size(dim) + Linear_size(dim, inner_dim) + Linear_size(inner_dim, dim);
-};
-
-void StandardFeedForwardNetwork_init(
-    StandardFeedForwardNetwork& self,
-    fairseq2_model& model,
-    const std::string &prefix,
-    int model_dim,
-    int inner_dim
-) {
-    Linear_init(self.inner_proj, model, prefix + ".inner_proj", model_dim, inner_dim, true);
-    LayerNorm_init(self.inner_layer_norm, model, prefix + ".inner_layer_norm", inner_dim);
-    Linear_init(self.output_proj, model, prefix + ".output_proj", inner_dim, model_dim, true);
-}
 
 extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
     fairseq2_model& model,
@@ -147,26 +85,6 @@ extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
     return seqs;
 }
 
-void MultiheadAttention_init(
-    MultiheadAttention& self,
-    fairseq2_model& model,
-    const std::string &prefix,
-    int model_dim,
-    int num_heads
-) {
-    int bias = true;
-    int num_key_value_heads = num_heads;
-    int head_dim = model_dim / num_heads;
-
-    Linear_init(self.q_proj, model, prefix + ".q_proj", model_dim, model_dim, bias);
-    Linear_init(self.k_proj, model, prefix + ".k_proj", model_dim, head_dim * num_key_value_heads, bias);
-    Linear_init(self.v_proj, model, prefix + ".v_proj", model_dim, model_dim, bias);
-
-    // (H, 1, K_h)
-    self.bias_k = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, num_heads, 1, head_dim * num_key_value_heads/ num_heads);
-    // (H, 1, V_h)
-    self.bias_v = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, num_heads, 1, model_dim / num_heads);
-}
 
 ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) {
     int slen = x->ne[1];
@@ -179,9 +97,8 @@ ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) 
 }
 
 
-
-extern "C" ggml_tensor* // (slen, d_in)
-MultiheadAttention_forward(
+// TODO: borken
+extern "C" ggml_tensor* MultiheadAttention_forward(
     fairseq2_model& model,
     const std::string &prefix,
     ggml_tensor* queries,  // (slen, d_in)
