@@ -7,14 +7,20 @@ extern "C" fairseq2_model* fairseq2_model_alloc() {
     auto* model = new fairseq2_model;
     model->hparams = new std::uint8_t[8 * 1024];
     model->arch = new std::uint64_t[16 * 1024];  // max tensors allowed
+    model->tensors_ctx = nullptr;
     return model;
 };
 
 extern "C" void fairseq2_model_free(fairseq2_model* model) {
+    if (model->tensors_ctx) ggml_free(model->tensors_ctx);
     delete (std::uint64_t*)(model->arch);
     delete (std::uint8_t*)model->hparams;
     delete model;
 };
+
+extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx) {
+    model->ctx = ctx;
+}
 
 extern "C" std::string* std_string_alloc(char* c_str) {
     return new std::string(c_str);
@@ -163,42 +169,67 @@ void MultiheadAttention_init(
 }
 
 ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) {
-    int slen = x->ne[0];
-    // (S, M) -> (S, K_proj)
-    x = ggml_reshape_3d(ctx, x, slen, num_heads, x->ne[1] / num_heads);
-    // (S, K_proj) -> (H, S, K_h)
-    return ggml_transpose(ctx, x);
+    int slen = x->ne[1];
+    int model_dim = x->ne[0];
+    // (S, dim) -> (S, H, H_dim)
+    x = ggml_reshape_3d(ctx, x, model_dim / num_heads, num_heads, slen);
+    // (S, H, H_dim) -> (H, S, H_dim)
+    x = ggml_permute(ctx, x, 0, 2, 1, 3);
+    return x;
 }
 
 
 
-extern "C" ggml_tensor* // (d_in, seq_len)
+extern "C" ggml_tensor* // (slen, d_in)
 MultiheadAttention_forward(
     fairseq2_model& model,
     const std::string &prefix,
-    ggml_tensor* queries,  // (d_in, len_q)
-    ggml_tensor* keys,  // (d_in, len_k)
-    ggml_tensor* values,  // (d_out, len_k)
-    ggml_tensor* mask // (seq_len, len_q)
+    ggml_tensor* queries,  // (slen, d_in)
+    ggml_tensor* keys,  // (klen, d_in)
+    ggml_tensor* values,  // (klen, d_out)
+    ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
 ) {
+    int slen = queries->ne[1];
     int num_heads = 16;
+    int head_dim = queries->ne[0] / num_heads;
     ggml_context* ctx = model.ctx;
     ggml_tensor* q = Linear_forward(model, prefix + ".q_proj", queries);
-    q = reshape_num_head(ctx, q, num_heads);
+    q = reshape_num_head(ctx, q, num_heads);  // (H, S, H_dim)
     ggml_tensor* k = Linear_forward(model, prefix + ".k_proj", keys);
-    k = reshape_num_head(ctx, k, num_heads);
-    ggml_tensor* v = Linear_forward(model, prefix + ".q_proj", queries);
-    v = reshape_num_head(ctx, v, num_heads);
+    k = reshape_num_head(ctx, k, num_heads);  // (H, S, H_dim)
+    ggml_tensor* v = Linear_forward(model, prefix + ".v_proj", values);
+    v = ggml_reshape_3d(ctx, v, head_dim, num_heads, slen); // (S, H, H_dim)
+    // v = ggml_permute(ctx, v, 1, 2, 0, 3);  // (H, H_dim, S)
+    v = ggml_permute(ctx, v, 1, 0, 2, 3);  // (S, H_dim, H)
+    v = ggml_cont(ctx, v);
 
-    ggml_tensor* attn = ggml_flash_attn(model.ctx, q, k, v, /*masked*/true);
-    attn = Linear_forward(model, prefix + ".output_proj", attn);
+    // ggml_tensor* attn = ggml_flash_attn(ctx, q, k, v, /*masked*/false);  // (H, S, H_dim)
+    attn = ggml_permute(ctx, attn, 0, 2, 1, 3);  // (S, H, H_dim)
+    attn = ggml_cont(ctx, attn);
+    attn = ggml_reshape_2d(ctx, attn, num_heads * head_dim, slen);   // (S, H * V_h)
+    attn = Linear_forward(model, prefix + ".output_proj", attn);              // (S, d_out)
+
     return attn;
-    // ggml_tensor* attn = SDPA_forward(q, k, v, nullptr);
-    // // (H, S, V_h) -> (S, H, V_h)
-    // attn = ggml_transpose(ctx, attn);
-    // // (S, H, V_h) -> (S, V_proj)
-    // attn = ggml_reshape_3d()
 }
+
+// ggml_tensor* attn_weights = ggml_mul_mat(ctx, q, k);  // (H, S, S)
+//     attn_weights = ggm_mul * (q.size(-1) ** -0.5)
+
+//     if mask is not None:
+//         attn_weights = attn_weights + mask
+
+//     # For numerical stability run in single precision.
+//     attn_weights = softmax(attn_weights, dim=-1, dtype=torch.float32)
+
+//     attn_weights = attn_weights.type_as(q)
+
+//     if training and dropout_p > 0.0:
+//         attn_weights = dropout(attn_weights, dropout_p)
+
+//     # (*, S, S_kv) @ (*, S_kv, V) = (*, S, V)
+//     attn = torch.matmul(attn_weights, values)
+
+//     return attn, attn_weights if needs_weights else None
 
 // extern "C" ggml_tensor* // (d_out, seq_len)
 // SDPA_forward(

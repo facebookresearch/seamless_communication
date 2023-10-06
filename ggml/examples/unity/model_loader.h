@@ -51,8 +51,8 @@ int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
-    model.ctx = ggml_init(params);
+    model.tensors_ctx = ggml_init(params);
 
-    return loader.load_model_weights(model, fin);;
+    return loader.load_model_weights(model, fin);
 }
 

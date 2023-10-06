@@ -29,7 +29,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         std::string name = get_name(fin);
         if (name.length() == 0)
             break;
-        auto tensor = load_tensor_value(fin, model.ctx);
+        auto tensor = load_tensor_value(fin, model.tensors_ctx);
         if (tensor == nullptr) {
             // Abort in case of error, the input stream is corrupted at this point.
             printf("Error while reading tensor %s\n", name.c_str() );

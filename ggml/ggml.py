@@ -99,7 +99,7 @@ def _shape_to_ne(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
     # in GGML ne[0] indicates the contiguous dimension, ie the last one in numpy and torch
     ne = shape[::-1]
     if len(ne) >= GGML_MAX_DIMS:
-        return   # type: ignore
+        return  # type: ignore
 
     # ne is always of the same length
     padding = (1,) * (GGML_MAX_DIMS - len(ne))
@@ -218,6 +218,9 @@ def GptVocab() -> NativeObj:
     return NativeObj("gpt_vocab")
 
 
+lib.fairseq2_model_set_inference_ctx.argtypes = [ctypes.c_void_p, ggml_context_p]
+
+
 def Fairseq2Model() -> NativeObj:
     return NativeObj("fairseq2_model")
 
@@ -290,7 +293,7 @@ _FORWARD_CACHE: Dict[str, Callable[..., ggml_tensor_p]] = {}
 
 
 def forward(
-    layer_name: str, model: NativeObj, prefix: str, *inputs: ggml_tensor_p
+    layer_name: str, model: ctypes.c_void_p, prefix: str, *inputs: ggml_tensor_p
 ) -> ggml_tensor_p:
     fwd: Any = _FORWARD_CACHE.get(layer_name)
     if fwd is None:
@@ -303,4 +306,4 @@ def forward(
         _FORWARD_CACHE[layer_name] = fwd
 
     with CppStr(prefix) as std_prefix:
-        return fwd(model.ptr, std_prefix, *inputs)  # ignore: type[no-any-return]
+        return fwd(model, std_prefix, *inputs)  # ignore: type[no-any-return]

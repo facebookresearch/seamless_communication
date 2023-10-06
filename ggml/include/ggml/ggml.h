@@ -347,7 +347,7 @@ extern "C" {
         GGML_OP_NONE = 0,
 
         GGML_OP_DUP,
-        GGML_OP_ADD,
+        GGML_OP_ADD, //2
         GGML_OP_ADD1,
         GGML_OP_ACC,
         GGML_OP_SUB,
@@ -369,16 +369,15 @@ extern "C" {
         GGML_OP_RMS_NORM_BACK,
         GGML_OP_GROUP_NORM,
 
-        GGML_OP_MUL_MAT,
+        GGML_OP_MUL_MAT, //23
         GGML_OP_OUT_PROD,
-
         GGML_OP_SCALE,
         GGML_OP_SET,
         GGML_OP_CPY,
         GGML_OP_CONT,
-        GGML_OP_RESHAPE,
+        GGML_OP_RESHAPE, //29
         GGML_OP_VIEW,
-        GGML_OP_PERMUTE,
+        GGML_OP_PERMUTE, //32
         GGML_OP_TRANSPOSE,
         GGML_OP_GET_ROWS,
         GGML_OP_GET_ROWS_BACK,

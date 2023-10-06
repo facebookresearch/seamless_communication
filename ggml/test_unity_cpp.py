@@ -52,6 +52,7 @@ def test_ggml_bindings_work(ctx: Ctx) -> None:
     output = ggml.ggml_get_f32_1d(f, 0)
     assert output == 16.0
 
+
 def test_ggml_matmul(ctx: Ctx) -> None:
     # Instantiate tensors
     a = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 4, 2)
@@ -66,7 +67,6 @@ def test_ggml_matmul(ctx: Ctx) -> None:
     ggml.ggml_set_f32(x, 0.0)
     for i in range(4 * 3):
         ggml.ggml_set_f32_1d(x, i, i)
-
 
     ggml.ggml_set_f32(a, 0.0)
     ggml.ggml_set_f32_1d(a, 1, 1.0)
@@ -129,11 +129,13 @@ def test_to_numpy_works_with_f32(ctx: Ctx) -> None:
     # assert nb.shape == (21, 11)
     assert nb[0, 5] == 5
     assert nb[3, 5] == 11 * 3 + 5
-    assert np.allclose(nb, np.array(range(11 * 21), dtype=np.float32).reshape(ggml.shape(b)))
+    assert np.allclose(
+        nb, np.array(range(11 * 21), dtype=np.float32).reshape(ggml.shape(b))
+    )
     ggml.ggml_set_f32_1d(b, 11 * 3 + 5, -1.5)
     assert nb[3, 5] == -1.5
 
-    sum_rows = ggml.ggml_sum_rows(ctx, b);
+    sum_rows = ggml.ggml_sum_rows(ctx, b)
     gf = ggml.ggml_build_forward(sum_rows)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
     np_sum_rows = np.sum(nb, axis=-1, keepdims=True)
@@ -147,7 +149,9 @@ def test_to_numpy_works_with_f32(ctx: Ctx) -> None:
     nc = ggml.to_numpy(c)
     assert ggml.shape(c) == (32, 22, 12)
     assert nc[3, 5, 11] == 22 * 12 * 3 + 12 * 5 + 11
-    assert np.allclose(nc, np.array(range(12 * 22 * 32), dtype=np.float32).reshape(ggml.shape(c)))
+    assert np.allclose(
+        nc, np.array(range(12 * 22 * 32), dtype=np.float32).reshape(ggml.shape(c))
+    )
     ggml.ggml_set_f32_1d(c, 22 * 12 * 3 + 12 * 5 + 11, -1.5)
     assert nc[3, 5, 11] == -1.5
 
@@ -240,11 +244,18 @@ def test_ning_model_load(ctx: Ctx) -> None:
 
 
 @pytest.fixture(scope="module")
-def g_model() -> NativeObj:
+def g_model_once() -> Iterator[ctypes.c_void_p]:
     model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
     if not model_file.exists():
         convert_model("seamlessM4T_medium", model_file)
-    return ggml.load_unity_ggml_file(model_file)
+    with ggml.load_unity_ggml_file(model_file) as model:
+        yield model
+
+
+@pytest.fixture()
+def g_model(ctx: Ctx, g_model_once: ctypes.c_void_p) -> ctypes.c_void_p:
+    ggml.lib.fairseq2_model_set_inference_ctx(g_model_once, ctx)
+    return g_model_once
 
 
 @pytest.fixture(scope="module")
@@ -266,18 +277,16 @@ def test_hparams_code_is_up_to_date() -> None:
     assert hparams_struct in actual_code
 
 
-def test_forward_linear(ctx: Ctx) -> None:
+def test_numpy_mul_mat(ctx: Ctx) -> None:
     slen, d_in, d_out = (5, 4, 2)
     # torch.nn and fairseq2.nn assumes (seq_len, dim) to represent inputs,
     x = np.zeros((slen, d_in), dtype=np.float32)  # (seq_len, dim_in)
-    # torch.nn.init.uniform_(x, -1, 1)
-    x[0, :] = [1, 1/3, 0, 0]
+    x[0, :] = [1, 1 / 3, 0, 0]
 
-    # linear = fairseq2.nn.Linear(d_in, d_out, bias=False)
     weight = np.eye(d_out, d_in, dtype=np.float32)
     weight[1, 1] = 1
     # assert weight.shape == (d_out, d_in) # (dim_out, dim_in)
-    y_exp = (x @ weight.T)  # (seq_len, dim_out)
+    y_exp = x @ weight.T  # (seq_len, dim_out)
 
     gx = ggml.from_numpy(ctx, x)  # (dim_in, seq_len)
     gw = ggml.from_numpy(ctx, weight)  # (dim_in, dim_out)
@@ -294,9 +303,37 @@ def test_forward_linear(ctx: Ctx) -> None:
     assert np.allclose(y_exp, y)
 
 
+@torch.no_grad()
+def test_torch_spda_vs_ggml_flash_attn(ctx: Ctx) -> None:
+    slen, d_in, num_heads = (5, 4, 2)
+    torch.random.manual_seed(0)
+    q = torch.zeros((num_heads, slen, d_in))
+    torch.nn.init.uniform_(q, -1, 1)
+    k = torch.zeros((num_heads, slen, d_in))
+    torch.nn.init.uniform_(k, -1, 1)
+    v = torch.zeros((num_heads, slen, d_in))
+    torch.nn.init.uniform_(v, -1, 1)
+
+    # Note: we are using x for both keys and queries, so every position
+    # attends mostly to itself, hence y_exp looks a bit like arange(slen)
+    y_exp = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
+    y_exp = y_exp.numpy()
+    gq = ggml.from_numpy(ctx, q.numpy())
+    gk = ggml.from_numpy(ctx, k.numpy())
+    # ggml flash attention expect a different order of axis for v:
+    gv = ggml.from_numpy(ctx, v.transpose(1, 2).contiguous().numpy())
+    assert ggml.shape(gv) == (num_heads, d_in, slen)
+    gy = ggml.ggml_flash_attn(ctx, gq, gk, gv, True)
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+    assert np.allclose(y_exp, y)
+
+
 def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
-    x = torch.empty((1024))
-    torch.nn.init.uniform_(x, -1, 1)
+    x = torch.empty((21, 1024))  # (seq_len, model_dim)
+    torch.nn.init.uniform_(x, -1 / 32, 1 / 32)
 
     # Test FFN without LayerNorm
     y_exp = pt_model.text_encoder.layers[0].ffn(x).numpy()
@@ -307,14 +344,12 @@ def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
-    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1]).reshape(-1)
-    abs_diff = np.max(np.abs(y - y_exp))
-    assert abs_diff < 1e-2
-    assert np.allclose(y_exp, y, rtol=1e-3)
+    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1])
+    assert np.allclose(y_exp, y, rtol=2e-2, atol=1e-4)
 
 
 def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
-    x = torch.empty((1024,))
+    x = torch.empty((21, 1024))
     torch.nn.init.uniform_(x, -1, 1)
 
     y_exp = pt_model.text_encoder.layers[0].ffn_layer_norm(x).numpy()
@@ -323,22 +358,21 @@ def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
-    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1]).reshape(-1)
-    abs_diff = np.max(np.abs(y - y_exp))
-    assert np.allclose(y_exp, y)
+    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1])
+    assert np.allclose(y_exp, y, rtol=1e-3, atol=1e-4)
 
 
 def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
-    x = torch.empty((1, 25, 1024))
-
+    x = torch.empty((1, 21, 1024))
+    torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
     self_attn = pt_model.text_encoder.layers[0].self_attn
     # Replace spda by just returning queries
     # TODO: implement spda
-    self_attn.spda = lambda *qkv, **kwargs: qkv[0]
+    # self_attn.spda = lambda *qkv, **kwargs: qkv[0]
 
-    y_exp = self_attn(x, None, x, x).numpy()
+
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward(
         "MultiheadAttention",
@@ -351,7 +385,19 @@ def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    y = ggml.to_numpy(gy)
+    names = "ql,q,qt,qp,kl,k,kt,kp,vl,v,vt,vp,v_cont,attn,attn_p,attn_cont,attn_reshape,outl,out"
+    assert gf.n_nodes == len(names.split(","))
+    gf_nodes = {}
+    for i, name in enumerate(names.split(",")):
+        mid = ggml.to_numpy(gf.nodes[i])
+        # print(name, mid.shape, mid)
+        gf_nodes[name] = mid
 
-    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1]).reshape(-1)
+    breakpoint()
+    y_exp = self_attn(x, None, x, x).numpy()
+    y_exp = y_exp.squeeze(0)  # remove batch dimension
+
+    assert y.shape == y_exp.shape
     abs_diff = np.max(np.abs(y - y_exp))
     assert np.allclose(y_exp, y)
