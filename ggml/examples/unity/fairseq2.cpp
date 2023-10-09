@@ -98,15 +98,15 @@ ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) 
     return x;
 }
 
+# define UNITY_FLASH_ATTN
 
-// TODO: borken
 extern "C" ggml_tensor* MultiheadAttention_forward(
     fairseq2_model& model,
     const std::string &prefix,
     ggml_tensor* queries,  // (slen, d_in)
     ggml_tensor* keys,  // (klen, d_in)
     ggml_tensor* values,  // (klen, d_out)
-    ggml_tensor* mask // (klen, slen)  TODO: do we need to pass mask here ?
+    ggml_tensor* mask // (klen, slen)
 ) {
     int slen = queries->ne[1];
     int slenk = keys->ne[1];
@@ -126,6 +126,14 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     v = ggml_cont(ctx, v);
     ggml_set_name(v, "v");
 
+#ifdef UNITY_FLASH_ATTN
+    // For flash_attn, we assume either no masks, or triangular masks.
+    ggml_tensor* attn = ggml_flash_attn(ctx, q, k, v, /*masked*/mask != nullptr);  // (H, S, H_dim)
+    ggml_set_name(attn, "attn");
+    attn = ggml_permute(ctx, attn, 0, 2, 1, 3); // (S, H, H_dim)
+    attn = ggml_cont(ctx, attn);
+    attn = ggml_reshape_2d(ctx, attn, num_heads * head_dim, slen); // (S, H * H_dim)
+#else
     // (H, Sk, H_dim) x (H, S, H_dim) -> (H, S, Sk)
     ggml_tensor* qk = ggml_mul_mat(ctx, k, q);
     ggml_set_name(qk, "qk");
@@ -146,6 +154,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     attn = ggml_transpose(ctx, attn); // (S, H * H_dim)
     // // I'm not sure why this one is needed ...
     attn = ggml_cont(ctx, attn);
+#endif  // UNITY_FLASH_ATTN
     // out -> (S, d_out)
     ggml_tensor* out = Linear_forward(model, prefix + ".output_proj", attn);
     ggml_set_name(out, "out");
