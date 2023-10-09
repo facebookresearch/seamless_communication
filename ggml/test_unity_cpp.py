@@ -216,6 +216,21 @@ def test_from_numpy_works_with_f16(ctx: Ctx) -> None:
     assert np.allclose(a, ggml.to_numpy(ga))
 
 
+def test_to_numpy_works_with_transposed(ctx: Ctx) -> None:
+    ga = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 10, 5)
+    a = ggml.to_numpy(ga)
+    a[...] = np.arange(50).reshape(5, 10).astype(dtype=np.float32)
+
+    gat = ggml.ggml_transpose(ctx, ga)
+
+    gf = ggml.ggml_build_forward(ga)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    at = ggml.to_numpy(gat)
+
+    assert np.allclose(a.T, at)
+
+
 def test_ning_model_load(ctx: Ctx) -> None:
     pytest.skip("borken")
     model, vocab = ggml.unity_model_load(UNITY_MODELS / "unity-large/ggml-model.bin")

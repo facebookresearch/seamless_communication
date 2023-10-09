@@ -67,7 +67,9 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
     if isinstance(tensor, ctypes._Pointer):
         tensor = tensor.contents
 
+    n_dim = tensor.n_dims
     t_shape = shape(tensor)
+    strides = nb(tensor)[:n_dim][::-1]
 
     # Convert the ggml data pointer to a pointer to ints with the same size (float16 -> uint16)
     # This is needed because Python ctypes doesn't have "float16", and `as_array` only works with ctypes
@@ -78,9 +80,9 @@ def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
     int_arr = np.ctypeslib.as_array(ptr, shape=t_shape)
     # Reinterpret it to the right dtype
     res = np.frombuffer(int_arr, dtype=numpy_dtype(tensor.type)).reshape(t_shape)
+    # Patch up strides to work with transposed ggml_tensor
+    res.strides = strides
 
-    # TODO: assert strides / check contiguous
-    # assert strides(tensor) == res.strides, "TODO: support strided tensor"
     return res
 
 
