@@ -17,14 +17,14 @@ from seamless_communication.models.unity import load_unity_model
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-PARAMS_16MB = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
+PARAMS_256MB = ggml.ggml_init_params(mem_size=256 * 1024 * 1024, mem_buffer=None)
 
 
 @pytest.fixture(name="ctx")
 def _ctx() -> Iterator[Ctx]:
-    """Allocate a new context with 16 MB of memory"""
+    """Allocate a new context with 256 MB of memory"""
     try:
-        ctx = ggml.ggml_init(params=PARAMS_16MB)
+        ctx = ggml.ggml_init(params=PARAMS_256MB)
         yield ctx
     finally:
         ggml.ggml_free(ctx)
@@ -422,7 +422,7 @@ def test_forward_self_attn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
         gxq,
         gx,
         gx,
-        ctypes.pointer(),  # TODO: tests with causal attention masks
+        None,  # TODO: tests with causal attention masks
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
@@ -500,6 +500,37 @@ def test_StandardTransformerEncoderLayer_forward(
     y = ggml.to_numpy(gy)
 
     y_exp, _ = layer(x, padding_mask)
+    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-4)
+
+
+def test_StandardTransformerEncoder_forward(
+    ctx: Ctx, g_model: c_void_p, pt_model: Any
+) -> None:
+    x = torch.empty((1, 21, 1024))
+    padding_mask = torch.ones((1, 21))
+    torch.random.manual_seed(0)
+    torch.nn.init.uniform_(x, -1, 1)
+
+    gx = ggml.from_numpy(ctx, x[0])
+    ggml.ggml_set_name(gx, b"x")
+    gpad = ggml.from_numpy(ctx, padding_mask[0])
+    ggml.ggml_set_name(gpad, b"padding_mask")
+    gy = ggml.forward(
+        "StandardTransformerEncoder",
+        g_model,
+        "text_encoder",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+
+    y_exp, _ = pt_model.text_encoder(x, padding_mask)
     y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
 
     assert y.shape == y_exp.shape

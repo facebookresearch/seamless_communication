@@ -228,3 +228,27 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
 
     return seqs;
 }
+
+
+extern "C" ggml_tensor* StandardTransformerEncoder_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+) {
+    int layer_idx = 0;
+    // TODO: this isn't nice.
+    // When loading model we should add nullptr for the module key to avoid those concatenation.
+    while (has_layer(model, prefix + ".layers." + std::to_string(layer_idx)  + ".self_attn_layer_norm.weight")) {
+        seqs = StandardTransformerEncoderLayer_forward(
+            model, prefix + ".layers." + std::to_string(layer_idx), seqs, padding_mask
+        );
+        ggml_set_name(seqs, ("x_" + std::to_string(layer_idx)).c_str());
+        layer_idx += 1;
+    }
+
+    if (has_layer(model, prefix + ".layer_norm.weight"))
+        seqs = LayerNorm_forward(model, prefix + ".layer_norm", seqs);
+
+    return seqs;
+}
