@@ -1,5 +1,7 @@
+#include <math.h>
 #include "ggml.h"
 #include "fairseq2.h"
+
 
 /// allocate the fairseq2 model and hyperparameters
 extern "C" fairseq2_model* fairseq2_model_alloc() {
@@ -104,29 +106,51 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* queries,  // (slen, d_in)
     ggml_tensor* keys,  // (klen, d_in)
     ggml_tensor* values,  // (klen, d_out)
-    ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
+    ggml_tensor* mask // (klen, slen)  TODO: do we need to pass mask here ?
 ) {
     int slen = queries->ne[1];
+    int slenk = keys->ne[1];
     int num_heads = 16;
     int head_dim = queries->ne[0] / num_heads;
     ggml_context* ctx = model.ctx;
     ggml_tensor* q = Linear_forward(model, prefix + ".q_proj", queries);
     q = reshape_num_head(ctx, q, num_heads);  // (H, S, H_dim)
+    ggml_set_name(q, "q");
     ggml_tensor* k = Linear_forward(model, prefix + ".k_proj", keys);
-    k = reshape_num_head(ctx, k, num_heads);  // (H, S, H_dim)
+    k = reshape_num_head(ctx, k, num_heads);  // (H, Sk, H_dim)
+    ggml_set_name(k, "k");
+
     ggml_tensor* v = Linear_forward(model, prefix + ".v_proj", values);
-    v = ggml_reshape_3d(ctx, v, head_dim, num_heads, slen); // (S, H, H_dim)
-    // v = ggml_permute(ctx, v, 1, 2, 0, 3);  // (H, H_dim, S)
-    v = ggml_permute(ctx, v, 1, 0, 2, 3);  // (S, H_dim, H)
+    v = ggml_reshape_3d(ctx, v, head_dim, num_heads, slenk); // (Sk, H, H_dim)
+    v = ggml_permute(ctx, v, 1, 2, 0, 3);  // (H, H_dim, Sk)
     v = ggml_cont(ctx, v);
+    ggml_set_name(v, "v");
 
-    // ggml_tensor* attn = ggml_flash_attn(ctx, q, k, v, /*masked*/false);  // (H, S, H_dim)
-    attn = ggml_permute(ctx, attn, 0, 2, 1, 3);  // (S, H, H_dim)
+    // (H, Sk, H_dim) x (H, S, H_dim) -> (H, S, Sk)
+    ggml_tensor* qk = ggml_mul_mat(ctx, k, q);
+    ggml_set_name(qk, "qk");
+    ggml_tensor* qk_scale = ggml_new_tensor_1d(ctx, qk->type, 1);
+    ggml_set_f32(qk_scale, 1.0f/sqrtf(float(head_dim)));
+    qk = ggml_scale(ctx, qk, qk_scale);
+    ggml_set_name(qk, "qk_scaled");
+
+    if (mask) qk = ggml_add(ctx, qk, mask);
+    // TODO: upgrade qk to float32 if needed
+    ggml_tensor* attn_weights = ggml_soft_max(ctx, qk);  // (H, Sk, S)
+    ggml_set_name(attn_weights, "attn_weights");
+
+    // (H, S, Sk) x (H, H_dim, Sk) -> (H, H_dim, S)
+    ggml_tensor* attn = ggml_mul_mat(ctx, attn_weights, v);
+    ggml_set_name(attn, "attn");
+    attn = ggml_reshape_2d(ctx, attn, slen, num_heads * head_dim); // (H * H_dim, S)
+    attn = ggml_transpose(ctx, attn); // (S, H * H_dim)
+    // // I'm not sure why this one is needed ...
     attn = ggml_cont(ctx, attn);
-    attn = ggml_reshape_2d(ctx, attn, num_heads * head_dim, slen);   // (S, H * V_h)
-    attn = Linear_forward(model, prefix + ".output_proj", attn);              // (S, d_out)
+    // out -> (S, d_out)
+    ggml_tensor* out = Linear_forward(model, prefix + ".output_proj", attn);
+    ggml_set_name(out, "out");
 
-    return attn;
+    return out;
 }
 
 // ggml_tensor* attn_weights = ggml_mul_mat(ctx, q, k);  // (H, S, S)

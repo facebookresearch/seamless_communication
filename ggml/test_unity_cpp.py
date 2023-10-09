@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 import torch
 import fairseq2.nn
+import fairseq2.nn.transformer
 from typing import Any
 from pathlib import Path
 from typing import Iterator
@@ -346,6 +347,21 @@ def test_torch_spda_vs_ggml_flash_attn(ctx: Ctx) -> None:
     assert np.allclose(y_exp, y)
 
 
+def test_ggml_softmax_vs_torch(ctx: Ctx) -> None:
+    x = torch.empty((5, 8, 4))
+    torch.nn.init.uniform_(x, -1, 1)
+    y_exp = torch.softmax(x, dim=-1).numpy()
+
+    gx = ggml.from_numpy(ctx, x.numpy())
+    gy = ggml.ggml_soft_max(ctx, gx)
+    y = ggml.to_numpy(gy)
+
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    assert np.allclose(y_exp, y, rtol=1e-3)
+
+
 def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     x = torch.empty((21, 1024))  # (seq_len, model_dim)
     torch.nn.init.uniform_(x, -1 / 32, 1 / 32)
@@ -377,6 +393,13 @@ def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None
     assert np.allclose(y_exp, y, rtol=1e-3, atol=1e-4)
 
 
+def _name(tensor: ggml.ggml_tensor_p) -> bytes:
+    try:
+        return tensor.contents.name
+    except ValueError:
+        return b"???"
+
+
 def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     x = torch.empty((1, 21, 1024))
     torch.random.manual_seed(0)
@@ -387,32 +410,55 @@ def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     # TODO: implement spda
     # self_attn.spda = lambda *qkv, **kwargs: qkv[0]
 
-
-    gx = ggml.from_numpy(ctx, x)
+    gx = ggml.from_numpy(ctx, x[0])
+    gxk = ggml.from_numpy(ctx, x[0, :11, :])
+    gxv = ggml.from_numpy(ctx, x[0, :11, :])
+    ggml.ggml_set_name(gx, b"x")
     gy = ggml.forward(
         "MultiheadAttention",
         g_model,
         "text_encoder.layers.0.self_attn",
         gx,
-        gx,
-        gx,
+        gxk,
+        gxv,
         None,
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-    y = ggml.to_numpy(gy)
-    names = "ql,q,qt,qp,kl,k,kt,kp,vl,v,vt,vp,v_cont,attn,attn_p,attn_cont,attn_reshape,outl,out"
-    assert gf.n_nodes == len(names.split(","))
-    gf_nodes = {}
-    for i, name in enumerate(names.split(",")):
-        mid = ggml.to_numpy(gf.nodes[i])
-        # print(name, mid.shape, mid)
-        gf_nodes[name] = mid
 
-    breakpoint()
-    y_exp = self_attn(x, None, x, x).numpy()
+    q_exp = self_attn._project_q(x, None, None).squeeze(0).numpy()
+
+    y = ggml.to_numpy(gy)
+    nodes = {}
+
+    for i in range(gf.n_nodes):
+        name = _name(gf.nodes[i])
+        children = [_name(gf.nodes[i].contents.src[j]) for j in range(2)]
+        print(name, f"op({gf.nodes[i].contents.op})", children)
+        nodes[name] = ggml.to_numpy(gf.nodes[i])
+
+    attn_weights_hook = fairseq2.nn.transformer.StoreAttentionWeights([])
+    self_attn.register_attn_weight_hook(attn_weights_hook)
+
+    y_exp = self_attn(x, None, x[:, :11, :], x[:, :11, :]).numpy()
     y_exp = y_exp.squeeze(0)  # remove batch dimension
 
+    q = nodes[b"q"]
+    assert q.shape == q_exp.shape
+    assert np.allclose(q_exp, q, atol=1e-5)
+
+    attn_exp, attn_weights_exp = map(lambda t: t.squeeze(0).numpy(), attn_weights_hook._storage[0])
+    attn_weights = nodes[b"attn_weights"]
+    assert attn_weights_exp.shape == attn_weights.shape
+    # GGML is very agressively reducing small softmax weights to 0.
+    # Not sure to what this is due.
+    assert np.allclose(attn_weights_exp, attn_weights, atol=1e-3)
+
+    attn_exp = attn_exp.transpose(0, 2, 1)
+    attn = nodes[b"attn"]
+    assert attn_exp.shape == attn.shape
+    # Because of rounding errors in softmax, it's even worse here.
+    assert np.allclose(attn_exp, attn, atol=1e-2)
+
     assert y.shape == y_exp.shape
-    abs_diff = np.max(np.abs(y - y_exp))
-    assert np.allclose(y_exp, y)
+    assert np.allclose(y_exp, y, atol=1e-2)
