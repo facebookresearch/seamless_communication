@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import fairseq2.nn
 import fairseq2.nn.transformer
+from ctypes import c_void_p
 from typing import Any
 from pathlib import Path
 from typing import Iterator
@@ -260,7 +261,7 @@ def test_ning_model_load(ctx: Ctx) -> None:
 
 
 @pytest.fixture(scope="module")
-def g_model_once() -> Iterator[ctypes.c_void_p]:
+def g_model_once() -> Iterator[c_void_p]:
     model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
     if not model_file.exists():
         convert_model("seamlessM4T_medium", model_file)
@@ -269,7 +270,7 @@ def g_model_once() -> Iterator[ctypes.c_void_p]:
 
 
 @pytest.fixture()
-def g_model(ctx: Ctx, g_model_once: ctypes.c_void_p) -> ctypes.c_void_p:
+def g_model(ctx: Ctx, g_model_once: c_void_p) -> c_void_p:
     ggml.lib.fairseq2_model_set_inference_ctx(g_model_once, ctx)
     return g_model_once
 
@@ -363,7 +364,7 @@ def test_ggml_softmax_vs_torch(ctx: Ctx) -> None:
     assert np.allclose(y_exp, y, rtol=1e-3)
 
 
-def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
+def test_forward_ffn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     x = torch.empty((21, 1024))  # (seq_len, model_dim)
     torch.nn.init.uniform_(x, -1 / 32, 1 / 32)
 
@@ -380,7 +381,7 @@ def test_forward_ffn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     assert np.allclose(y_exp, y, rtol=2e-2, atol=1e-4)
 
 
-def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
+def test_forward_layer_norm(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     x = torch.empty((21, 1024))
     torch.nn.init.uniform_(x, -1, 1)
 
@@ -396,20 +397,17 @@ def test_forward_layer_norm(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None
 
 def _name(tensor: ggml.ggml_tensor_p) -> bytes:
     try:
-        return tensor.contents.name
+        return tensor.contents.name  # type: ignore[no-any-return]
     except ValueError:
         return b"???"
 
 
-def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
+def test_forward_self_attn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     x = torch.empty((1, 21, 1024))
     torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
     self_attn = pt_model.text_encoder.layers[0].self_attn
-    # Replace spda by just returning queries
-    # TODO: implement spda
-    # self_attn.spda = lambda *qkv, **kwargs: qkv[0]
 
     # Note: we use different lengths for queries and keys,
     # this tests the implementation in decoding context too.
@@ -424,7 +422,7 @@ def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
         gxq,
         gx,
         gx,
-        None,  # attention mask
+        ctypes.pointer(),  # TODO: tests with causal attention masks
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
@@ -450,7 +448,9 @@ def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
     assert q.shape == q_exp.shape
     assert np.allclose(q_exp, q, atol=1e-5)
 
-    attn_exp, attn_weights_exp = map(lambda t: t.squeeze(0).numpy(), attn_weights_hook._storage[0])
+    attn_exp, attn_weights_exp = map(
+        lambda t: t.squeeze(0).numpy(), attn_weights_hook._storage[0]
+    )
 
     # with flash_attn we don't have attn_weights
     flash_attn = b"attn_weights" not in nodes
@@ -471,3 +471,36 @@ def test_forward_self_attn(ctx: Ctx, g_model: NativeObj, pt_model: Any) -> None:
 
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-4 if flash_attn else 1e-2)
+
+
+def test_StandardTransformerEncoderLayer_forward(
+    ctx: Ctx, g_model: c_void_p, pt_model: Any
+) -> None:
+    x = torch.empty((1, 21, 1024))
+    padding_mask = torch.ones((1, 21))
+    torch.random.manual_seed(0)
+    torch.nn.init.uniform_(x, -1, 1)
+
+    layer = pt_model.text_encoder.layers[0]
+
+    gx = ggml.from_numpy(ctx, x[0])
+    ggml.ggml_set_name(gx, b"x")
+    gpad = ggml.from_numpy(ctx, padding_mask[0])
+    ggml.ggml_set_name(gpad, b"padding_mask")
+    gy = ggml.forward(
+        "StandardTransformerEncoderLayer",
+        g_model,
+        "text_encoder.layers.0",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+
+    y_exp, _ = layer(x, padding_mask)
+    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-4)

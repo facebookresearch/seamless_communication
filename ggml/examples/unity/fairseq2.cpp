@@ -40,7 +40,9 @@ extern "C" ggml_tensor* Linear_forward(
 ) {
     // Note: for now we assumed un-batched input
     ggml_tensor* weight = model.tensors[prefix + ".weight"];  // (d_in, d_out)
+    GGML_ASSERT(weight != nullptr);
     ggml_tensor* bias = model.tensors[prefix + ".bias"];  // (d_out)
+    GGML_ASSERT(bias != nullptr);
 
     return ggml_add(
         model.ctx,
@@ -54,7 +56,9 @@ extern "C" ggml_tensor* LayerNorm_forward(
     const std::string &prefix,
     ggml_tensor* input) {
     ggml_tensor* weight = model.tensors[prefix + ".weight"];
+    GGML_ASSERT(weight != nullptr);
     ggml_tensor* bias = model.tensors[prefix + ".bias"];
+    GGML_ASSERT(bias != nullptr);
 
     auto ctx = model.ctx;
     // TODO: should `eps` be part of unity hparams ?
@@ -162,33 +166,65 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     return out;
 }
 
-// ggml_tensor* attn_weights = ggml_mul_mat(ctx, q, k);  // (H, S, S)
-//     attn_weights = ggm_mul * (q.size(-1) ** -0.5)
 
-//     if mask is not None:
-//         attn_weights = attn_weights + mask
+bool has_layer(fairseq2_model& model, const std::string& name) {
+    return model.tensors.find(name) != model.tensors.end();
+}
 
-//     # For numerical stability run in single precision.
-//     attn_weights = softmax(attn_weights, dim=-1, dtype=torch.float32)
 
-//     attn_weights = attn_weights.type_as(q)
+extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+) {
+    ggml_context* ctx = model.ctx;
+    // TODO: read norm_order from model
+    auto norm_order = TRANSFORMER_NORM_ORDER_PRE;
 
-//     if training and dropout_p > 0.0:
-//         attn_weights = dropout(attn_weights, dropout_p)
+    // _forward_self_attn(seqs, padding_mask)
+    auto residual = seqs;
+    if (norm_order != TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".self_attn_layer_norm", seqs);
 
-//     # (*, S, S_kv) @ (*, S_kv, V) = (*, S, V)
-//     attn = torch.matmul(attn_weights, values)
+    // TODO: add padding_mask to MultiheadAttention_forward
+    GGML_ASSERT(padding_mask == nullptr);
+    seqs = MultiheadAttention_forward(
+        model,
+        prefix + ".self_attn",
+        seqs,
+        seqs,
+        seqs,
+        /*attention masks=*/nullptr
+    );
 
-//     return attn, attn_weights if needs_weights else None
+    if (has_layer(model, prefix + ".self_attn_norm.weight"))
+        seqs = LayerNorm_forward(model, prefix + ".self_attn_norm", seqs);
 
-// extern "C" ggml_tensor* // (d_out, seq_len)
-// SDPA_forward(
-//     fairseq2_model& model,
-//     const std::string &prefix,
-//     ggml_tensor* queries,  // (d_in, len_q)
-//     ggml_tensor* keys,  // (d_in, len_k)
-//     ggml_tensor* values,  // (d_out, len_k)
-//     ggml_tensor* mask // (seq_len, len_q)
-// ) {
-//     return queries;
-// }
+    // TODO: seqs = self.self_attn_dropout(seqs)
+
+    seqs = ggml_add(ctx, seqs, residual);
+
+    if (norm_order == TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".self_attn_layer_norm", seqs);
+
+    // _forward_ffn(seqs)
+    residual = seqs;
+
+    if (norm_order != TRANSFORMER_NORM_ORDER_POST)
+        seqs = LayerNorm_forward(model, prefix + ".ffn_layer_norm", seqs);
+
+    seqs = StandardFeedForwardNetwork_forward(model, prefix + ".ffn", seqs);
+
+    // TODO:
+    // seqs = self.ffn_dropout(seqs)
+    // if self.residual_scale is not None:
+    // residual = self.residual_scale * residual
+
+    seqs = ggml_add(ctx, seqs, residual);
+
+    if (norm_order == TRANSFORMER_NORM_ORDER_POST)
+        seqs = LayerNorm_forward(model, prefix + ".ffn_layer_norm", seqs);
+
+    return seqs;
+}

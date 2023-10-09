@@ -54,3 +54,17 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* values,  // (klen, d_out)
     ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
 );
+
+extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
+// Specifies the Layer Normalization order.
+enum TransformerNormOrder {
+    TRANSFORMER_NORM_ORDER_POST = 0,
+    TRANSFORMER_NORM_ORDER_PRE = 1,
+    TRANSFORMER_NORM_ORDER_PRE_WITH_NORMFORMER = 2
+};
