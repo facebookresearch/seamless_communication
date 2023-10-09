@@ -25,8 +25,6 @@ public:
 
     virtual std::size_t compute_context_size(void *raw_hparams) = 0;
 
-    virtual void tensors_alloc(fairseq2_model& model) = 0;
-
     int load_model_weights(fairseq2_model &model, std::ifstream &fin);
 
 private:

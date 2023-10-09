@@ -210,14 +210,6 @@ def FixedSizeArena(mem_size: int) -> NativeObj:
     return arena
 
 
-def UnityModel() -> NativeObj:
-    return NativeObj("unity_model")
-
-
-def GptVocab() -> NativeObj:
-    return NativeObj("gpt_vocab")
-
-
 lib.fairseq2_model_set_inference_ctx.argtypes = [ctypes.c_void_p, ggml_context_p]
 
 
@@ -239,20 +231,6 @@ def CppStr(content: str) -> NativeObj:
     return NativeObj("std_string", cpp_str)
 
 
-lib.unity_model_load.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
-
-
-def unity_model_load(model_file: Path) -> Tuple[NativeObj, NativeObj]:
-    model = UnityModel()
-    vocab = GptVocab()
-    lib.unity_model_load(
-        ctypes.create_string_buffer(str(model_file).encode("utf-8")),
-        model.ptr,
-        vocab.ptr,
-    )
-    return model, vocab
-
-
 lib.load_unity_ggml_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 lib.load_unity_ggml_file.restype = ctypes.c_int
 
@@ -266,27 +244,27 @@ def load_unity_ggml_file(model_file: Path) -> NativeObj:
     return model
 
 
-lib.unity_audio_encoder_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-lib.unity_audio_encoder_graph.restype = ctypes.POINTER(ggml_cgraph)
+# lib.unity_audio_encoder_graph.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+# lib.unity_audio_encoder_graph.restype = ctypes.POINTER(ggml_cgraph)
 
 
-def unity_audio_encoder_graph(model: NativeObj, tensor: ggml_tensor_p) -> ggml_cgraph_p:
-    return lib.unity_audio_encoder_graph(model.ptr, tensor)  # type: ignore
+# def unity_audio_encoder_graph(model: NativeObj, tensor: ggml_tensor_p) -> ggml_cgraph_p:
+#     return lib.unity_audio_encoder_graph(model.ptr, tensor)  # type: ignore
 
 
-lib.unity_eval.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.POINTER(ggml_tensor),
-    ctypes.c_int,
-]
-lib.unity_eval.restype = ctypes.POINTER(ggml_cgraph)
+# lib.unity_eval.argtypes = [
+#     ctypes.c_void_p,
+#     ctypes.c_void_p,
+#     ctypes.POINTER(ggml_tensor),
+#     ctypes.c_int,
+# ]
+# lib.unity_eval.restype = ctypes.POINTER(ggml_cgraph)
 
 
-def unity_eval(
-    allocr: ctypes.c_void_p, model: NativeObj, tensor: ggml_tensor_p, n_threads: int
-) -> ggml_cgraph_p:
-    return lib.unity_eval(allocr, model.ptr, tensor, n_threads)
+# def unity_eval(
+#     allocr: ctypes.c_void_p, model: NativeObj, tensor: ggml_tensor_p, n_threads: int
+# ) -> ggml_cgraph_p:
+#     return lib.unity_eval(allocr, model.ptr, tensor, n_threads)
 
 
 _FORWARD_CACHE: Dict[str, Callable[..., ggml_tensor_p]] = {}
