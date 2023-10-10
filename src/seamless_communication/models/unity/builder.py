@@ -293,8 +293,6 @@ class UnitYBuilder:
             text_encoder_frontend = None
             text_encoder = None
 
-        assert isinstance(text_embed.weight, Parameter)
-
         final_proj = TiedProjection(text_embed.weight, bias=None)
 
         if self.t2u_builder is None:
