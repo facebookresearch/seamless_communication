@@ -238,16 +238,22 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
 
     @finaloverride
     def forward(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[Tensor],
+        self_attn_mask: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
-        seqs, padding_mask = self._forward_self_attn(seqs, padding_mask)
+        seqs, padding_mask = self._forward_self_attn(seqs, padding_mask, self_attn_mask)
 
         seqs = self._forward_ffn(seqs)
 
         return seqs, padding_mask
 
     def _forward_self_attn(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[Tensor],
+        self_attn_mask: Optional[Tensor],
     ) -> Tuple[Tensor, Optional[Tensor]]:
         residual = self.residual_layer_norm(seqs)
 
@@ -287,6 +293,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
             padding_mask,
             keys=seqs,
             values=seqs,
+            attn_mask=self_attn_mask,
             key_padding_mask=padding_mask,
         )
 
@@ -385,7 +392,10 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
 
     @finaloverride
     def forward(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[Tensor],
+        self_attn_mask: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)
@@ -405,7 +415,7 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
             seqs, padding_mask, self.kernel_size, self.stride
         )
 
-        return self.block(seqs, padding_mask)  # type: ignore[no-any-return]
+        return self.block(seqs, padding_mask, self_attn_mask)  # type: ignore[no-any-return]
 
     def extra_repr(self) -> str:
         """:meta private:"""

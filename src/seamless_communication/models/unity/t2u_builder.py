@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass
+from torch.nn import Parameter
 from typing import Literal, Optional, Union
 
 from fairseq2.assets import download_manager
@@ -240,6 +241,8 @@ class UnitYT2UBuilder:
         encoder = self.build_encoder()
 
         decoder = self.build_decoder()
+
+        assert isinstance(embed_unit.weight, Parameter)
 
         final_proj = TiedProjection(embed_unit.weight, bias=None)
 
