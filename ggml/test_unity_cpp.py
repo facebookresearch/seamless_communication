@@ -378,7 +378,7 @@ def test_forward_ffn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
     y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1])
-    assert np.allclose(y_exp, y, rtol=2e-2, atol=1e-4)
+    assert np.allclose(y_exp, y, atol=1e-6)
 
 
 def test_forward_layer_norm(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
