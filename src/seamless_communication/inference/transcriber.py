@@ -67,7 +67,7 @@ def lis(arr):
     return (maximum, reversed(seq))
 
 
-class Transcriber:
+class Transcriber(nn.Module):
     def __init__(
         self,
         model_name_or_card: Union[str, AssetCard],
@@ -79,6 +79,7 @@ class Transcriber:
         embed_dim: int = 512,
         depthwise_conv_kernel_size: int = 31,
     ):
+        super().__init__()
         self.device = device
         self.dtype = dtype
         self.embed_dim = embed_dim
