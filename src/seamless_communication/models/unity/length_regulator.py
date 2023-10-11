@@ -75,9 +75,9 @@ class VariancePredictor(Module):
             ReLU(),
         )
 
-        layer_norm_fn = create_default_layer_norm
+        layer_norm_factory = create_default_layer_norm
 
-        self.ln1 = layer_norm_fn(var_pred_hidden_dim, device=device, dtype=dtype)
+        self.ln1 = layer_norm_factory(var_pred_hidden_dim, device=device, dtype=dtype)
 
         self.dropout_module = Dropout(p=var_pred_dropout)
 
@@ -95,7 +95,7 @@ class VariancePredictor(Module):
             ReLU(),
         )
 
-        self.ln2 = layer_norm_fn(var_pred_hidden_dim, device=device, dtype=dtype)
+        self.ln2 = layer_norm_factory(var_pred_hidden_dim, device=device, dtype=dtype)
 
         self.proj = Linear(
             var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype

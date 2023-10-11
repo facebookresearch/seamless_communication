@@ -148,9 +148,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("self_attn_dropout", None)
 
-        layer_norm_fn = create_default_layer_norm
+        layer_norm_factory = create_default_layer_norm
 
-        self.self_attn_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
+        self.self_attn_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
 
         self.conv1d = conv1d
 
@@ -159,7 +159,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("conv1d_dropout", None)
 
-        self.conv1d_layer_norm = layer_norm_fn(model_dim, device=device, dtype=dtype)
+        self.conv1d_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
 
         check_model_dim(self)
 
