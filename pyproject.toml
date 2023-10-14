@@ -24,7 +24,7 @@ m4t_prepare_dataset = "m4t.finetune.dataset:main"
 m4t_audio_to_units = "m4t.audio_to_units.audio_to_units:main"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 pre-commit = "^3.5.0"
 datasets = "^2.14.5"
 torchaudio = "^2.0.1"

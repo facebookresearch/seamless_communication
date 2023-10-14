@@ -35,7 +35,7 @@ poetry install
 
 A temporary extra requirement for fairseq2 is [libsndfile](https://github.com/libsndfile/libsndfile). From [Conda](https://docs.conda.io/en/latest/) environment it can be installed via:
 ```
-conda install -y -c conda-forge libsndfile
+conda install -c conda-forge libsndfile==1.0.31
 ```
 At this point fairseq2 has a confirmed support only for Linux and macOS. Pre-built packages are only available for Linux (macOS is planned).
 
