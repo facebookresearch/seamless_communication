@@ -22,9 +22,15 @@ Links:
 
 # Quick Start
 ## Installation
-
+- install [poetry](https://python-poetry.org/docs/) if not available 
 ```
-pip install .
+# Linux, macOS, Windows (WSL)
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+- install dependencies
+```
+poetry install
 ```
 
 A temporary extra requirement for fairseq2 is [libsndfile](https://github.com/libsndfile/libsndfile). From [Conda](https://docs.conda.io/en/latest/) environment it can be installed via:
