@@ -1,13 +1,30 @@
 [tool.poetry]
-name = "seamless-communication"
-version = "0.1.0"
-description = "Foundational Models for State-of-the-Art Speech and Text Translation"
-authors = ["Seamless Communication <costajussa@meta.com>"]
+name = "seamless_communication"
+version = "1.0.0"
+description = "SeamlessM4T -- Massively Multilingual & Multimodal Machine Translation Model"
+authors = ["Fundamental AI Research (FAIR) at Meta"]
 license = "CC-BY-NC 4.0"
 readme = "README.md"
+homepage = "https://github.com/facebookresearch/seamless_communication"
+repository = "https://github.com/facebookresearch/seamless_communication"
+packages = [
+    { include = "seamless_communication", from = "src" },
+    { include = "m4t", from = "scripts" },
+]
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+m4t_predict = "m4t.predict.predict:main"
+m4t_finetune = "m4t.finetune.finetune:main"
+m4t_prepare_dataset = "m4t.finetune.dataset:main"
+m4t_audio_to_units = "m4t.audio_to_units.audio_to_units:main"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 pre-commit = "^3.5.0"
 datasets = "^2.14.5"
 torchaudio = "^2.0.1"
@@ -21,6 +38,6 @@ black = "^23.9.1"
 flake8 = "^6.1.0"
 isort = "^5.12.0"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins.poetry-dynamic-versioning]
+enabled = "False"
