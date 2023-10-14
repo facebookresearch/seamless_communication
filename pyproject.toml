@@ -7,13 +7,13 @@ license = "CC-BY-NC 4.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 pre-commit = "^3.5.0"
 datasets = "^2.14.5"
-torchaudio = "^2.1.0"
+torchaudio = "^2.0.1"
 soundfile = "^0.12.1"
 librosa = "^0.10.1"
-fairseq2 = "^0.1"
+fairseq2 = "^0.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.2"
