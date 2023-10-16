@@ -226,10 +226,7 @@ class Transcriber(nn.Module):
     def transcribe(
         self,
         audio: Union[str, Tensor],
-        ngram_filtering: bool = False,
         sample_rate: int = 16000,
-        text_max_len_a: int = 1,
-        text_max_len_b: int = 200,
     ) -> str:
         """
         The main method used to perform transcription.
