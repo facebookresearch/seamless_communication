@@ -32,6 +32,9 @@ extern "C" void std_string_free(std::string* str) {
     delete str;
 }
 
+bool has_layer(fairseq2_model& model, const std::string& name) {
+    return model.tensors.find(name) != model.tensors.end();
+}
 
 extern "C" ggml_tensor* Linear_forward(
     fairseq2_model& model,
@@ -80,13 +83,10 @@ extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
     // inner_activation = ReLu // TODO: allow other activation
     seqs = ggml_relu(model.ctx, seqs);
 
-    if (model.tensors.find(prefix + ".inner_layer_norm.weight") != model.tensors.end()) {
+    if (has_layer(model, prefix + ".inner_layer_norm")) {
         seqs = LayerNorm_forward(model, prefix + ".inner_layer_norm", seqs);
     }
 
-    // TODO: inference dropout
-    // if self.inner_dropout is not None:
-    //     seqs = self.inner_dropout(seqs)
     seqs = Linear_forward(model, prefix + ".output_proj", seqs);
     return seqs;
 }
@@ -167,11 +167,6 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
 }
 
 
-bool has_layer(fairseq2_model& model, const std::string& name) {
-    return model.tensors.find(name) != model.tensors.end();
-}
-
-
 extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     fairseq2_model& model,
     const std::string& prefix,
@@ -198,10 +193,8 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
         /*attention masks=*/nullptr
     );
 
-    if (has_layer(model, prefix + ".self_attn_norm.weight"))
+    if (has_layer(model, prefix + ".self_attn_norm"))
         seqs = LayerNorm_forward(model, prefix + ".self_attn_norm", seqs);
-
-    // TODO: seqs = self.self_attn_dropout(seqs)
 
     seqs = ggml_add(ctx, seqs, residual);
 
@@ -216,9 +209,7 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
 
     seqs = StandardFeedForwardNetwork_forward(model, prefix + ".ffn", seqs);
 
-    // TODO:
-    // seqs = self.ffn_dropout(seqs)
-    // if self.residual_scale is not None:
+    // TODO: if self.residual_scale is not None:
     // residual = self.residual_scale * residual
 
     seqs = ggml_add(ctx, seqs, residual);
@@ -237,17 +228,157 @@ extern "C" ggml_tensor* StandardTransformerEncoder_forward(
     ggml_tensor* padding_mask
 ) {
     int layer_idx = 0;
-    // TODO: this isn't nice.
-    // When loading model we should add nullptr for the module key to avoid those concatenation.
-    while (has_layer(model, prefix + ".layers." + std::to_string(layer_idx)  + ".self_attn_layer_norm.weight")) {
+    std::string layer_name = prefix + ".layers." + std::to_string(layer_idx);
+    while (has_layer(model, layer_name)) {
         seqs = StandardTransformerEncoderLayer_forward(
-            model, prefix + ".layers." + std::to_string(layer_idx), seqs, padding_mask
+            model, layer_name, seqs, padding_mask
         );
-        ggml_set_name(seqs, ("x_" + std::to_string(layer_idx)).c_str());
+
+        ggml_set_name(seqs, ("x_enc_" + std::to_string(layer_idx)).c_str());
         layer_idx += 1;
+        layer_name = prefix + ".layers." + std::to_string(layer_idx);
     }
 
-    if (has_layer(model, prefix + ".layer_norm.weight"))
+    if (has_layer(model, prefix + ".layer_norm"))
+        seqs = LayerNorm_forward(model, prefix + ".layer_norm", seqs);
+
+    return seqs;
+}
+
+extern "C" ggml_tensor* StandardTransformerDecoderLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* self_attn_mask,
+    ggml_tensor* encoder_output,
+    ggml_tensor* encoder_padding_mask
+) {
+    ggml_context* ctx = model.ctx;
+    // TODO: read norm_order from model
+    auto norm_order = TRANSFORMER_NORM_ORDER_PRE;
+
+    // _forward_self_attn(seqs, padding_mask)
+    auto residual = seqs;
+    if (norm_order != TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".self_attn_layer_norm", seqs);
+
+    seqs = MultiheadAttention_forward(
+        model,
+        prefix + ".self_attn",
+        seqs,
+        seqs,
+        seqs,
+        /*attention masks=*/self_attn_mask
+    );
+
+    if (has_layer(model, prefix + ".self_attn_norm"))
+        seqs = LayerNorm_forward(model, prefix + ".self_attn_norm", seqs);
+
+    seqs = ggml_add(ctx, seqs, residual);
+
+    if (norm_order == TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".self_attn_layer_norm", seqs);
+
+    // _forward_encoder_decoder_attn
+    if (! has_layer(model, prefix + ".encoder_decoder_attn")) {
+        // `encoder_output` must be `None` for decoder-only attention.
+        GGML_ASSERT(encoder_output == nullptr);
+        return seqs;
+    }
+
+    // `encoder_output` must not be `None` for encoder-decoder attention.
+    GGML_ASSERT(encoder_output != nullptr);
+
+    residual = seqs;
+
+    if (norm_order != TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".encoder_decoder_attn_layer_norm", seqs);
+
+
+    seqs = MultiheadAttention_forward(
+        model,
+        prefix + ".encoder_decoder_attn",
+        seqs,
+        encoder_output,
+        encoder_output,
+        /*attention masks=*/encoder_padding_mask
+    );
+
+    seqs = ggml_add(ctx, seqs, residual);
+
+    if (norm_order == TRANSFORMER_NORM_ORDER_POST)
+        seqs =  LayerNorm_forward(model, prefix + ".encoder_decoder_attn_layer_norm", seqs);
+
+    // _forward_ffn(seqs)
+    residual = seqs;
+
+    if (norm_order != TRANSFORMER_NORM_ORDER_POST)
+        seqs = LayerNorm_forward(model, prefix + ".ffn_layer_norm", seqs);
+
+    seqs = StandardFeedForwardNetwork_forward(model, prefix + ".ffn", seqs);
+
+    // TODO:
+    // if self.residual_scale is not None:
+    // residual = self.residual_scale * residual
+
+    seqs = ggml_add(ctx, seqs, residual);
+
+    if (norm_order == TRANSFORMER_NORM_ORDER_POST)
+        seqs = LayerNorm_forward(model, prefix + ".ffn_layer_norm", seqs);
+
+    return seqs;
+}
+
+ggml_tensor* causal_mask_cache = nullptr;
+
+extern "C" ggml_tensor* causal_attention_mask(ggml_context* ctx, ggml_tensor* seqs) {
+    auto seq_len = seqs->ne[0];
+    auto mask = causal_mask_cache;
+    // TODO: this cache only works as long as we don't change the size/device too often
+    // TODO: allow other ggml_type
+    if (mask == nullptr || mask->backend != seqs->backend || mask->ne[0] < seq_len) {
+        printf("new causal_mask (%ld, %ld) created\n", seq_len, seq_len);
+        mask = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, seq_len, seq_len);
+        char* data = (char*)mask->data;
+
+        // tensor([[0., -inf, -inf, -inf],
+        //         [0.,   0., -inf, -inf],
+        //         [0.,   0.,   0., -inf],
+        //         [0.,   0.,   0.,   0.]])
+        for (int i = 0; i < seq_len; ++i) {
+            char* row = data + i * mask->nb[1];
+            for (int j = 0; j <= i; ++j) {*(float*)(row + j * mask->nb[0]) = 0;}
+            for (int j = i + 1; j < seq_len; ++j) {*(float*)(row + j * mask->nb[0]) = -INFINITY;}
+        }
+
+        causal_mask_cache = mask;
+    }
+
+    return ggml_view_2d(ctx, mask, seq_len, seq_len, mask->nb[1], 0);
+}
+
+extern "C" ggml_tensor* StandardTransformerDecoder_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask,
+    ggml_tensor* encoder_output,
+    ggml_tensor* encoder_padding_mask
+) {
+    int layer_idx = 0;
+    std::string layer_name = prefix + ".layers." + std::to_string(layer_idx);
+    ggml_tensor* self_attn_mask = causal_attention_mask(model.ctx, seqs);
+    while (has_layer(model, layer_name)) {
+        seqs = StandardTransformerDecoderLayer_forward(
+            model, layer_name, seqs, self_attn_mask, encoder_output, encoder_padding_mask
+        );
+
+        ggml_set_name(seqs, ("x_dec_" + std::to_string(layer_idx)).c_str());
+        layer_idx += 1;
+        layer_name = prefix + ".layers." + std::to_string(layer_idx);
+    }
+
+    if (has_layer(model, prefix + ".layer_norm"))
         seqs = LayerNorm_forward(model, prefix + ".layer_norm", seqs);
 
     return seqs;

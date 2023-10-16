@@ -21,6 +21,20 @@ std::ifstream open_ggml_file(const char* fname) {
     return fin;
 }
 
+void register_prefix(fairseq2_model &model, const std::string& name) {
+    std::size_t i = name.find_last_of('.');
+    while(i != std::string::npos && i > 0) {
+        std::string prefix = name.substr(0, i);
+        auto prev_tensor = model.tensors.find(prefix);
+        if (prev_tensor != model.tensors.end()) {
+            GGML_ASSERT(prev_tensor->second == nullptr);
+        }
+        model.tensors[prefix] = nullptr;
+        i = name.find_last_of('.', i - 1);
+    }
+}
+
+
 int
 model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 {
@@ -35,6 +49,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
             printf("Error while reading tensor %s\n", name.c_str() );
             return 1;
         }
+        register_prefix(model, name);
         ggml_set_name(tensor, name.c_str());
         model.tensors[name] = tensor;
         if (DEBUG_MODEL_LOAD) {

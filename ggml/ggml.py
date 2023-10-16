@@ -287,3 +287,9 @@ def forward(
 
     with CppStr(prefix) as std_prefix:
         return fwd(model, std_prefix, *inputs)  # ignore: type[no-any-return]
+
+lib.causal_attention_mask.argtypes = [ggml_context_p, ctypes.POINTER(ggml_tensor)]
+lib.causal_attention_mask.restype = ctypes.POINTER(ggml_tensor)
+
+def causal_attention_mask(ctx: ggml_context_p, seqs: ggml_tensor_p) -> ggml_tensor_p:
+    return lib.causal_attention_mask(ctx, seqs)  # type: ignore[no-any-return]
