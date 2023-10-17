@@ -71,7 +71,6 @@ class Transcriber(nn.Module):
     def __init__(
         self,
         model_name_or_card: Union[str, AssetCard],
-        src_lang: str,
         device: torch.device = torch.device("cpu"),
         dtype: torch.dtype = torch.float32,
         encoder_layers: int = 6,
@@ -104,17 +103,6 @@ class Transcriber(nn.Module):
         self.enc_dec_attn_collector = EncDecAttentionsCollect()
         self.s2t.decoder.layers[-1].encoder_decoder_attn.register_attn_weight_hook(
             self.enc_dec_attn_collector
-        )
-        self.gen_opts = SequenceGeneratorOptions(beam_size=1)
-        prefix = self.tokenizer.create_encoder(
-            mode="target", lang=src_lang
-        ).prefix_indices.tolist()
-        self.prefix_len = len(prefix)
-        self.generator = Seq2SeqGenerator(
-            decoder=self.s2t,
-            vocab_info=self.decoder_vocab_info,
-            prefix_seq=torch.LongTensor(prefix, device=self.device),
-            opts=self.gen_opts,
         )
 
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
@@ -198,20 +186,33 @@ class Transcriber(nn.Module):
         ]
         return word_stats
 
-    def run_inference(self, fbanks: torch.Tensor, length_seconds: float) -> str:
+    def run_inference(
+        self, fbanks: torch.Tensor, src_lang: str, length_seconds: float
+    ) -> str:
+        # TODO: get SeqGenOpts obj from transcribe(..., *seqgenparams)
+        gen_opts = SequenceGeneratorOptions(beam_size=1)
+        prefix = self.tokenizer.create_encoder(
+            mode="target", lang=src_lang
+        ).prefix_indices.tolist()
+        prefix_len = len(prefix)
+        generator = Seq2SeqGenerator(
+            decoder=self.s2t,
+            vocab_info=self.decoder_vocab_info,
+            prefix_seq=torch.LongTensor(prefix, device=self.device),
+            opts=gen_opts,
+        )
+
         encoder_output, encoder_padding_mask = self.s2t.encode(
             fbanks.unsqueeze(0), None
         )
         self.enc_dec_attn_collector.reset()
-        output: SequenceGeneratorOutput = self.generator(
+        output: SequenceGeneratorOutput = generator(
             encoder_output=encoder_output, encoder_padding_mask=encoder_padding_mask
         )
         lang_token = output.results[0][0].seq.squeeze(0)[1].item()
-        token_ids = output.results[0][0].seq.squeeze(0)[self.prefix_len :].tolist()
-        step_scores = output.results[0][0].step_scores[self.prefix_len :].tolist()
-        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[
-            self.prefix_len - 1 :
-        ]
+        token_ids = output.results[0][0].seq.squeeze(0)[prefix_len:].tolist()
+        step_scores = output.results[0][0].step_scores[prefix_len:].tolist()
+        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
         token_timestamps = self._extract_timestamps(enc_dec_attn_scores, length_seconds)
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
@@ -226,6 +227,7 @@ class Transcriber(nn.Module):
     def transcribe(
         self,
         audio: Union[str, Tensor],
+        src_lang: str,
         sample_rate: int = 16000,
     ) -> str:
         """
@@ -252,4 +254,6 @@ class Transcriber(nn.Module):
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
 
-        return self.run_inference(src, 15)  # TODO: extract length_seconds from audio
+        return self.run_inference(
+            src, src_lang, 15
+        )  # TODO: extract length_seconds from audio
