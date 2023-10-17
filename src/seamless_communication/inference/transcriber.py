@@ -41,30 +41,6 @@ class EncDecAttentionsCollect(AttentionWeightHook):
         self.attn_scores = []
 
 
-def lis(arr):
-    n = len(arr)
-    lis = [1] * n
-    prev = [0] * n
-    for i in range(0, n):
-        prev[i] = i
-    for i in range(1, n):
-        for j in range(0, i):
-            if arr[i] > arr[j] and lis[i] < lis[j] + 1:
-                lis[i] = lis[j] + 1
-                prev[i] = j
-    maximum = 0
-    idx = 0
-    for i in range(n):
-        if maximum < lis[i]:
-            maximum = lis[i]
-            idx = i
-    seq = [arr[idx]]
-    while idx != prev[idx]:
-        idx = prev[idx]
-        seq.append(arr[idx])
-    return (maximum, reversed(seq))
-
-
 class Transcriber(nn.Module):
     def __init__(
         self,
@@ -147,6 +123,30 @@ class Transcriber(nn.Module):
         model.eval()
         return model
 
+    @staticmethod
+    def generate_lis(arr: List[Tuple[int, int]]):
+        n = len(arr)
+        lis = [1] * n
+        prev = [0] * n
+        for i in range(0, n):
+            prev[i] = i
+        for i in range(1, n):
+            for j in range(0, i):
+                if arr[i] > arr[j] and lis[i] < lis[j] + 1:
+                    lis[i] = lis[j] + 1
+                    prev[i] = j
+        maximum = 0
+        idx = 0
+        for i in range(n):
+            if maximum < lis[i]:
+                maximum = lis[i]
+                idx = i
+        seq = [arr[idx]]
+        while idx != prev[idx]:
+            idx = prev[idx]
+            seq.append(arr[idx])
+        return (maximum, reversed(seq))
+
     @classmethod
     def _word_stats_to_string(cls, word_stats: List[Any]) -> str:
         words = [
@@ -166,7 +166,8 @@ class Transcriber(nn.Module):
             for enc_bin_idx, out_tok_idx in enumerate(col_maxes)
         ]
         tok_idx_to_start_enc_bin_idx = {
-            out_tok_idx: -enc_bin_idx for out_tok_idx, enc_bin_idx in lis(lis_input)[1]
+            out_tok_idx: -enc_bin_idx
+            for out_tok_idx, enc_bin_idx in cls.generate_lis(lis_input)[1]
         }
         prev_start = 0
         starts = []
