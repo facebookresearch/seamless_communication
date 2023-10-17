@@ -80,6 +80,7 @@ class VocoderBuilder:
     def __init__(
         self,
         config: VocoderConfig,
+        *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -92,8 +93,8 @@ class VocoderBuilder:
             The data type of module parameters and buffers.
         """
         self.config = config
-        self.device = device
-        self.dtype = dtype
+
+        self.device, self.dtype = device, dtype
 
     def build_model(self) -> Vocoder:
         """Build a model."""
@@ -133,4 +134,4 @@ def create_vocoder_model(
         The data type of module parameters and buffers.
     """
 
-    return VocoderBuilder(config, device, dtype).build_model()
+    return VocoderBuilder(config, device=device, dtype=dtype).build_model()

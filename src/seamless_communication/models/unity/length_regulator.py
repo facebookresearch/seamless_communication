@@ -11,10 +11,10 @@ from torch.nn import Conv1d, Dropout, Module, ReLU, Sequential
 from typing import Optional, Tuple
 
 from fairseq2.typing import DataType, Device
-from fairseq2.nn.transformer import create_default_layer_norm
+from fairseq2.nn.transformer import create_standard_layer_norm
 from fairseq2.nn.normalization import LayerNorm
+from fairseq2.nn.padding import PaddingMask, apply_padding_mask
 from fairseq2.nn.projection import Linear
-from fairseq2.nn.utils.mask import apply_padding_mask
 
 
 class HardUpsampling(Module):
@@ -75,7 +75,7 @@ class VariancePredictor(Module):
             ReLU(),
         )
 
-        layer_norm_factory = create_default_layer_norm
+        layer_norm_factory = create_standard_layer_norm
 
         self.ln1 = layer_norm_factory(var_pred_hidden_dim, device=device, dtype=dtype)
 
@@ -101,7 +101,7 @@ class VariancePredictor(Module):
             var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype
         )
 
-    def forward(self, seqs: Tensor, padding_mask: Optional[Tensor]) -> Tensor:
+    def forward(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
         seqs = apply_padding_mask(seqs, padding_mask)
 
@@ -173,10 +173,10 @@ class VarianceAdaptor(Module):
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
+        padding_mask: Optional[PaddingMask],
         duration_factor: float = 1.0,
         min_duration: int = 0,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, PaddingMask]:
         log_durations = self.duration_predictor(seqs, padding_mask)
 
         durations = torch.clamp(
@@ -185,10 +185,10 @@ class VarianceAdaptor(Module):
         )
 
         # We need to apply the padding_mask again since we clamp by min_duration.
-        durations = apply_padding_mask(durations, padding_mask)
+        durations = apply_padding_mask(durations, padding_mask, fill_value=0)
 
         # TODO: Implement pitch, energy predictors.
         # TODO: Implement GaussianUpsampling.
         seqs, seq_lens = self.hard_upsampling(seqs, durations)
 
-        return seqs, seq_lens
+        return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1))

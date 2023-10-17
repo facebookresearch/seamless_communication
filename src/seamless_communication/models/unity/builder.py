@@ -236,6 +236,7 @@ class UnitYBuilder:
         w2v2_encoder_builder: Wav2Vec2EncoderBuilder,
         mt_model_builder: NllbBuilder,
         t2u_builder: Optional["UnitYT2UBuilder"],
+        *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -269,11 +270,12 @@ class UnitYBuilder:
             )
 
         self.config = config
+
         self.w2v2_encoder_builder = w2v2_encoder_builder
         self.mt_model_builder = mt_model_builder
         self.t2u_builder = t2u_builder
-        self.device = device
-        self.dtype = dtype
+
+        self.device, self.dtype = device, dtype
 
     def build_model(self) -> UnitYModel:
         """Build a model."""

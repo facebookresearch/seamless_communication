@@ -219,6 +219,7 @@ class UnitYT2UBuilder:
     def __init__(
         self,
         config: UnitYT2UConfig,
+        *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -231,8 +232,8 @@ class UnitYT2UBuilder:
             The data type of module parameters and buffers.
         """
         self.config = config
-        self.device = device
-        self.dtype = dtype
+
+        self.device, self.dtype = device, dtype
 
     def build_model(self) -> Union[UnitYT2UModel, UnitYNART2UModel]:
         """Build a model."""
@@ -490,4 +491,4 @@ def create_unity_t2u_model(
     :param dtype:
         The data type of module parameters and buffers.
     """
-    return UnitYT2UBuilder(config, device, dtype).build_model()
+    return UnitYT2UBuilder(config, device=device, dtype=dtype).build_model()

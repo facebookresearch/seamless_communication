@@ -4,13 +4,16 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Optional
+
 import torch
 from torch import Tensor
 
 from fairseq2.nn.utils.mask import to_float_mask
+from fairseq2.nn.transformer import AttentionMask, CustomAttentionMask
 
 
-class ChunkAttentionMaskGenerator:
+class ChunkAttentionMaskFactory:
     """Generates a chunk attention mask for self attention.
 
     .. note::
@@ -27,7 +30,7 @@ class ChunkAttentionMaskGenerator:
         if self.right_chunk_num != 0:
             raise ValueError("We currently only support `right_chunk_num` == 0.")
 
-    def __call__(self, seqs: Tensor) -> Tensor:
+    def __call__(self, seqs: Tensor) -> Optional[AttentionMask]:
         """
         :param seqs:
             The sequences for which to generate the mask. *Shape:*
@@ -71,7 +74,4 @@ class ChunkAttentionMaskGenerator:
 
         mask = mask[:seq_len, :seq_len]
 
-        return mask
-
-    def __repr__(self) -> str:
-        return "ChunkAttentionMaskGenerator"
+        return CustomAttentionMask(mask)

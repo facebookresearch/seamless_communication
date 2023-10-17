@@ -9,12 +9,13 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 from fairseq2.assets.card import AssetCard
-from fairseq2.data import Collater
+from fairseq2.data import Collater, SequenceData
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.generation import SequenceToTextOutput, SequenceGeneratorOptions
 from fairseq2.memory import MemoryBlock
+from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 from enum import Enum, auto
@@ -100,7 +101,7 @@ class Translator(nn.Module):
         model: UnitYModel,
         text_tokenizer: TextTokenizer,
         unit_tokenizer: UnitTokenizer,
-        src: Dict[str, Tensor],
+        src: SequenceData,
         input_modality: Modality,
         output_modality: Modality,
         tgt_lang: str,
@@ -139,9 +140,10 @@ class Translator(nn.Module):
             text_opts=text_opts,
             unit_opts=unit_opts,
         )
+        seqs, padding_mask = get_seqs_and_padding_mask(src)
         return generator(
-            src["seqs"],
-            src["seq_lens"],
+            seqs,
+            padding_mask,
             input_modality.value,
             output_modality.value,
             ngram_filtering=ngram_filtering,

@@ -13,9 +13,9 @@ from fairseq2.data import VocabularyInfo
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
 from fairseq2.nn.normalization import LayerNorm
+from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.position_encoder import PositionEncoder
-from fairseq2.nn.transformer import create_default_layer_norm
-from fairseq2.nn.utils.mask import to_padding_mask
+from fairseq2.nn.transformer import create_standard_layer_norm
 from fairseq2.typing import DataType, Device, finaloverride
 
 
@@ -120,7 +120,7 @@ class NARDecoderFrontend(Module):
         self.variance_adaptor = variance_adaptor
 
         if layer_norm:
-            self.layer_norm = create_default_layer_norm(
+            self.layer_norm = create_standard_layer_norm(
                 self.model_dim, device=device, dtype=dtype
             )
         else:
@@ -265,7 +265,7 @@ class NARDecoderFrontend(Module):
     def character_level_upsampling(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
+        padding_mask: Optional[PaddingMask],
         char_seqs: Tensor,
         char_lens: Tensor,
     ) -> Tensor:
@@ -287,7 +287,7 @@ class NARDecoderFrontend(Module):
         return seqs
 
     def forward_unit_pos_embedding(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
+        self, seqs: Tensor, padding_mask: Optional[PaddingMask]
     ) -> Tensor:
         pos_embeds = self.pos_emb_alpha * (
             self.unit_pos_encoder(seqs, padding_mask) - seqs
@@ -304,18 +304,20 @@ class NARDecoderFrontend(Module):
     def forward(
         self,
         target_seqs: Optional[Tensor],
-        target_seq_lens: Optional[Tensor],
+        target_padding_mask: Optional[PaddingMask],
         encoder_output: Tensor,
-        encoder_padding_mask: Optional[Tensor],
+        encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
         assert text_seqs is not None
 
         # text_seqs: (N, S_text)
         char_seqs, char_seq_lens, char_lens = self.text_to_char_seqs(text_seqs)
 
         # char_seqs: (N, S_char)
-        encoder_padding_mask = to_padding_mask(char_seqs, char_seq_lens)
+        encoder_padding_mask = PaddingMask(
+            char_seq_lens, batch_seq_len=char_seqs.size(1)
+        )
 
         # (N, S_text, M) -> (N, S_char, M)
         seqs = self.character_level_upsampling(
@@ -323,14 +325,12 @@ class NARDecoderFrontend(Module):
         )
 
         # (N, S_char, M) -> (N, S_unit, M)
-        seqs, seq_lens = self.variance_adaptor(
+        seqs, padding_mask = self.variance_adaptor(
             seqs,
             encoder_padding_mask,
             min_duration=1,
         )
 
-        decoder_padding_mask = to_padding_mask(seqs, seq_lens)
+        seqs = self.forward_unit_pos_embedding(seqs, padding_mask)
 
-        seqs = self.forward_unit_pos_embedding(seqs, decoder_padding_mask)
-
-        return seqs, decoder_padding_mask
+        return seqs, padding_mask

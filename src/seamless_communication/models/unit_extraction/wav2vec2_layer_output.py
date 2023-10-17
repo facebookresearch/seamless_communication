@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.transformer import TransformerEncoder, TransformerNormOrder
 from fairseq2.models.wav2vec2 import (
     Wav2Vec2EncoderConfig,
@@ -105,18 +106,18 @@ class Wav2Vec2LayerOutputModel(nn.Module):
         self.encoder = w2v2.encoder
 
     @torch.inference_mode()
-    def forward(self, batch: SequenceBatch, out_layer_idx: int):
+    def forward(self, batch: SequenceBatch, out_layer_idx: int) -> Tensor:
         """
         :param batch:
             The batch of sequences to process.
         """
-        seqs, padding_mask = self.encoder_frontend(batch.seqs, batch.seq_lens)
+        seqs, padding_mask = self.encoder_frontend(batch.seqs, batch.padding_mask)
         w2v2_layer_output = None
 
         def layer_output_hook(
             layer_idx: int,
             layer_output: Tensor,
-            layer_padding_mask: Optional[Tensor],
+            layer_padding_mask: Optional[PaddingMask],
             num_layers: int,
         ) -> bool:
             nonlocal w2v2_layer_output

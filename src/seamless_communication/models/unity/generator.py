@@ -26,6 +26,7 @@ from seamless_communication.models.unity.unit_tokenizer import (
     UnitTokenizer,
 )
 from fairseq2.nn.utils.module import infer_device
+from fairseq2.nn.padding import PaddingMask
 from torch import Tensor
 
 
@@ -149,7 +150,7 @@ class UnitYGenerator:
     def __call__(
         self,
         source_seqs: Tensor,
-        source_seq_lens: Optional[Tensor],
+        source_padding_mask: Optional[PaddingMask],
         input_modality: str = "speech",
         output_modality: str = "speech",
         ngram_filtering: bool = False,
@@ -160,10 +161,9 @@ class UnitYGenerator:
             where :math:`N` is the batch size, :math:`S` is the sequence length,
             and :math:`*` is any number of sequence-specific dimensions
             including none.
-        :param source_seq_lens:
-            An array where each element represents the length of the sequence at
-            the same index in ``source_seqs``. *Shape:* :math:`(N)`, where
-            :math:`N` is the batch size.
+        :param source_padding_mask:
+            The padding mask of ``source_seqs``. *Shape:* :math:`(N,S)`, where
+            :math:`N` is the batch size and :math:`S` is the sequence length.
         :param input_modality:
             The type of modality to encode.
         :param output_modality:
@@ -175,9 +175,9 @@ class UnitYGenerator:
         """
 
         if input_modality == "speech":
-            text_output = self.s2t_generator.generate_ex(source_seqs, source_seq_lens)
+            text_output = self.s2t_generator.generate_ex(source_seqs, source_padding_mask)
         elif input_modality == "text" and self.t2t_generator is not None:
-            text_output = self.t2t_generator.generate_ex(source_seqs, source_seq_lens)
+            text_output = self.t2t_generator.generate_ex(source_seqs, source_padding_mask)
         elif input_modality == "text" and self.t2t_generator is None:
             raise ValueError(
                 f"Please set use_text_encoder to True in your model config to encode text."
@@ -189,16 +189,18 @@ class UnitYGenerator:
         if output_modality == "text":
             return text_output, None
 
-        text_seqs, text_seq_lens = text_output.generator_output.collate()
+        text_seqs, text_padding_mask = text_output.generator_output.collate()
 
         # Manually trim the final EOS token to be consistent with fairseq.
-        if text_seq_lens is not None:
-            text_seq_lens -= 1
+        text_seqs = text_seqs[:, :-1]
+
+        if text_padding_mask is not None:
+            text_padding_mask = text_padding_mask.trim(1)
 
         # Use the output of the text generator to compute the decoder output.
         decoder_output, decoder_padding_mask = self.model.decode(
             text_seqs,
-            text_seq_lens,
+            text_padding_mask,
             text_output.encoder_output,
             text_output.encoder_padding_mask,
         )
@@ -223,13 +225,16 @@ class UnitYGenerator:
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 target_seqs=None,
-                target_seq_lens=None,
+                target_padding_mask=None,
                 text_seqs=text_seqs,
             )
             # (B, S_unit, V_unit)
             unit_seqs = unit_decoder_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.
-            unit_seqs[decoder_padding_mask == -torch.inf] = unit_decoder_output.pad_idx
+            if decoder_padding_mask is not None:
+                m = decoder_padding_mask.materialize()
+
+                unit_seqs[m == -torch.inf] = unit_decoder_output.pad_idx
 
         # Convert to speech units.
         units = self.unit_decoder(unit_seqs)

@@ -12,16 +12,17 @@ from torch.nn import Dropout
 from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.nn.module_list import ModuleList
 from fairseq2.nn.normalization import LayerNorm
+from fairseq2.nn.padding import PaddingMask
 
 from fairseq2.nn.transformer import (
-    AttentionMaskGenerator,
+    AttentionMaskFactory,
     EncoderLayerOutputHook,
     TransformerEncoder,
     TransformerEncoderLayer,
 )
 
 from seamless_communication.models.wav2vec2_chunk.chunk_attention_mask import (
-    ChunkAttentionMaskGenerator,
+    ChunkAttentionMaskFactory,
 )
 
 from fairseq2.typing import finaloverride
@@ -32,7 +33,7 @@ class ChunkTransformerEncoder(TransformerEncoder):
     """Represents a Chunk Transformer encoder."""
 
     preliminary_dropout: Optional[Dropout]
-    self_attn_mask_gen: AttentionMaskGenerator
+    self_attn_mask_factory: ChunkAttentionMaskFactory
     layers: ModuleList
     layer_norm: Optional[LayerNorm]
 
@@ -74,7 +75,7 @@ class ChunkTransformerEncoder(TransformerEncoder):
         else:
             self.register_module("preliminary_dropout", None)
 
-        self.self_attn_mask_gen = ChunkAttentionMaskGenerator(
+        self.self_attn_mask_factory = ChunkAttentionMaskFactory(
             chunk_size * 2, left_chunk_num, right_chunk_num
         )
 
@@ -86,17 +87,17 @@ class ChunkTransformerEncoder(TransformerEncoder):
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
+        padding_mask: Optional[PaddingMask],
         *,
         layer_output_hook: Optional[EncoderLayerOutputHook] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
         if layer_output_hook is not None and self.layers.drop_p > 0.0:
             raise ValueError("`layer_hook` must be `None` when LayerDrop is enabled.")
 
         if self.preliminary_dropout is not None:
             seqs = self.preliminary_dropout(seqs)
 
-        self_attn_mask = self.self_attn_mask_gen(seqs)
+        self_attn_mask = self.self_attn_mask_factory(seqs)
 
         num_layers = len(self.layers)
 

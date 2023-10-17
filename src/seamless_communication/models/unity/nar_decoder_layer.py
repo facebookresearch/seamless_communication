@@ -11,12 +11,13 @@ from torch.nn import Conv1d, Dropout, Module, ReLU
 
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.transformer import (
+    AttentionMask,
     TransformerDecoderLayer,
     MultiheadAttention,
 )
 from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.transformer import create_default_layer_norm
-from fairseq2.nn.utils.mask import apply_padding_mask
+from fairseq2.nn.padding import PaddingMask, apply_padding_mask
+from fairseq2.nn.transformer import create_standard_layer_norm
 from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.typing import DataType, Device, finaloverride
 
@@ -77,7 +78,7 @@ class Conv1dBlock(Module):
         )
 
     @finaloverride
-    def forward(self, seqs: Tensor, padding_mask: Optional[Tensor]) -> Tensor:
+    def forward(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
         seqs = apply_padding_mask(seqs, padding_mask)
 
@@ -148,7 +149,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("self_attn_dropout", None)
 
-        layer_norm_factory = create_default_layer_norm
+        layer_norm_factory = create_standard_layer_norm
 
         self.self_attn_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
 
@@ -167,12 +168,12 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
-        self_attn_mask: Optional[Tensor] = None,
+        padding_mask: Optional[PaddingMask],
+        self_attn_mask: Optional[AttentionMask] = None,
         encoder_output: Optional[Tensor] = None,
-        encoder_padding_mask: Optional[Tensor] = None,
+        encoder_padding_mask: Optional[PaddingMask] = None,
         state_bag: Optional[IncrementalStateBag] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs = self._forward_self_attn(seqs, padding_mask)
 
         seqs = self._forward_conv1d(seqs, padding_mask)
@@ -182,7 +183,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
     def _forward_self_attn(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
+        padding_mask: Optional[PaddingMask],
     ) -> Tensor:
         residual = seqs
 
@@ -190,8 +191,8 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
             seqs,
             padding_mask,
             keys=seqs,
-            values=seqs,
             key_padding_mask=padding_mask,
+            values=seqs,
         )
 
         if self.self_attn_dropout is not None:
@@ -203,7 +204,7 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
 
         return seqs
 
-    def _forward_conv1d(self, seqs: Tensor, padding_mask: Optional[Tensor]) -> Tensor:
+    def _forward_conv1d(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
         residual = seqs
 
         seqs = self.conv1d(seqs, padding_mask)
