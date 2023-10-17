@@ -11,7 +11,6 @@ from fairseq2.generation.sequence_generator import (
     Seq2SeqGenerator,
     SequenceGeneratorOptions,
     SequenceGeneratorOutput,
-    VocabularyInfo,
 )
 from fairseq2.memory import MemoryBlock
 from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
@@ -229,7 +228,6 @@ class Transcriber(nn.Module):
         output: SequenceGeneratorOutput = generator(
             encoder_output=encoder_output, encoder_padding_mask=encoder_padding_mask
         )
-        lang_token = output.results[0][0].seq.squeeze(0)[1].item()
         token_ids = output.results[0][0].seq.squeeze(0)[prefix_len:].tolist()
         step_scores = output.results[0][0].step_scores[prefix_len:].tolist()
         enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
