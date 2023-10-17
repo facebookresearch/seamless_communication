@@ -104,6 +104,8 @@ class Transcriber(nn.Module):
         self.s2t.decoder.layers[-1].encoder_decoder_attn.register_attn_weight_hook(
             self.enc_dec_attn_collector
         )
+        # TODO: get params from init call
+        self.gen_opts = SequenceGeneratorOptions(beam_size=1)
 
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
         self.convert_to_fbank = WaveformToFbankConverter(
@@ -189,8 +191,6 @@ class Transcriber(nn.Module):
     def run_inference(
         self, fbanks: torch.Tensor, src_lang: str, length_seconds: float
     ) -> str:
-        # TODO: get SeqGenOpts obj from transcribe(..., *seqgenparams)
-        gen_opts = SequenceGeneratorOptions(beam_size=1)
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
         ).prefix_indices.tolist()
@@ -199,7 +199,7 @@ class Transcriber(nn.Module):
             decoder=self.s2t,
             vocab_info=self.decoder_vocab_info,
             prefix_seq=torch.LongTensor(prefix, device=self.device),
-            opts=gen_opts,
+            opts=self.gen_opts,
         )
 
         encoder_output, encoder_padding_mask = self.s2t.encode(
