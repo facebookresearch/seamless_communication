@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple, Union
 
@@ -27,8 +26,6 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
-
-_log = logging.getLogger(__name__)
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
