@@ -1,10 +1,12 @@
 import logging
 from pathlib import Path
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
+from fairseq2.generation.beam_search import BeamSearch
+from fairseq2.generation.logits_processor import LogitsProcessor
 from fairseq2.generation.sequence_generator import (
     Seq2SeqGenerator,
     SequenceGeneratorOptions,
@@ -77,6 +79,15 @@ class Transcriber(nn.Module):
         decoder_layers: int = 3,
         embed_dim: int = 512,
         depthwise_conv_kernel_size: int = 31,
+        beam_size: int = 1,
+        min_seq_len: int = 1,
+        soft_max_seq_len: Optional[Tuple[int, int]] = (1, 200),
+        hard_max_seq_len: int = 1024,
+        len_penalty: float = 1,
+        unk_penalty: float = 0,
+        normalize_scores: bool = True,
+        search: Optional[BeamSearch] = None,
+        logits_processor: Optional[LogitsProcessor] = None,
     ):
         super().__init__()
         self.device = device
@@ -104,8 +115,17 @@ class Transcriber(nn.Module):
         self.s2t.decoder.layers[-1].encoder_decoder_attn.register_attn_weight_hook(
             self.enc_dec_attn_collector
         )
-        # TODO: get params from init call
-        self.gen_opts = SequenceGeneratorOptions(beam_size=1)
+        self.gen_opts = SequenceGeneratorOptions(
+            beam_size=beam_size,
+            min_seq_len=min_seq_len,
+            soft_max_seq_len=soft_max_seq_len,
+            hard_max_seq_len=hard_max_seq_len,
+            len_penalty=len_penalty,
+            unk_penalty=unk_penalty,
+            normalize_scores=normalize_scores,
+            search=search,
+            logits_processor=logits_processor,
+        )
 
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
         self.convert_to_fbank = WaveformToFbankConverter(
