@@ -257,6 +257,8 @@ class Transcriber(nn.Module):
             Either path to audio or audio Tensor.
         :param src_lang:
             Source language of audio.
+        :param sample_rate:
+            Sample rate of the audio Tensor.
 
         :returns:
             - Transcribed text with timestamps.
