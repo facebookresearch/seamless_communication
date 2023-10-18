@@ -15,7 +15,6 @@ from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.padding import PaddingMask
 
 from fairseq2.nn.transformer import (
-    AttentionMaskFactory,
     EncoderLayerOutputHook,
     TransformerEncoder,
     TransformerEncoderLayer,

@@ -82,13 +82,6 @@ class UnitYGenerator:
         :param unit_generator_opts:
             The options to pass to the underlying unit :class:`Seq2SeqGenerator`.
         """
-        if model.t2u_model is None:
-            raise ValueError(
-                "`model` does not have a T2U sub-model. "
-                "For text generation only, "
-                "use `SequenceToTextGenerator` instead."
-            )
-
         model.eval()
 
         self.model = model
@@ -126,6 +119,11 @@ class UnitYGenerator:
         self.unit_decoder = None
         # Set up unit generator.
         if unit_tokenizer is not None:
+            if model.t2u_model is None:
+                raise ValueError(
+                    "`model` does not have a T2U sub-model when `unit_tokenizer` is not None."
+                )
+
             self.unit_decoder = unit_tokenizer.create_decoder()
 
             unit_encoder = unit_tokenizer.create_encoder(
@@ -175,9 +173,13 @@ class UnitYGenerator:
         """
 
         if input_modality == "speech":
-            text_output = self.s2t_generator.generate_ex(source_seqs, source_padding_mask)
+            text_output = self.s2t_generator.generate_ex(
+                source_seqs, source_padding_mask
+            )
         elif input_modality == "text" and self.t2t_generator is not None:
-            text_output = self.t2t_generator.generate_ex(source_seqs, source_padding_mask)
+            text_output = self.t2t_generator.generate_ex(
+                source_seqs, source_padding_mask
+            )
         elif input_modality == "text" and self.t2t_generator is None:
             raise ValueError(
                 f"Please set use_text_encoder to True in your model config to encode text."

@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,7 @@ from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.generation import SequenceToTextOutput, SequenceGeneratorOptions
 from fairseq2.memory import MemoryBlock
-from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
+from fairseq2.nn.padding import get_seqs_and_padding_mask
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 from enum import Enum, auto
@@ -65,7 +65,10 @@ class Translator(nn.Module):
             load_unity_model, model_name_or_card, device, dtype
         )
         self.text_tokenizer = load_unity_text_tokenizer(model_name_or_card)
-        self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
+        if self.model.t2u_model is not None:
+            self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
+        else:
+            self.unit_tokenizer = None
         self.device = device
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
         self.convert_to_fbank = WaveformToFbankConverter(

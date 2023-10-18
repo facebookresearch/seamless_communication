@@ -91,14 +91,14 @@ class UnitYFinetuneWrapper(nn.Module):
         dummy_context = contextmanager(lambda: iter([None]))()
         with torch.no_grad() if self.freeze_s2t else dummy_context:  # type:ignore
             assert batch.speech_to_text.src_tokens is not None
-            seqs=batch.speech_to_text.src_tokens.to(self.device)
-            seq_lens=batch.speech_to_text.src_lengths.to(self.device)
+            seqs = batch.speech_to_text.src_tokens.to(self.device)
+            seq_lens = batch.speech_to_text.src_lengths.to(self.device)
             speech_encoder_out, speech_encoder_padding_mask = self.model.encode_speech(
                 seqs=seqs, padding_mask=PaddingMask(seq_lens, seqs.size(1))
             )
             assert batch.speech_to_text.prev_output_tokens is not None
-            seqs=batch.speech_to_text.prev_output_tokens.to(self.device)
-            seq_lens=batch.speech_to_text.target_lengths.to(self.device)
+            seqs = batch.speech_to_text.prev_output_tokens.to(self.device)
+            seq_lens = batch.speech_to_text.target_lengths.to(self.device)
             text_decoder_out, text_decoder_padding_mask = self.model.decode(
                 seqs=seqs,
                 padding_mask=PaddingMask(seq_lens, seqs.size(1)),
@@ -117,8 +117,8 @@ class UnitYFinetuneWrapper(nn.Module):
                 text_decoder_output=text_decoder_out,
                 text_decoder_padding_mask=text_decoder_padding_mask,
             )
-            seqs=batch.text_to_units.prev_output_tokens.to(self.device)
-            seq_lens=batch.text_to_units.target_lengths.to(self.device)
+            seqs = batch.text_to_units.prev_output_tokens.to(self.device)
+            seq_lens = batch.text_to_units.target_lengths.to(self.device)
             unit_decoder_out, _ = self.model.t2u_model.decode(
                 seqs=seqs,
                 padding_mask=PaddingMask(seq_lens, seqs.size(1)),

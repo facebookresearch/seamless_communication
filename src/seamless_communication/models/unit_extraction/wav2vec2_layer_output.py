@@ -130,7 +130,7 @@ class Wav2Vec2LayerOutputModel(nn.Module):
 
             return True
 
-        _, _ = self.encoder(seqs, padding_mask, layer_output_hook)
+        _, _ = self.encoder(seqs, padding_mask, layer_output_hook=layer_output_hook)
 
         assert w2v2_layer_output is not None
         return w2v2_layer_output

@@ -151,7 +151,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
 
         layer_norm_factory = create_standard_layer_norm
 
-        self.self_attn_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
+        self.self_attn_layer_norm = layer_norm_factory(
+            model_dim, device=device, dtype=dtype
+        )
 
         self.conv1d = conv1d
 
@@ -160,7 +162,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         else:
             self.register_module("conv1d_dropout", None)
 
-        self.conv1d_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
+        self.conv1d_layer_norm = layer_norm_factory(
+            model_dim, device=device, dtype=dtype
+        )
 
         check_model_dim(self)
 
@@ -204,7 +208,9 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
 
         return seqs
 
-    def _forward_conv1d(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
+    def _forward_conv1d(
+        self, seqs: Tensor, padding_mask: Optional[PaddingMask]
+    ) -> Tensor:
         residual = seqs
 
         seqs = self.conv1d(seqs, padding_mask)
