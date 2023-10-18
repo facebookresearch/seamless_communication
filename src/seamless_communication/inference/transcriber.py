@@ -129,7 +129,7 @@ class Transcriber(nn.Module):
         return model
 
     @staticmethod
-    def generate_lis(arr: List[Tuple[int, int]]):
+    def generate_lis(arr: List[Tuple[int, int]]) -> Tuple[int, List[Tuple[int, int]]]:
         n = len(arr)
         lis = [1] * n
         prev = [0] * n
@@ -161,7 +161,7 @@ class Transcriber(nn.Module):
         return " ".join(words)
 
     @classmethod
-    def _extract_timestamps(cls, attn_weights, audio_len):
+    def _extract_timestamps(cls, attn_weights, audio_len) -> List[float]:
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
@@ -187,7 +187,7 @@ class Transcriber(nn.Module):
     @classmethod
     def _collect_word_level_stats(
         cls, pieces: List[str], token_timestamps: List[float], step_scores: List[float]
-    ):
+    ) -> List[dict]:
         assert len(pieces) == len(token_timestamps) and len(token_timestamps) == len(
             step_scores
         )
