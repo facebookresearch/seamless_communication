@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-name: s2t_chunk_conformer
-base: unity_nllb-200
-model_arch: s2t_chunk_conformer
-checkpoint: "file://checkpoint/andyyuan/ckpt_from_rsc/w2vbert-2.0/S2T/avg_last_5_checkpoint.pt"
+name: s2t_m4t_v2
+base: unity_nllb-100
+model_arch: s2t_base_v2
+checkpoint: "file://large_experiments/seamless/ust/elbayadm/multitasking_models/m4t_v2_s2t.pt"

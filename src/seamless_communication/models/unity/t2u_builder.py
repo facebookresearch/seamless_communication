@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass
-from torch.nn import Parameter
 from typing import Literal, Optional, Union
 
 from fairseq2.assets import download_manager
@@ -165,8 +164,8 @@ def _medium_t2u() -> UnitYT2UConfig:
     )
 
 
-@unity_t2u_arch("nar_multilingual")
-def _nar_multilingual_t2u() -> UnitYT2UConfig:
+@unity_t2u_arch("base_nar")
+def _base_nar() -> UnitYT2UConfig:
     duration_predictor_config = VariancePredictorConfig(
         var_pred_hidden_dim=256,
         var_pred_kernel_size=3,
@@ -181,8 +180,8 @@ def _nar_multilingual_t2u() -> UnitYT2UConfig:
     )
 
     nar_decoder_config = NARDecoderConfig(
-        model_name_or_card="unity_nar_multilingual",
-        char_vocabulary_size=10904,
+        model_name_or_card="seamlessM4T_v2_large",
+        char_vocabulary_size=10943,
         char_max_seq_len=4096,
         conv1d_kernel_size=7,
         conv1d_inner_dim=1024,
@@ -192,7 +191,7 @@ def _nar_multilingual_t2u() -> UnitYT2UConfig:
     return UnitYT2UConfig(
         model_dim=1024,
         unit_max_seq_len=2048,
-        unit_vocabulary_size=10020,
+        unit_vocabulary_size=10082,
         unit_pad_idx=1,
         num_encoder_layers=6,
         num_decoder_layers=6,

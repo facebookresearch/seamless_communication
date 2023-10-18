@@ -103,7 +103,7 @@ class Translator(nn.Module):
         cls,
         model: UnitYModel,
         text_tokenizer: TextTokenizer,
-        unit_tokenizer: UnitTokenizer,
+        unit_tokenizer: Optional[UnitTokenizer],
         src: SequenceData,
         input_modality: Modality,
         output_modality: Modality,

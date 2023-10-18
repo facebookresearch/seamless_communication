@@ -32,15 +32,16 @@ class UnitTokenizer:
 
         self.langs = langs
 
-        self.model_arch = model_arch
-
         self.lang_map = {lang: idx for idx, lang in enumerate(langs)}
 
-        if self.model_arch == "nar_multilingual":
+        # The "_v2" unity architectures have a non-autoregressive decoder.
+        if model_arch.split("_")[-1] == "v2":
+            self.is_nar_decoder = True
             self.lang_symbol_repititions = 1
         else:
+            self.is_nar_decoder = False
             # For legacy reasons, we have to repeat the language symbols twice,
-            # along with a placeholder `<mask>` token for UnitY AR models.
+            # along with a placeholder `<mask>` token for UnitY autoregressive models.
             self.lang_symbol_repititions = 2
 
         vocab_size = num_units + self.lang_symbol_repititions * (len(langs) + 1) + 4
@@ -95,7 +96,7 @@ class UnitTokenizer:
 
     def create_decoder(self) -> "UnitTokenDecoder":
         """Create a token decoder."""
-        return UnitTokenDecoder(self, self.model_arch)
+        return UnitTokenDecoder(self, self.is_nar_decoder)
 
 
 class UnitTokenEncoder:
@@ -177,19 +178,20 @@ class UnitTokenDecoder:
     eos_idx: int
     pad_idx: int
 
-    def __init__(self, tokenizer: UnitTokenizer, model_arch: str) -> None:
+    def __init__(self, tokenizer: UnitTokenizer, is_nar_decoder: bool) -> None:
         """
         :param tokenizer:
             The unit tokenizer to use.
-        :param model_arch:
-            The type of UnitY model architecture.
+        :param is_nar_decoder:
+            If True, the unit decoder is non-autoregressive.
         """
         assert tokenizer.vocab_info.eos_idx is not None
         assert tokenizer.vocab_info.pad_idx is not None
 
         self.eos_idx = tokenizer.vocab_info.eos_idx
         self.pad_idx = tokenizer.vocab_info.pad_idx
-        self.model_arch = model_arch
+
+        self.is_nar_decoder = is_nar_decoder
 
     def __call__(self, token_indices: Tensor) -> Tensor:
         """Decode ``token_indices`` to speech units.
@@ -208,8 +210,9 @@ class UnitTokenDecoder:
 
         units = token_indices.clone().detach()
 
-        # Remove the prefix EOS symbol from the decoded output for AR UnitY.
-        if self.model_arch != "nar_multilingual":
+        # Remove the prefix EOS symbol from the decoded output for
+        # autoregressive UnitY.
+        if not self.is_nar_decoder:
             units = units[:, 1:]
 
         # Also, replace EOS with PAD at sequence ends.
@@ -217,10 +220,11 @@ class UnitTokenDecoder:
 
         units[units == self.pad_idx] = self.pad_idx + 4
 
-        # Remove offset of control symbols (exclude language symbol for AR UnitY).
-        if self.model_arch == "nar_multilingual":
+        # Remove offset of control symbols.
+        if self.is_nar_decoder:
             units -= 4
         else:
+            # Exclude language symbol for autoregressive UnitY.
             units[:, 1:] -= 4
 
         return units
