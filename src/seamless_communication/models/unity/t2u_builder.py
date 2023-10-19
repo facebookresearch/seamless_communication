@@ -190,7 +190,7 @@ def _base_nar() -> UnitYT2UConfig:
 
     return UnitYT2UConfig(
         model_dim=1024,
-        unit_max_seq_len=2048,
+        unit_max_seq_len=4096,
         unit_vocabulary_size=10082,
         unit_pad_idx=1,
         num_encoder_layers=6,
