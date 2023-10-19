@@ -68,3 +68,52 @@ enum TransformerNormOrder {
     TRANSFORMER_NORM_ORDER_PRE = 1,
     TRANSFORMER_NORM_ORDER_PRE_WITH_NORMFORMER = 2
 };
+
+
+
+/// Holds the options to pass to a sequence generator.
+struct SequenceGeneratorOptions {
+    /// The beam size.
+    int beam_size = 5;
+
+    /// The minimum length of generated sequences (including prefix sequence).
+    int min_seq_len = 1;
+
+    /// The terms ``a`` and ``b`` of ``ax + b`` where ``x`` is the source
+    /// sequence length. The generated sequences (including prefix sequence) will
+    /// have the maximum length of ``min(hard_max_seq_len, ax + b)``. See also
+    /// ``hard_max_seq_len``.
+    int soft_max_seq_len_a = 1;
+    int soft_max_seq_len_b = 200;
+
+    /// The hard limit on maximum length of generated sequences.
+    int hard_max_seq_len = 1024;
+
+    /// The length penalty, where values less than 1.0 favor shorter, values
+    /// greater than 1.0 favor longer sequences.
+    float len_penalty = 1.0;
+
+    /// The unknown symbol penalty, where values less than 0 produce more UNKs,
+    /// values greater than 0 produce fewer UNKs.
+    float unk_penalty = 0.0;
+
+    /// If ``True``, normalizes scores by the length of generated sequences.
+    bool normalize_scores = true;
+};
+
+
+struct SequenceGeneratorJob {
+    SequenceGeneratorOptions opts;
+    ggml_tensor* prefix_seq;
+    int source_seq_len;
+    std::int32_t eos_idx;
+};
+
+
+extern "C" float generate_sequence(
+    fairseq2_model& model,
+    const SequenceGeneratorJob& opts,
+    ggml_tensor* encoder_output,
+    ggml_tensor* encoder_padding_mask,
+    ggml_tensor** output_seq
+);
