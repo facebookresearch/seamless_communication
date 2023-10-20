@@ -277,6 +277,8 @@ class Transcriber(nn.Module):
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
 
-        return self.run_inference(
-            src, src_lang, 15
-        )  # TODO: extract length_seconds from audio
+        length_seconds = (
+            decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
+        )
+
+        return self.run_inference(src, src_lang, length_seconds)
