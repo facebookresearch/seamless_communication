@@ -59,7 +59,8 @@ extern "C" ggml_tensor* Linear_forward(
 extern "C" ggml_tensor* LayerNorm_forward(
     fairseq2_model& model,
     const std::string &prefix,
-    ggml_tensor* input) {
+    ggml_tensor* input
+) {
     ggml_tensor* weight = model.tensors[prefix + ".weight"];
     GGML_ASSERT(weight != nullptr);
     ggml_tensor* bias = model.tensors[prefix + ".bias"];
@@ -222,6 +223,74 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     return seqs;
 }
 
+struct ggml_tensor * ggml_slice(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int axis,
+        int64_t               start,
+        int64_t               end
+    ) {
+    int64_t ne[4];
+    std::copy(a->ne, a->ne + 4, ne);
+    if (start < 0) start = ne[axis] + start;
+    if (end < 0) end = ne[axis] + end;
+    GGML_ASSERT(0 <= start);
+    GGML_ASSERT(start <= end);
+    GGML_ASSERT(end <= ne[axis]);
+
+    ne[axis] = end - start;
+    size_t offset = a->nb[axis] * start;
+
+    size_t* nb = a->nb;
+    ggml_tensor* result = ggml_view_4d(ctx, a, ne[0], ne[1], ne[2], ne[3], nb[1], nb[2], nb[3], offset);
+    result->n_dims = a->n_dims;
+    return result;
+}
+
+
+extern "C" ggml_tensor* PositionalEmbedding_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* embeds
+) {
+    int encoding_dim = embeds->ne[0];
+    int seq_len = embeds->ne[1];
+    ggml_tensor* full_pos_embeds = model.tensors[prefix];
+    ggml_tensor* pos_embeds = ggml_slice(model.ctx, full_pos_embeds, /*axis*/1, 0, seq_len);
+    return ggml_add(model.ctx, embeds, pos_embeds);
+}
+
+extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs
+    // TODO: state_bag
+) {
+    ggml_context* ctx = model.ctx;
+    ggml_tensor* embed_weights = model.tensors[prefix + ".embed.weight"];
+    GGML_ASSERT(embed_weights != nullptr);
+    ggml_tensor* embeds = ggml_get_rows(ctx, embed_weights, seqs);
+
+    // padding_mask = to_padding_mask(embeds, seq_lens)
+
+    // TODO: scale when saving the model weights
+    // embeds = ggml_scale embeds * self.scale
+
+    if (has_layer(model, prefix + ".pos_encoder")) {
+        // This only work with the simple pos encoders
+        int encoding_dim = embeds->ne[0];
+        int seq_len = embeds->ne[1];
+       ggml_tensor* pos_embeds = ggml_view_2d(ctx, model.tensors[prefix + ".pos_encoder"], encoding_dim, seq_len, 0, 0);
+        embeds = ggml_add(ctx, embeds, pos_embeds);
+    }
+
+    if (has_layer(model, prefix + ".layer_norm")) {
+        embeds = LayerNorm_forward(model, prefix + ".layer_norm", embeds);
+    }
+
+    // padding mask ?
+    return embeds;
+}
 
 extern "C" ggml_tensor* StandardTransformerEncoder_forward(
     fairseq2_model& model,
@@ -389,13 +458,13 @@ extern "C" ggml_tensor* StandardTransformerDecoder_forward(
 using IncrementalStateBag = std::unordered_map<ggml_tensor*, ggml_tensor*>*;
 
 
-int _determine_max_seq_len(const SequenceGeneratorJob& job) {
+int _determine_max_seq_len(const SequenceGeneratorJob& job, int source_seq_len) {
     auto opts = job.opts;
     int max_seq_len = -1;
-    if (job.source_seq_len <= 0 || opts.soft_max_seq_len_a <= 0) {
+    if (source_seq_len <= 0 || opts.soft_max_seq_len_a <= 0) {
         max_seq_len = opts.hard_max_seq_len;
     } else {
-        max_seq_len = std::min(opts.hard_max_seq_len, int(opts.soft_max_seq_len_a * job.source_seq_len + opts.soft_max_seq_len_b));
+        max_seq_len = std::min(opts.hard_max_seq_len, int(opts.soft_max_seq_len_a * source_seq_len + opts.soft_max_seq_len_b));
     }
 
     if (opts.min_seq_len > max_seq_len) {
@@ -432,11 +501,12 @@ void _fan_out_encoder_output(
 
     // (B, S_enc, M)
     ggml_tensor* shape = ggml_new_tensor_3d(ctx, GGML_TYPE_I8, encoder_output->ne[0], encoder_output->ne[1], beam_size);
-
     // (S_enc, M) -> (B, S_enc, M)
     *encoder_output_out = ggml_repeat(ctx, encoder_output, shape);
+    // (S_enc) -> (B, S_enc)
+    ggml_tensor* shape_mask = ggml_new_tensor_2d(ctx, GGML_TYPE_I8, encoder_padding_mask->ne[0], beam_size);
     if (encoder_padding_mask != nullptr) {
-        *encoder_padding_mask_out = ggml_repeat(ctx, encoder_padding_mask, shape);
+        *encoder_padding_mask_out = ggml_repeat(ctx, encoder_padding_mask, shape_mask);
     }
 }
 
@@ -464,7 +534,7 @@ void _bootstrap_seqs_and_scores(
     ggml_context* ctx = model.ctx;
 
     // seqs[:, : prefix_seq_len] = job.prefix_seq;
-    ggml_cpy(ctx, job.prefix_seq, ggml_view_2d(ctx, seqs, 0, prefix_seq_len, 0, 0));
+    ggml_cpy(ctx, job.prefix_seq, ggml_view_2d(ctx, seqs, 0, prefix_seq_len, seqs->nb[1], 0));
 
     // We have to bootstrap the model with the already fanned-out encoder
     // output to correctly initialize its incremental state. This causes some
@@ -477,7 +547,7 @@ void _bootstrap_seqs_and_scores(
     // Bootstrap the model state with prefix sequence.
     ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
         model,
-        ".decoder",
+        "text_decoder",
         seqs,
         /*padding_mask*/ nullptr,
         encoder_output,
@@ -487,7 +557,7 @@ void _bootstrap_seqs_and_scores(
     // TODO state_bag.increment_step(prefix_seq_len - 1)
 
     // logits, lprobs: (N, S_pfx - 1, V)
-    ggml_tensor* logits = Linear_forward(model, ".decoder.final_proj", decoder_output);
+    ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
     ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_view_3d(ctx, logits, logits->ne[0], logits->ne[1], 1, 0, 0, 0));
     int vocab_size = logits->ne[0];
 
@@ -622,23 +692,29 @@ bool _finalize_hypothesis(
 }
 
 /// Generates a translation for a single sequence
+// TODO: finish this for beam_size=1
+// * implement the lprobs tweaking
+// TODO: add IncrementalStateBag support to avoid a O(N^3) generation.
+// TODO: support beam_size > 1:
+// * most layers assume un-batched input, but we want to handle several beams at once
+// * need to port "reorder_state_dict"
+// * once beam are selected with topk, we need to update seqs and scores tensors
 extern "C" float generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_tensor** output_seq
+    ggml_tensor* output_seq
 ) {
-    int input_seq_len = encoder_output->ne[1];
     int vocab_size = encoder_output->ne[0];
     int beam_size = job.opts.beam_size;
-    int max_seq_len = _determine_max_seq_len(job);
+    int source_seq_len = encoder_output->ne[1];
+    int max_seq_len = _determine_max_seq_len(job, source_seq_len);
     ggml_context* ctx = model.ctx;
 
     // (S_enc, M) -> (B, S_enc, M)
     _fan_out_encoder_output(ctx, &encoder_output, &encoder_padding_mask, beam_size);
 
-    std::vector<Hypothesis> active_searches(beam_size);
     std::vector<Hypothesis> finished_searches(beam_size);
 
     // Initialize buffers. (B, S)
@@ -688,9 +764,10 @@ extern "C" float generate_sequence(
         //     // state_bag.reorder(beam_indices)
         // }
 
+        seqs = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", seqs);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
-            ".decoder",
+            "text_decoder",
             // seqs[:, step_nr : step_nr + 1]
             ggml_view_2d(ctx, seqs, 1, beam_size, step_nr * seqs->nb[0], 0),
             nullptr,  // We never generate PAD.
@@ -701,7 +778,7 @@ extern "C" float generate_sequence(
 
         // state_bag.increment_step()
 
-        ggml_tensor* logits = Linear_forward(model, ".decoder.final_proj", decoder_output);
+        ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
         ggml_tensor* lprobs = ggml_log_softmax(ctx, logits);
 
         // // Do not allow EOS before reaching the minimum sequence length.

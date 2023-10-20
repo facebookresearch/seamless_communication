@@ -16,6 +16,7 @@ from typing import Union
 from typing import Type
 
 from third_party_ggml import *
+from ctypes_utils import c_struct, c_fn, Ptr
 
 ### Helpers
 
@@ -29,12 +30,17 @@ def numpy_dtype(ggml_type: ctypes.c_int) -> type:
         # GGML_TYPE_F16  = 1,
         return np.float16
 
+    if ggml_type == 18:
+        return np.int32
+
     raise NotImplementedError(f"Can't convert GGML_TYPE({ggml_type}) to a numpy.dtype")
 
 
 def from_numpy_dtype(dtype: np.dtype) -> ctypes.c_int:
     if dtype == np.float32:
         return ctypes.c_int(0)
+    elif dtype == np.int32:
+        return ctypes.c_int(18)
     elif dtype == np.float16:
         return ctypes.c_int(1)
     raise NotImplementedError(f"Can't convert {dtype} to a GGML_TYPE")
@@ -288,8 +294,39 @@ def forward(
     with CppStr(prefix) as std_prefix:
         return fwd(model, std_prefix, *inputs)  # ignore: type[no-any-return]
 
-lib.causal_attention_mask.argtypes = [ggml_context_p, ctypes.POINTER(ggml_tensor)]
-lib.causal_attention_mask.restype = ctypes.POINTER(ggml_tensor)
 
-def causal_attention_mask(ctx: ggml_context_p, seqs: ggml_tensor_p) -> ggml_tensor_p:
+@c_fn(lib)
+def causal_attention_mask(
+    ctx: ggml_context_p, seqs: Ptr[ggml_tensor]
+) -> Ptr[ggml_tensor]:
     return lib.causal_attention_mask(ctx, seqs)  # type: ignore[no-any-return]
+
+
+@c_struct
+class SequenceGeneratorOptions:
+    beam_size: int
+    min_seq_len: int
+    soft_max_seq_len_a: int
+    soft_max_seq_len_b: int
+    hard_max_seq_len: int
+    len_penalty: float
+    unk_penalty: float
+    normalize_scores: bool
+
+
+@c_struct
+class SequenceGeneratorJob:
+    opts: SequenceGeneratorOptions
+    prefix_seq: Ptr[ggml_tensor]
+    eos_idx: int
+
+
+@c_fn(lib)
+def generate_sequence(
+    model: ctypes.c_void_p,
+    job: Ptr[SequenceGeneratorJob],
+    encoder_output: Ptr[ggml_tensor],
+    encoder_padding_mask: Ptr[ggml_tensor],
+    output_seq: Ptr[ggml_tensor],
+) -> float:
+    ...

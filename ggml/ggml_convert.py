@@ -11,10 +11,12 @@ from enum import Enum
 from io import BufferedWriter
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
-
 import torch
 import ggml
+from typing import List
 from fairseq2.assets import AssetCard
+from fairseq2.models.transformer.frontend import TransformerEmbeddingFrontend
+from fairseq2.nn import SinusoidalPositionEncoder
 from seamless_communication.models.unity import load_unity_config, load_unity_model
 
 Preprocessor = Callable[[Any], Any]
@@ -33,11 +35,57 @@ def convert_model(model_name: str, out: Optional[Path] = None) -> None:
     else:
         raise ValueError(f"Unsupported model type: {model_name}")
 
+    state_dict = model.state_dict()
+    fixup_model(model, state_dict)
+
     with out.open("wb") as o:
-        write_ggml_file(o, hparams, model.state_dict())
+        write_ggml_file(o, hparams, state_dict)
 
     with out.with_suffix(".hparams.h").open("w") as h:
         h.write(generate_hparams_struct(hparams, "unity_hparams"))
+
+
+def _nested_getattr(model: Any, name: str) -> Any:
+    parts = name.split(".")
+    node = model
+    for part in parts:
+        node = getattr(node, part)
+        if node is None:
+            return None
+    return node
+
+
+def find_children(model: torch.nn.Module, t: type) -> List[Tuple[str, torch.nn.Module]]:
+    queue = list(model._modules.items())
+    modules = []
+    while queue:
+        name, node = queue.pop()
+        if node is None:
+            continue
+        if isinstance(node, t):
+            modules.append((name, node))
+        for child_name, child_node in node._modules.items():
+            queue.append((".".join((name, child_name)), child_node))
+
+    return modules
+
+
+def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> None:
+    # Bake the embedding scaling into the weights
+    frontends = find_children(model, TransformerEmbeddingFrontend)
+    print("Upgrading the following TransformerEmbeddingFrontend:", [x[0] for x in frontends])
+    for name, frontend in frontends:
+        embed_weights = state_dict[name + ".embed.weight"]
+        state_dict[name + ".embed.weight"] = embed_weights * frontend.scale
+
+    # Sinusoidal embeddings are typically not saved since they are easily recomputed,
+    # but this allows to avoid porting the sinusoidal logic to GGML
+    pos_encoders = find_children(model, SinusoidalPositionEncoder)
+    print("Upgrading the following SinusoidalPositionEncoder:", [x[0] for x in pos_encoders])
+    for name, pos_encoder in pos_encoders:
+        assert isinstance(pos_encoder.weight, torch.Tensor)
+        assert name not in state_dict
+        state_dict[name] = pos_encoder.weight
 
 
 def write_ggml_file(
@@ -52,7 +100,9 @@ def write_ggml_file(
         # + tensor overhead
         byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
         hparams["model_byte_size"] = byte_size
-        logging.warning(f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3)} GGML Gb")
+        logging.warning(
+            f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3)} GGML Gb"
+        )
     # 6877961321223123048
     hparams["__end_of_hparams__"] = struct.unpack("l", b"hparams_")[0]
 
@@ -139,6 +189,7 @@ def write_tensor(out: BufferedWriter, value: torch.Tensor) -> None:
         out.write(struct.pack("l", data.shape[n_dims - 1 - i]))
 
     data.tofile(out)
+
 
 def torch_to_ggml_type(dtype: type) -> int:
     if dtype is torch.float32:

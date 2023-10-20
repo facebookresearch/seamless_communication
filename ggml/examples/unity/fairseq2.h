@@ -55,6 +55,12 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
 );
 
+extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs
+);
+
 extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     fairseq2_model& model,
     const std::string& prefix,
@@ -105,7 +111,6 @@ struct SequenceGeneratorOptions {
 struct SequenceGeneratorJob {
     SequenceGeneratorOptions opts;
     ggml_tensor* prefix_seq;
-    int source_seq_len;
     std::int32_t eos_idx;
 };
 
@@ -115,5 +120,5 @@ extern "C" float generate_sequence(
     const SequenceGeneratorJob& opts,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_tensor** output_seq
+    ggml_tensor* output_seq
 );

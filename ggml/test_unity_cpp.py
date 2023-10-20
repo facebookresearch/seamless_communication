@@ -6,13 +6,17 @@ import numpy as np
 import torch
 import fairseq2.nn
 import fairseq2.nn.transformer
+import logging
+import sys
+from pathlib import Path
+from ctypes_utils import Ptr
 from ctypes import c_void_p
 from typing import Any
 from pathlib import Path
 from typing import Iterator
 from ggml import NativeObj
 from ggml_convert import convert_model
-from seamless_communication.models.unity import load_unity_model
+from seamless_communication.models.inference.translator import Translator, Modality
 
 Ctx = ggml.ggml_context_p
 
@@ -276,12 +280,19 @@ def g_model(ctx: Ctx, g_model_once: c_void_p) -> c_void_p:
 
 
 @pytest.fixture(scope="module")
-def pt_model() -> Iterator[Any]:
-    model = load_unity_model("seamlessM4T_medium")
-    print(model)
-    model.eval()
+def translator() -> Iterator[Any]:
+    tr = Translator(
+        "seamlessM4T_medium", "vocoder_36langs", torch.device("cpu"), torch.float32
+    )
     with torch.inference_mode():
-        yield model
+        yield tr
+
+
+@pytest.fixture(scope="module")
+def pt_model(translator: Translator) -> Any:
+    model = translator.model
+    print(model)
+    return model
 
 
 @pytest.mark.xfail(reason="TODO")
@@ -551,6 +562,46 @@ def test_causal_attention_mask(ctx: Ctx):
     assert np.allclose(mask, mask_exp)
 
 
+def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
+    seq = torch.zeros((4, 20, 1024), dtype=torch.float32)
+    # this _legacy_pad_idx is suspicious. Shouldn't the model use 1 ? But
+    # this is consistent with pt_model.text_decoder_frontend.pos_encoder._sin_offset
+    pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=0)
+    y_exp = pos_encoder(seq, None)[0].numpy()
+
+    gseq = ggml.from_numpy(ctx, seq[0].numpy())
+    ggml.ggml_set_name(gseq, b"seq")
+    gy = ggml.forward(
+        "PositionalEmbedding", g_model, "text_decoder_frontend.pos_encoder", gseq
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    y = ggml.to_numpy(gy)
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-6)
+
+
+def test_TransformerEmbeddingFrontend_forward(
+    ctx: Ctx, g_model: c_void_p, pt_model: Any
+) -> None:
+    seq = torch.arange(20).reshape(1, 20)
+    seq_len = torch.tensor([20])
+    gseq = ggml.from_numpy(ctx, seq[0].numpy().astype(np.int32))
+    ggml.ggml_set_name(gseq, b"seq")
+    gy = ggml.forward(
+        "TransformerEmbeddingFrontend", g_model, "text_decoder_frontend", gseq
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    y = ggml.to_numpy(gy)
+
+    y_exp, _ = pt_model.text_decoder_frontend(seq, seq_len)
+    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-6)
+
 
 def test_StandardTransformerDecoder_forward(
     ctx: Ctx, g_model: c_void_p, pt_model: Any
@@ -577,7 +628,6 @@ def test_StandardTransformerDecoder_forward(
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
     y = ggml.to_numpy(gy)
 
     y_exp, _ = pt_model.text_decoder(x, padding_mask, encoder_out, None)
@@ -585,3 +635,99 @@ def test_StandardTransformerDecoder_forward(
 
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-4)
+
+
+def test_t2tt(ctx: Ctx, g_model: c_void_p):
+    # device = translator.device
+    src_lang = "eng"
+    src_text = "We are all in a yellow submarine."
+    tgt_lang = "fra"
+    # token_encoder = translator.text_tokenizer.create_encoder(
+    #     task="translation", lang=src_lang, mode="source", device=device
+    # )
+    # src = translator.collate(token_encoder(src_text))
+
+    # text_out, _ = translator.get_prediction(
+    #     translator.model,
+    #     translator.text_tokenizer,
+    #     translator.unit_tokenizer,
+    #     src,
+    #     input_modality=Modality.TEXT,
+    #     output_modality=Modality.TEXT,
+    #     tgt_lang=tgt_lang,
+    # )
+
+    # tgt_text = str(text_out.sentences[0])
+    # assert tgt_text == "Nous sommes tous dans un sous-marin jaune."
+    # tgt_tokens = text_out.generator_output.results[0][0].seq
+    # score = text_out.generator_output.results[0][0].score.item()
+    # np.savez(
+    #     Path(__file__).parent / "sample_input.npz",
+    #     score=score,
+    #     encoder_output=text_out.encoder_output.squeeze(0).numpy(),
+    #     encoder_padding_mask=text_out.encoder_padding_mask.squeeze(0).numpy(),
+    #     tgt_tokens=tgt_tokens.numpy(),
+    # )
+
+    text_out = np.load(Path(__file__).parent / "sample_input.npz")
+    score = text_out["score"].item()
+
+    tgt_tokens = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32))
+    encoder_out = ggml.from_numpy(ctx, text_out["encoder_output"])
+    encoder_padding_mask = ggml.from_numpy(ctx, text_out["encoder_padding_mask"])
+
+    job = ggml.SequenceGeneratorJob()
+    job.opts.beam_size = 1
+    job.opts.min_seq_len = 1
+    job.opts.soft_max_seq_len_a = 1
+    job.opts.soft_max_seq_len_b = 200
+    job.opts.hard_max_seq_len = 1024
+    job.opts.len_penalty = 1.0
+    job.opts.unk_penalty = 0.0
+    job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:1])
+    job.eos_idx = 3
+
+    result = ctypes.byref(ggml.ggml_tensor())
+    g_score = ggml.generate_sequence(
+        g_model, job, encoder_out, encoder_padding_mask, result
+    )
+    breakpoint()
+    assert g_score == pytest.approx(score)
+
+
+def test_in_loop(ctx: Ctx, g_model: c_void_p, pt_model: Any):
+    resources = locals()
+
+    import importlib
+    import time
+
+    testcase = test_TransformerEmbeddingFrontend_forward.__name__
+    name, script = __name__, __file__
+    root = Path(__file__).parent
+    watched_files = [Path(__file__), root / "ggml.py", root / "build/src/libggml.so"]
+    last_try = 0.0
+
+    while True:
+        last_save = max(f.stat().st_mtime for f in watched_files)
+        if last_save <= last_try:
+            time.sleep(0.1)
+            continue
+
+        last_try = last_save
+        spec = importlib.util.spec_from_file_location(name, script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[name] = module
+        f = getattr(module, testcase)
+        f_args = [k for k in f.__annotations__ if k != "return"]
+        try:
+            f(**{k: resources[k] for k in f_args})
+            print(f"Testcase {testcase} success")
+        except AssertionError as e:
+            print(f"Testcase {testcase} failed: {e}")
+
+        except Exception as e:
+            import pdb
+
+            logging.exception(f"Testcase {testcase} crashed !")
+            pdb.post_mortem()
