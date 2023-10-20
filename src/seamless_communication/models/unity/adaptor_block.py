@@ -22,7 +22,6 @@ from fairseq2.nn.transformer import (
     TransformerEncoderLayer,
     create_standard_layer_norm,
 )
-from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.typing import DataType, Device
 from overrides import final as finaloverride
 from torch import Tensor
@@ -95,8 +94,6 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self.adaptor_layers = layer_list
 
         self.layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
-
-        check_model_dim(self)
 
     @finaloverride
     def forward(
@@ -240,8 +237,6 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
             self.ffn_dropout = Dropout(dropout_p)
         else:
             self.register_module("ffn_dropout", None)
-
-        check_model_dim(self)
 
     @finaloverride
     def forward(

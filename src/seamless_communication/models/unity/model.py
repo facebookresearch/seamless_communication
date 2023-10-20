@@ -14,7 +14,6 @@ from fairseq2.nn.incremental_state import IncrementalStateBag
 from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.projection import Projection
 from fairseq2.nn.transformer import TransformerDecoder, TransformerEncoder
-from fairseq2.nn.utils.module import check_model_dim
 from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
@@ -93,8 +92,6 @@ class UnitYModel(EncoderDecoderModel):
             self.register_module("t2u_model", None)
 
         self.pad_idx = pad_idx
-
-        check_model_dim(self)
 
     @finaloverride
     def encode(
@@ -189,7 +186,6 @@ class UnitYX2TModel(EncoderDecoderModel):
         self.decoder = decoder
         self.final_proj = final_proj
         self.pad_idx = pad_idx
-        check_model_dim(self)
 
     @finaloverride
     def encode(

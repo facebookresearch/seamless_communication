@@ -9,7 +9,6 @@ from typing import Iterable, Optional, Tuple, final
 from torch import Tensor
 from torch.nn import Dropout
 
-from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.nn.module_list import ModuleList
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.padding import PaddingMask
@@ -79,8 +78,6 @@ class ChunkTransformerEncoder(TransformerEncoder):
         )
 
         self.layers = layer_list
-
-        check_model_dim(self)
 
     @finaloverride
     def forward(

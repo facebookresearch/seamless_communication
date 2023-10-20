@@ -18,7 +18,6 @@ from fairseq2.nn.transformer import (
 from fairseq2.nn.incremental_state import IncrementalStateBag
 from fairseq2.nn.padding import PaddingMask, apply_padding_mask
 from fairseq2.nn.transformer import create_standard_layer_norm
-from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.typing import DataType, Device, finaloverride
 
 
@@ -165,8 +164,6 @@ class NARTransformerDecoderLayer(TransformerDecoderLayer):
         self.conv1d_layer_norm = layer_norm_factory(
             model_dim, device=device, dtype=dtype
         )
-
-        check_model_dim(self)
 
     @finaloverride
     def forward(
