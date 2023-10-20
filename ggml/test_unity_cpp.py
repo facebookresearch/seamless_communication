@@ -21,14 +21,14 @@ from seamless_communication.models.inference.translator import Translator, Modal
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-PARAMS_256MB = ggml.ggml_init_params(mem_size=256 * 1024 * 1024, mem_buffer=None)
+CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024, mem_buffer=None)
 
 
 @pytest.fixture(name="ctx")
 def _ctx() -> Iterator[Ctx]:
-    """Allocate a new context with 256 MB of memory"""
+    """Allocate a new context with 1024 MB of memory"""
     try:
-        ctx = ggml.ggml_init(params=PARAMS_256MB)
+        ctx = ggml.ggml_init(params=CTX_PARAMS)
         yield ctx
     finally:
         ggml.ggml_free(ctx)

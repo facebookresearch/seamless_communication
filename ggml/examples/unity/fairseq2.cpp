@@ -46,14 +46,12 @@ extern "C" ggml_tensor* Linear_forward(
     // Note: for now we assumed un-batched input
     ggml_tensor* weight = model.tensors[prefix + ".weight"];  // (d_in, d_out)
     GGML_ASSERT(weight != nullptr);
-    ggml_tensor* bias = model.tensors[prefix + ".bias"];  // (d_out)
-    GGML_ASSERT(bias != nullptr);
+    ggml_tensor* out = ggml_mul_mat(model.ctx, weight, input);  // (d_out)
 
-    return ggml_add(
-        model.ctx,
-        ggml_mul_mat(model.ctx, weight, input),  // (d_out)
-        bias
-    );
+    ggml_tensor* bias = model.tensors[prefix + ".bias"];  // (d_out)
+    if (bias == nullptr) return out;
+
+    return ggml_add_inplace(model.ctx, out, bias);
 }
 
 extern "C" ggml_tensor* LayerNorm_forward(
@@ -69,9 +67,9 @@ extern "C" ggml_tensor* LayerNorm_forward(
     auto ctx = model.ctx;
     // TODO: should `eps` be part of unity hparams ?
     input = ggml_norm(ctx, input, /*eps*/1e-5);
-    return ggml_add(
+    return ggml_add_inplace(
         ctx,
-        ggml_mul(ctx, ggml_repeat(ctx, weight, input), input),
+        ggml_mul_inplace(ctx, ggml_repeat(ctx, weight, input), input),
         ggml_repeat(ctx, bias, input)
     );
 }
@@ -84,7 +82,7 @@ extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
 ) {
     seqs = Linear_forward(model, prefix + ".inner_proj", seqs);
     // inner_activation = ReLu // TODO: allow other activation
-    seqs = ggml_relu(model.ctx, seqs);
+    seqs = ggml_relu_inplace(model.ctx, seqs);
 
     if (has_layer(model, prefix + ".inner_layer_norm")) {
         seqs = LayerNorm_forward(model, prefix + ".inner_layer_norm", seqs);
@@ -223,15 +221,18 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     return seqs;
 }
 
+/// ggml_slice(X, -1, start, end) is equivalent to X[start:end]
+/// ggml_slice(X, 0, start, end) is equivalent to X[..., start:end]
 struct ggml_tensor * ggml_slice(
-        struct ggml_context * ctx,
-        struct ggml_tensor  * a,
-        int axis,
-        int64_t               start,
-        int64_t               end
-    ) {
+    struct ggml_context * ctx,
+    struct ggml_tensor  * a,
+    int axis,
+    int64_t start,
+    int64_t end
+) {
     int64_t ne[4];
     std::copy(a->ne, a->ne + 4, ne);
+    if (axis < 0) axis = a->n_dims + axis;
     if (start < 0) start = ne[axis] + start;
     if (end < 0) end = ne[axis] + end;
     GGML_ASSERT(0 <= start);
@@ -506,7 +507,7 @@ void _fan_out_encoder_output(
 
 ggml_tensor* ggml_log_softmax(ggml_context* ctx, ggml_tensor* logits) {
     // TODO: this isn't the smartest way of doing this
-    return ggml_log(ctx, ggml_soft_max(ctx, logits));
+    return ggml_log_inplace(ctx, ggml_soft_max_inplace(ctx, logits));
 }
 
 void _bootstrap_seqs_and_scores(
@@ -539,10 +540,11 @@ void _bootstrap_seqs_and_scores(
     ggml_tensor* decoder_input = ggml_repeat(ctx, ggml_view_1d(ctx, job.prefix_seq, prefix_seq_len - 1, 0), encoder_output);
 
     // Bootstrap the model state with prefix sequence.
+    decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", decoder_input);
     ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
         model,
         "text_decoder",
-        seqs,
+        decoder_input,
         /*padding_mask*/ nullptr,
         encoder_output,
         encoder_padding_mask
@@ -589,22 +591,23 @@ int StandardBeamSearch_step(
     ggml_context* ctx,
     int step_nr,
     bool is_start_step,
-    ggml_tensor* lprobs,  // (N, S, V)
-    ggml_tensor* scores,  // (N, S)
+    ggml_tensor* lprobs,  // (B, V)
+    ggml_tensor* last_scores,  // (B)
     ggml_tensor* candidate_indices
 ) {
+    GGML_ASSERT(lprobs->n_dims == 2);
     int vocab_size = lprobs->ne[0];
-    int sent_len = lprobs->ne[1];
-    int beam_size = lprobs->ne[2];
-    GGML_ASSERT(scores->ne[0] == sent_len);
-    GGML_ASSERT(scores->ne[1] == beam_size);
+    int beam_size = lprobs->ne[1];
+    GGML_ASSERT(last_scores->n_dims == 2);
+    GGML_ASSERT(last_scores->ne[0] == 1);
+    GGML_ASSERT(last_scores->ne[1] == beam_size);
+    GGML_ASSERT(candidate_indices->ne[0] == beam_size * vocab_size);
 
     // should this be done by the caller ?
-    ggml_tensor* last_scores = ggml_view_2d(ctx, scores, beam_size, 1, 0, step_nr);
     if (is_start_step) {
         // At the initial step, all hypotheses are equally likely, so we use
         // only the first beam.
-        lprobs = ggml_view_3d(ctx, lprobs, vocab_size, sent_len, 1, 0, 0, 0);
+        lprobs = ggml_slice(ctx, lprobs, 1, 0, 1);
         lprobs = ggml_cont(ctx, lprobs);
         // The first step always indicates the beginning of the sequence and
         // has no score.
@@ -625,8 +628,8 @@ int StandardBeamSearch_step(
     // `vocab_size` - 1 to never select PAD.
     int topk = std::min(2 * beam_size, vocab_size - 1);
 
-    auto comp = [scores](std::int32_t a, std::int32_t b) {
-        return ggml_get_f32_1d(scores, a) < ggml_get_f32_1d(scores, b);
+    auto comp = [lprobs](std::int32_t a, std::int32_t b) {
+        return ggml_get_f32_1d(lprobs, a) < ggml_get_f32_1d(lprobs, b);
     };
     auto cand = (std::int32_t*)candidate_indices->data;
     std::partial_sort(cand, cand + topk, cand + (beam_size * vocab_size), comp);
@@ -700,7 +703,8 @@ extern "C" float generate_sequence(
     ggml_tensor* encoder_padding_mask,
     ggml_tensor* output_seq
 ) {
-    int vocab_size = encoder_output->ne[0];
+    ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
+    int vocab_size = embed->ne[0];
     int beam_size = job.opts.beam_size;
     int source_seq_len = encoder_output->ne[1];
     int max_seq_len = _determine_max_seq_len(job, source_seq_len);
@@ -737,6 +741,8 @@ extern "C" float generate_sequence(
     // last step.
     ggml_tensor* search_indices = nullptr;
 
+    // TODO: memory management
+    // there should be a per-step ggml_context for intermediary results
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         // if (beam_indices != nullptr) {
         //     // If not `None`, it means in the last step we finalized one or
@@ -757,13 +763,14 @@ extern "C" float generate_sequence(
 
         //     // state_bag.reorder(beam_indices)
         // }
-
-        seqs = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", seqs);
+        // because of no IncrementalStateBag we pass input from the start
+        // decoder_input = seqs[:, 0 : step_nr + 1]
+        ggml_tensor* decoder_input = ggml_slice(ctx, seqs, 0, 0, step_nr + 1);
+        decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", decoder_input);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
             "text_decoder",
-            // seqs[:, step_nr : step_nr + 1]
-            ggml_view_2d(ctx, seqs, 1, beam_size, step_nr * seqs->nb[0], 0),
+            decoder_input,
             nullptr,  // We never generate PAD.
             encoder_output,
             encoder_padding_mask
@@ -772,6 +779,9 @@ extern "C" float generate_sequence(
 
         // state_bag.increment_step()
 
+        // Because of no IncrementalStateBag decoder_output here is of shape (B, S, D)
+        // Just look at the last token.
+        decoder_output = ggml_slice(ctx, decoder_output, 1, step_nr, step_nr+1);
         ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
         ggml_tensor* lprobs = ggml_log_softmax(ctx, logits);
 
@@ -799,8 +809,7 @@ extern "C" float generate_sequence(
             step_nr,
             step_nr == start_step,
             lprobs,
-            // TODO only pass scores for new tokens
-            ggml_view_2d(ctx, scores, step_nr + 1, beam_size, 0, 0),
+            ggml_slice(ctx, scores, 0, step_nr, step_nr+1),
             candidate_indices
         );
 
