@@ -55,6 +55,13 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
 );
 
+
+extern "C" ggml_tensor* PositionalEmbedding_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* embeds
+);
+
 extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
     fairseq2_model& model,
     const std::string& prefix,
