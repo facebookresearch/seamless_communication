@@ -56,11 +56,20 @@ class Token:
         self.time_s = time_s
         self.prob = prob
 
+
+class Transcription:
+    text: str
+    tokens: List[Token]
+
+    def __init__(self, tokens: List[Token]):
+        self.text = " ".join([t.text for t in tokens])
+        self.tokens = tokens
+
     def __str__(self):
-        return f"{self.text}[t{self.time_s:0.2f}, p{self.prob:0.2f}]"
+        return self.text
 
     def __repr__(self):
-        return f"{self.text}[t{self.time_s:0.2f}, p{self.prob:0.2f}]"
+        return self.text
 
 
 class Transcriber(nn.Module):
@@ -220,7 +229,7 @@ class Transcriber(nn.Module):
 
     def run_inference(
         self, fbanks: torch.Tensor, src_lang: str, length_seconds: float
-    ) -> List[Token]:
+    ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
         ).prefix_indices.tolist()
@@ -246,10 +255,10 @@ class Transcriber(nn.Module):
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
         ]
-        transcription = self._collect_word_level_stats(
+        stats = self._collect_word_level_stats(
             pieces=pieces, token_timestamps=token_timestamps, step_scores=step_scores
         )
-        return transcription
+        return Transcription(stats)
 
     @torch.inference_mode()
     def transcribe(
@@ -257,7 +266,7 @@ class Transcriber(nn.Module):
         audio: Union[str, Tensor],
         src_lang: str,
         sample_rate: int = 16000,
-    ) -> List[Token]:
+    ) -> Transcription:
         """
         The main method used to perform transcription.
 
