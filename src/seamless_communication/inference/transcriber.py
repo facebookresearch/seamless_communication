@@ -46,6 +46,23 @@ class EncDecAttentionsCollect(AttentionWeightHook):
         self.attn_scores = []
 
 
+class Token:
+    text: str
+    time_s: float
+    prob: float
+
+    def __init__(self, text: str, time_s: float, prob: float):
+        self.text = text
+        self.time_s = time_s
+        self.prob = prob
+
+    def __str__(self):
+        return f"{self.text}[t{self.time_s:0.2f}, p{self.prob:0.2f}]"
+
+    def __repr__(self):
+        return f"{self.text}[t{self.time_s:0.2f}, p{self.prob:0.2f}]"
+
+
 class Transcriber(nn.Module):
     def __init__(
         self,
@@ -153,14 +170,6 @@ class Transcriber(nn.Module):
         return (maximum, reversed(seq))
 
     @classmethod
-    def _word_stats_to_string(cls, word_stats: List[Any]) -> str:
-        words = [
-            f"{stat['text']}[t{stat['time_s']:0.2f}, p{stat['prob']:0.2f}]"
-            for stat in word_stats
-        ]
-        return " ".join(words)
-
-    @classmethod
     def _extract_timestamps(cls, attn_weights, audio_len) -> List[float]:
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
@@ -187,7 +196,7 @@ class Transcriber(nn.Module):
     @classmethod
     def _collect_word_level_stats(
         cls, pieces: List[str], token_timestamps: List[float], step_scores: List[float]
-    ) -> List[dict]:
+    ) -> List[Token]:
         assert len(pieces) == len(token_timestamps) and len(token_timestamps) == len(
             step_scores
         )
@@ -205,14 +214,13 @@ class Transcriber(nn.Module):
                 word_stats[-1][0] += token.replace("▁", " ")
                 word_stats[-1][2].append(np.exp(score))
         word_stats = [
-            {"text": word, "time_s": start, "prob": np.mean(probs)}
-            for word, start, probs in word_stats
+            Token(word, start, np.mean(probs)) for word, start, probs in word_stats
         ]
         return word_stats
 
     def run_inference(
         self, fbanks: torch.Tensor, src_lang: str, length_seconds: float
-    ) -> str:
+    ) -> List[Token]:
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
         ).prefix_indices.tolist()
@@ -238,11 +246,10 @@ class Transcriber(nn.Module):
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
         ]
-        word_stats = self._collect_word_level_stats(
+        transcription = self._collect_word_level_stats(
             pieces=pieces, token_timestamps=token_timestamps, step_scores=step_scores
         )
-        augmented_text = self._word_stats_to_string(word_stats)
-        return augmented_text
+        return transcription
 
     @torch.inference_mode()
     def transcribe(
@@ -250,7 +257,7 @@ class Transcriber(nn.Module):
         audio: Union[str, Tensor],
         src_lang: str,
         sample_rate: int = 16000,
-    ) -> str:
+    ) -> List[Token]:
         """
         The main method used to perform transcription.
 
@@ -262,7 +269,7 @@ class Transcriber(nn.Module):
             Sample rate of the audio Tensor.
 
         :returns:
-            - Transcribed text with timestamps.
+            - List of Tokens with timestamps.
         """
         if isinstance(audio, str):
             with Path(audio).open("rb") as fb:
