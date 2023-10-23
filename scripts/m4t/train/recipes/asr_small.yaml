@@ -1,0 +1,97 @@
+eval_data:
+  audio:
+    audio_root_dir: /fsx-ust/data/audio_zips/
+    fbanks_num_mel_bins: 80
+    fbanks_standardize_audio: true
+    fbanks_waveform_scale: 32768
+  fbank_feats_pad_idx: 0
+  manifest_list: dev_asr_only_aggregated_adapted
+  manifest_list_path: null
+  manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
+  max_seconds_per_input_audio: 15
+  fixed_batch_size: 40
+  max_tgt_text_tokens_per_batch: 1000
+  max_tgt_text_tokens_per_sample: 300
+  max_units_per_sample: 1500
+  num_threads: 5
+  prefech_batches: null 
+  prepend_tgt_lang_tag: true
+  shuffle_window: 1000
+  text_tokenization:
+    from_model: null
+    langtoks:
+    - eng
+    - rus
+    - hin
+    - por
+    - spa
+    spm_path: /data/home/mavlyutov/s2t_ondevice/vocab20k/5_5_20k.model
+  unit_tokenization:
+    from_model: seamlessM4T_large
+    langtoks: null
+    num_units: null
+  unit_tokenizer_name: seamlessM4T_large
+model:
+  custom_params:
+    model_embed_dim: 768
+    nllb_decoder_layers: 3
+    nllb_encoder_layers: 1
+    nllb_vocabulary_size: 256102
+    t2u_decoder_layers: 1
+    t2u_encoder_layers: 1
+    unit_vocabulary_size: 10082
+    w2v2_encoder_layers: 6
+    w2v2_encoder_layers_layernorm_features: false
+    w2v2_encoder_layers_use_conformer: true
+    w2v2_num_pos_conv_groups: 0
+    w2v2_pos_conv_kernel_size: 0
+    w2v2_pos_encoder_depth: 0
+    w2v2_pos_encoder_type: relative
+  from_model: null
+  from_model_config: null
+  pretrained_s2t_decoder_path: null
+  pretrained_t2u_path: null
+  pretrained_w2v2_path: null
+train_data:
+  audio:
+    audio_root_dir: /fsx-ust/data/audio_zips/
+    fbanks_num_mel_bins: 80
+    fbanks_standardize_audio: true
+    fbanks_waveform_scale: 32768
+  fbank_feats_pad_idx: 0
+  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted
+  manifest_list_path: null
+  manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
+  max_seconds_per_input_audio: 15
+  fixed_batch_size: 40
+  max_tgt_text_tokens_per_batch: 600
+  max_tgt_text_tokens_per_sample: 300
+  max_units_per_sample: 1500
+  num_threads: 4 
+  prefech_batches: null 
+  prepend_tgt_lang_tag: true
+  shuffle_window: 1000 
+  text_tokenization:
+    from_model: null
+    langtoks:
+    - eng
+    - rus
+    - hin
+    - por
+    - spa
+    spm_path: /data/home/mavlyutov/s2t_ondevice/vocab20k/5_5_20k.model
+  unit_tokenization:
+    from_model: seamlessM4T_large
+    langtoks: null
+    num_units: null
+  unit_tokenizer_name: seamlessM4T_large
+training:
+  eval_steps: 5000 
+  float_dtype: fp32
+  label_smoothing: 0.2
+  learning_rate: 0.0001
+  log_steps:  200 
+  max_epochs: 100
+  patience: 10
+  start_learning_rate: 1.0e-07
+  warmup_steps: 1000

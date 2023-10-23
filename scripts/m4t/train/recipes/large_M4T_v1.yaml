@@ -1,0 +1,74 @@
+eval_data:
+  audio:
+    audio_root_dir: /fsx-ust/data/audio_zips/
+    fbanks_num_mel_bins: 80
+    fbanks_standardize_audio: true
+    fbanks_waveform_scale: 32768
+  fbank_feats_pad_idx: 0
+  manifest_list: dev_fleurs_arb-eng,dev_fleurs_ben-eng,dev_fleurs_hin-eng,dev_fleurs_ind-eng,dev_fleurs_ita-eng,dev_fleurs_jpn-eng,dev_fleurs_por-eng,dev_fleurs_rus-eng,dev_fleurs_swh-eng,dev_fleurs_tha-eng,dev_fleurs_tur-eng,dev_fleurs_urd-eng,dev_fleurs_vie-eng,dev_fleurs_spa-eng,dev_fleurs_eng-arb,dev_fleurs_eng-ben,dev_fleurs_eng-hin,dev_fleurs_eng-ind,dev_fleurs_eng-ita,dev_fleurs_eng-jpn,dev_fleurs_eng-por,dev_fleurs_eng-rus,dev_fleurs_eng-swh,dev_fleurs_eng-tha,dev_fleurs_eng-tur,dev_fleurs_eng-urd,dev_fleurs_eng-vie,dev_fleurs_eng-spa
+  manifest_list_path: null
+  manifest_path_prefix: /fsx-ust/spopuri/datasets/S2ST/V1/M4T_V1_phase2/primary/
+  max_seconds_per_input_audio: 150
+  fixed_batch_size: 40
+  max_tgt_text_tokens_per_batch: null
+  max_tgt_text_tokens_per_sample: 3000
+  max_units_per_sample: 1500
+  num_threads: 10 
+  prefech_batches: 10
+  prepend_tgt_lang_tag: true
+  shuffle_window: 1000
+  text_tokenization:
+    from_model: seamlessM4T_large
+    spm_path: null
+    langtoks: null
+  unit_tokenization:
+    from_model: seamlessM4T_large
+    langtoks: null
+    num_units: null
+  unit_tokenizer_name: seamlessM4T_large
+model:
+  custom_params:
+    nllb_vocabulary_size: 256103
+  from_model: null
+  from_model_config: null
+  pretrained_s2t_decoder_path: /fsx-ust/spopuri/datasets/PT_CKPT/S2T/S2T_M4T_V1_V1_cleaned.pt
+  pretrained_t2u_path: /fsx-ust/spopuri/datasets/PT_CKPT/T2U/V5_10K_p2_14_80K.pt 
+  pretrained_w2v2_path: /fsx-ust/spopuri/datasets/PT_CKPT/w2v2/w2vbert2rpq_600m_al5.pt
+train_data:
+  audio:
+    audio_root_dir: /fsx-ust/data/audio_zips/
+    fbanks_num_mel_bins: 80
+    fbanks_standardize_audio: true
+    fbanks_waveform_scale: 32768
+  fbank_feats_pad_idx: 0
+  manifest_list: null 
+  manifest_list_path: /data/home/mavlyutov/train_configs/m4t_v1_train_manifests.txt
+  manifest_path_prefix: /fsx-ust/spopuri/datasets/S2ST/V1/M4T_V1_phase2/primary 
+  max_seconds_per_input_audio: 15
+  fixed_batch_size: null 
+  max_tgt_text_tokens_per_batch: 600
+  max_tgt_text_tokens_per_sample: 300
+  max_units_per_sample: 1500
+  num_threads: 10 
+  prefech_batches: 10
+  prepend_tgt_lang_tag: true
+  shuffle_window: 1000
+  text_tokenization:
+    from_model: seamlessM4T_large
+    spm_path: null
+    langtoks: null
+  unit_tokenization:
+    from_model: seamlessM4T_large
+    langtoks: null
+    num_units: null
+  unit_tokenizer_name: seamlessM4T_large
+training:
+  eval_steps: 5000 
+  float_dtype: fp16
+  label_smoothing: 0.2
+  learning_rate: 0.0001
+  log_steps: 200 
+  max_epochs: 100
+  patience: 10
+  start_learning_rate: 1.0e-07
+  warmup_steps: 1000
