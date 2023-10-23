@@ -156,7 +156,7 @@ def _base_v2() -> UnitYConfig:
         w2v2_encoder_config=w2v2_chunk_encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
-        use_text_encoder=False,
+        use_text_encoder=True,
         use_conformer_adaptor=False,
         num_adaptor_layers=1,
         adaptor_kernel_size=8,
