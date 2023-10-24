@@ -119,6 +119,7 @@ struct SequenceGeneratorJob {
     SequenceGeneratorOptions opts;
     ggml_tensor* prefix_seq;
     std::int32_t eos_idx;
+    std::int32_t pad_idx;
 };
 
 

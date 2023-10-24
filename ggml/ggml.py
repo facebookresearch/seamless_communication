@@ -319,6 +319,7 @@ class SequenceGeneratorJob:
     opts: SequenceGeneratorOptions
     prefix_seq: Ptr[ggml_tensor]
     eos_idx: int
+    pad_idx: int
 
 
 @c_fn(lib)

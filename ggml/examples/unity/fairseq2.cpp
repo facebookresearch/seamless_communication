@@ -628,12 +628,11 @@ int StandardBeamSearch_step(
         }
     } else {
         // Make probabilities contain cumulative scores for each hypothesis.
+        // TODO this seems incorrect
         lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
     }
 
-    // Note this is where we will actually do the model inference.
     ggml_cgraph gf = ggml_build_forward(lprobs);
-    printf("StandardBeamSearch_step.graph.n_nodes: %d\n", gf.n_nodes);
     ggml_graph_compute_with_ctx(ctx, &gf, 1);
 
     // Take the best 2 x `beam_size` predictions. We'll choose the first
@@ -716,12 +715,15 @@ extern "C" float generate_sequence(
     ggml_tensor* encoder_padding_mask,
     ggml_tensor* output_seq
 ) {
+    ggml_context* ctx = model.ctx;
+    size_t eos_idx = job.eos_idx;
+    auto pad_idx = job.pad_idx;
+
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
-    int vocab_size = embed->ne[1];
+    size_t vocab_size = embed->ne[1];
     std::size_t beam_size = job.opts.beam_size;
     int source_seq_len = encoder_output->ne[1];
     int max_seq_len = _determine_max_seq_len(job, source_seq_len);
-    ggml_context* ctx = model.ctx;
 
     // (S_enc, M) -> (B, S_enc, M)
     _fan_out_encoder_output(ctx, &encoder_output, &encoder_padding_mask, beam_size);
@@ -798,18 +800,37 @@ extern "C" float generate_sequence(
         ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
         ggml_tensor* lprobs = ggml_log_softmax(ctx, logits);
 
+        // Compute lprobs here so we can modify it in place in the lprob tweaking phase
+        // TODO: use ggml properly compute the tweaks
+        ggml_cgraph gf = ggml_build_forward(lprobs);
+        printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
+        ggml_graph_compute_with_ctx(ctx, &gf, 1);
+
         // // Do not allow EOS before reaching the minimum sequence length.
-        // if step_nr < self.opts.min_seq_len:
-        //     lprobs[:, :, self.eos_idx] = -torch.inf
+        if (step_nr < job.opts.min_seq_len) {
+            // lprobs[:, :, self.eos_idx] = -INFINITY;
+            for (size_t i = 0; i < beam_size; ++i)
+                ggml_set_f32_1d(lprobs, vocab_size * i + eos_idx, -INFINITY);
+        }
 
-        // // If we have reached the maximum length, force the last step to be
-        // // EOS.
-        // if step_nr == max_seq_len - 2:
-        //     lprobs[:, :, : self.eos_idx]       = -torch.inf
-        //     lprobs[:, :,   self.eos_idx + 1 :] = -torch.inf
+        // If we have reached the maximum length, force the last step to be EOS.
+        // TODO: should this be done in an hadoc loop ? how often does that happen anyway ?
+        if (step_nr == max_seq_len - 2) {
+            // lprobs[:, :, : self.eos_idx]       = -torch.inf
+            // lprobs[:, :,   self.eos_idx + 1 :] = -torch.inf
+            for (size_t b = 0; b < beam_size; ++b) {
+                size_t t = 0;
+                for (t = 0; t < eos_idx; ++t)
+                    ggml_set_f32_1d(lprobs, vocab_size * b + t, -INFINITY);
+                for (t = eos_idx + 1; t < vocab_size; ++t)
+                    ggml_set_f32_1d(lprobs, vocab_size * b + t, -INFINITY);
+            }
 
-        // // Never allow PAD.
-        // lprobs[:, :, self.pad_idx] = -torch.inf
+        }
+
+        // Never allow PAD.
+        for (size_t i = 0; i < beam_size; ++i)
+            ggml_set_f32_1d(lprobs, vocab_size * i + pad_idx, -INFINITY);
 
         // // Apply UNK penalty.
         // if self.unk_idx is not None:
@@ -863,7 +884,7 @@ extern "C" float generate_sequence(
         ggml_set_1d_inplace(ctx, new_seqs, next_tokens, new_seqs->nb[0] * (step_nr + 1));
         ggml_set_1d_inplace(ctx, new_scores, next_scores, new_scores->nb[0] * (step_nr + 1));
 
-        ggml_cgraph gf = ggml_build_forward(new_seqs);
+        gf = ggml_build_forward(new_seqs);
         ggml_graph_compute_with_ctx(ctx, &gf, 1);
         new_seqs->type = GGML_TYPE_I32;
         gf = ggml_build_forward(new_scores);

@@ -687,6 +687,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     job.opts.unk_penalty = 0.0
     job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:2])
     job.eos_idx = 3
+    job.pad_idx = 1
 
     result = ggml.ggml_tensor()
     g_score = ggml.generate_sequence(
