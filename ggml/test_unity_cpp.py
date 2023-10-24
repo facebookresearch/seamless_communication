@@ -638,6 +638,7 @@ def test_StandardTransformerDecoder_forward(
 
 
 def test_t2tt(ctx: Ctx, g_model: c_void_p):
+    # def test_t2tt(ctx: Ctx, g_model: c_void_p, translator):
     # device = translator.device
     src_lang = "eng"
     src_text = "We are all in a yellow submarine."
@@ -672,7 +673,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     text_out = np.load(Path(__file__).parent / "sample_input.npz")
     score = text_out["score"].item()
 
-    tgt_tokens = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32))
+    tgt_tokens = list(text_out["tgt_tokens"])
     encoder_out = ggml.from_numpy(ctx, text_out["encoder_output"])
     encoder_padding_mask = ggml.from_numpy(ctx, text_out["encoder_padding_mask"])
 
@@ -681,17 +682,18 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     job.opts.min_seq_len = 1
     job.opts.soft_max_seq_len_a = 1
     job.opts.soft_max_seq_len_b = 200
-    job.opts.hard_max_seq_len = 1024
+    job.opts.hard_max_seq_len = int(len(tgt_tokens) * 1.5)
     job.opts.len_penalty = 1.0
     job.opts.unk_penalty = 0.0
-    job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:1])
+    job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:2])
     job.eos_idx = 3
 
-    result = ctypes.byref(ggml.ggml_tensor())
+    result = ggml.ggml_tensor()
     g_score = ggml.generate_sequence(
-        g_model, job, encoder_out, encoder_padding_mask, result
+        g_model, job, encoder_out, encoder_padding_mask, ctypes.byref(result)
     )
-    breakpoint()
+    tokens = list(ggml.to_numpy(result))
+    assert tokens == tgt_tokens
     assert g_score == pytest.approx(score)
 
 

@@ -506,14 +506,23 @@ void _fan_out_encoder_output(
 }
 
 ggml_tensor* ggml_log_softmax(ggml_context* ctx, ggml_tensor* logits) {
-    // TODO: this isn't the smartest way of doing this
+    // TODO: this isn't the most precise way of doing this
     return ggml_log_inplace(ctx, ggml_soft_max_inplace(ctx, logits));
+}
+
+ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int64_t ne1) {
+    ggml_tensor* shape = ggml_new_tensor_2d(ctx, GGML_TYPE_I8, ne0, ne1);
+    ggml_type true_type = x->type;
+    x->type = GGML_TYPE_F32;
+    ggml_tensor* y = ggml_repeat(ctx, x, shape);
+    y->type = true_type;
+    return y;
 }
 
 void _bootstrap_seqs_and_scores(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
-    ggml_tensor* seqs,
+    ggml_tensor* full_seqs,
     ggml_tensor* scores,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
@@ -528,23 +537,24 @@ void _bootstrap_seqs_and_scores(
 
     ggml_context* ctx = model.ctx;
 
-    // seqs[:, : prefix_seq_len] = job.prefix_seq;
-    ggml_cpy(ctx, job.prefix_seq, ggml_view_2d(ctx, seqs, 0, prefix_seq_len, seqs->nb[1], 0));
+    // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
+    full_seqs->type = GGML_TYPE_F32;
+    job.prefix_seq->type = GGML_TYPE_F32;
+    ggml_tensor* seqs = ggml_cpy(ctx, job.prefix_seq, ggml_slice(ctx, full_seqs, 0, 0, prefix_seq_len));
 
     // We have to bootstrap the model with the already fanned-out encoder
-    // output to correctly initialize its incremental state. This causes some
-    // redundancy as we have to expand `decoder_input` to match the shape of
-    // `encoder_output`.
+    // output to correctly initialize its incremental state.
     // (S_pfx) -> (N x B, S_pfx - 1)
-    // prefix_seq[:-1].expand(encoder_output.size(0), -1)
-    ggml_tensor* decoder_input = ggml_repeat(ctx, ggml_view_1d(ctx, job.prefix_seq, prefix_seq_len - 1, 0), encoder_output);
+    // prefix_seq[:-1].expand(beam_size, -1)
+    seqs = ggml_expand_2d(ctx, ggml_slice(ctx, seqs, 0, 0, prefix_seq_len - 1), prefix_seq_len - 1, beam_size);
+    seqs->type = GGML_TYPE_I32;
 
     // Bootstrap the model state with prefix sequence.
-    decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", decoder_input);
+    seqs = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", seqs);
     ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
         model,
         "text_decoder",
-        decoder_input,
+        seqs,
         /*padding_mask*/ nullptr,
         encoder_output,
         encoder_padding_mask
@@ -554,11 +564,13 @@ void _bootstrap_seqs_and_scores(
 
     // logits, lprobs: (N, S_pfx - 1, V)
     ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
-    ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_view_3d(ctx, logits, logits->ne[0], logits->ne[1], 1, 0, 0, 0));
     int vocab_size = logits->ne[0];
+    ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_slice(ctx, logits, 1, 0, 1));
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
     ggml_graph_compute_with_ctx(ctx, &gf, 1);
+    full_seqs->type = GGML_TYPE_I32;
+    job.prefix_seq->type = GGML_TYPE_I32;
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
@@ -612,7 +624,7 @@ int StandardBeamSearch_step(
         // The first step always indicates the beginning of the sequence and
         // has no score.
         if (step_nr > 0) {
-            lprobs = ggml_add_inplace(ctx, lprobs, last_scores);
+            lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
         }
     } else {
         // Make probabilities contain cumulative scores for each hypothesis.
@@ -738,10 +750,12 @@ extern "C" float generate_sequence(
 
     // Array with integers up to 'vocab_size * beam_size' to represent next beams to explore
     ggml_tensor* candidate_indices = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, vocab_size * beam_size);
-    for (std::size_t i = 0; i < vocab_size * beam_size; ++i) ggml_set_i32_1d(candidate_indices, i, i);
+    for (std::size_t i = 0; i < vocab_size * beam_size; ++i)
+        ((int32_t *)(candidate_indices->data))[i] = i;
 
     // TODO: memory management
     // there should be a per-step ggml_context for intermediary results
+    // start of beam search:
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         // if (beam_indices != nullptr) {
         //     // If not `None`, it means in the last step we finalized one or
@@ -829,9 +843,9 @@ extern "C" float generate_sequence(
                 ongoing_beams += 1 - finished;
             }
             if (ongoing_beams >= beam_size) break;
-            if (finished_searches.size() >= beam_size) break;
+            if (finished_searches.size() >= beam_size)
+                goto end_of_beam_search;
         }
-        if (finished_searches.size() >= beam_size) break;
 
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
@@ -860,6 +874,7 @@ extern "C" float generate_sequence(
         scores = new_scores;
     }
 
+end_of_beam_search:
     // Ensure that hypotheses are sorted by decreasing scores before returning.
     std::sort(
         finished_searches.begin(),
@@ -871,5 +886,5 @@ extern "C" float generate_sequence(
     // TODO: return structured output
     *output_seq = *(finished_searches[0].seq);
 
-    return 0.0f;
+    return finished_searches[0].score;
 }
