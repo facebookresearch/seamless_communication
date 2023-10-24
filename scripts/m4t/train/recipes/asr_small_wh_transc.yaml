@@ -9,7 +9,7 @@ eval_data:
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15
-  fixed_batch_size: 40
+  fixed_batch_size: 30
   max_tgt_text_tokens_per_batch: 1000
   max_tgt_text_tokens_per_sample: 300
   max_units_per_sample: 1500
@@ -63,7 +63,7 @@ train_data:
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15
-  fixed_batch_size: 40
+  fixed_batch_size: 30
   max_tgt_text_tokens_per_batch: 600
   max_tgt_text_tokens_per_sample: 300
   max_units_per_sample: 1500
@@ -87,7 +87,7 @@ train_data:
   unit_tokenizer_name: seamlessM4T_large
 training:
   eval_steps: 1000 
-  float_dtype: fp32
+  float_dtype: bf16
   label_smoothing: 0.2
   learning_rate: 0.0001
   log_steps:  50 

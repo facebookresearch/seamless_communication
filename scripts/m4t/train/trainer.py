@@ -326,7 +326,7 @@ class UnitYTrainer:
                     loss_val = float("Inf")
                 else:
                     loss_val = loss.item()
-                del batch  # force memory release
+                self._release_memory(batch)
                 loss_hist.update(1, loss_val)
         eval_loss = loss_hist.reduce()
         self._update_eval_stats(eval_loss)
@@ -369,6 +369,11 @@ class UnitYTrainer:
         self.train_loss_hist.update(1, loss.item())
         self.batch_sizes.append(batch.speech_to_text.src_tokens.shape[0])
         self._train_step_log()
+        self._release_memory(batch)
+
+    def _release_memory(self, batch: dataloader.MultimodalSeqsBatch) -> None:
+        """ Explicitly release large memory consumers """
+        del batch
 
     def _get_state(self) -> Dict[str, Any]:
         model_state_dict = self.model.state_dict()

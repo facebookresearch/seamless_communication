@@ -93,7 +93,7 @@ def prepare_sbatch_config(
 #SBATCH --ntasks-per-node=1
 
 ## amount of mem
-#SBATCH --mem 50G
+#SBATCH --mem 500G
 
 ## amount of time in minutes
 #SBATCH --time 2400
