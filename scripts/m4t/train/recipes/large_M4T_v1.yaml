@@ -9,7 +9,7 @@ eval_data:
   manifest_list_path: null
   manifest_path_prefix: /fsx-ust/spopuri/datasets/S2ST/V1/M4T_V1_phase2/primary/
   max_seconds_per_input_audio: 150
-  fixed_batch_size: 40
+  fixed_batch_size: 10
   max_tgt_text_tokens_per_batch: null
   max_tgt_text_tokens_per_sample: 3000
   max_units_per_sample: 1500
@@ -28,7 +28,20 @@ eval_data:
   unit_tokenizer_name: seamlessM4T_large
 model:
   custom_params:
+    model_embed_dim: 1024
     nllb_vocabulary_size: 256103
+    w2v2_encoder_layers: 24
+    w2v2_encoder_layers_use_conformer: true
+    w2v2_encoder_layers_layernorm_features: false
+    w2v2_pos_encoder_type: "relative"
+    w2v2_pos_encoder_depth: 0
+    w2v2_pos_conv_kernel_size: 0
+    w2v2_num_pos_conv_groups: 0
+    nllb_encoder_layers: 24
+    nllb_decoder_layers: 24
+    t2u_encoder_layers: 6
+    t2u_decoder_layers: 6
+    unit_vocabulary_size: 10082
   from_model: null
   from_model_config: null
   pretrained_s2t_decoder_path: /fsx-ust/spopuri/datasets/PT_CKPT/S2T/S2T_M4T_V1_V1_cleaned.pt
@@ -45,10 +58,11 @@ train_data:
   manifest_list_path: /data/home/mavlyutov/train_configs/m4t_v1_train_manifests.txt
   manifest_path_prefix: /fsx-ust/spopuri/datasets/S2ST/V1/M4T_V1_phase2/primary 
   max_seconds_per_input_audio: 15
-  fixed_batch_size: null 
-  max_tgt_text_tokens_per_batch: 600
-  max_tgt_text_tokens_per_sample: 300
-  max_units_per_sample: 1500
+  fixed_batch_size: null
+  max_batch_size: 25
+  max_tgt_text_tokens_per_batch: 300
+  max_tgt_text_tokens_per_sample: 150
+  max_units_per_sample: 1200
   num_threads: 10 
   prefech_batches: 10
   prepend_tgt_lang_tag: true
@@ -63,11 +77,11 @@ train_data:
     num_units: null
   unit_tokenizer_name: seamlessM4T_large
 training:
-  eval_steps: 5000 
-  float_dtype: fp16
+  eval_steps: 1000
+  float_dtype: bf16
   label_smoothing: 0.2
-  learning_rate: 0.0001
-  log_steps: 200 
+  learning_rate: 0.00005
+  log_steps: 200
   max_epochs: 100
   patience: 10
   start_learning_rate: 1.0e-07

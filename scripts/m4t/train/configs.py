@@ -131,6 +131,9 @@ class DataLoadingConfig(Config):
     max_tgt_text_tokens_per_batch: Optional[int] = 1000
     """ Defines flexible batch construction """
 
+    max_batch_size: Optional[int] = None
+    """ In flexible batch construction sets max allowed size"""
+
     fixed_batch_size: Optional[int] = None
     """ If set, uses fixed batch size """
 
