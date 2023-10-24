@@ -629,7 +629,7 @@ int StandardBeamSearch_step(
     } else {
         // Make probabilities contain cumulative scores for each hypothesis.
         // TODO this seems incorrect
-        lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
+        lprobs = ggml_add(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
     }
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
@@ -650,6 +650,13 @@ int StandardBeamSearch_step(
     return topk;
 }
 
+
+void ggml_detach(ggml_tensor* a) {
+    a->op = GGML_OP_NONE;
+    a->src[0] = nullptr;
+}
+
+
 int _finalize_hypothesis(
     const SequenceGeneratorJob& job,
     ggml_context* ctx,
@@ -667,9 +674,6 @@ int _finalize_hypothesis(
     // Detect beams that reached the minimum length and that end with an EOS.
     bool eos = token == job.eos_idx;
     eos &= tok_score != -INFINITY;
-    // TODO ignored_beam_mask ?
-    // eos &= ggml_get_i32_1d(ignored_beam_mask, beam);
-    // ggml_set_i32_1d(eos_mask, beam, eos);
 
     if (!eos) return 0;
 
@@ -696,18 +700,20 @@ int _finalize_hypothesis(
         // Skip first EOS since it is always 0 and skews normalization.
         tok_score /= (float)std::pow((step_nr + 1), job.opts.len_penalty);
 
+    // TODO the score computed here isn't the same than computed by fairseq2.
     hypotheses.emplace_back(Hypothesis{tokens, tok_score, step_scores});
     return 1;
 }
 
 /// Generates a translation for a single sequence
 // TODO: finish this for beam_size=1
-// * implement the lprobs tweaking
+// * find out why score is different (seq is the same though)
 // TODO: add IncrementalStateBag support to avoid a O(N^3) generation.
 // TODO: support beam_size > 1:
 // * most layers assume un-batched input, but we want to handle several beams at once
 // * need to port "reorder_state_dict"
-// * once beam are selected with topk, we need to update seqs and scores tensors
+// TODO: clean up
+// * replace manual tensor tweaking with ggml_set_*d (ggml_set_slice could be useful)
 extern "C" float generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
@@ -805,6 +811,7 @@ extern "C" float generate_sequence(
         ggml_cgraph gf = ggml_build_forward(lprobs);
         printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
         ggml_graph_compute_with_ctx(ctx, &gf, 1);
+        ggml_detach(lprobs);
 
         // // Do not allow EOS before reaching the minimum sequence length.
         if (step_nr < job.opts.min_seq_len) {
@@ -814,7 +821,7 @@ extern "C" float generate_sequence(
         }
 
         // If we have reached the maximum length, force the last step to be EOS.
-        // TODO: should this be done in an hadoc loop ? how often does that happen anyway ?
+        // TODO: should this be done in an adhoc loop ? how often does that happen anyway ?
         if (step_nr == max_seq_len - 2) {
             // lprobs[:, :, : self.eos_idx]       = -torch.inf
             // lprobs[:, :,   self.eos_idx + 1 :] = -torch.inf
@@ -832,9 +839,14 @@ extern "C" float generate_sequence(
         for (size_t i = 0; i < beam_size; ++i)
             ggml_set_f32_1d(lprobs, vocab_size * i + pad_idx, -INFINITY);
 
-        // // Apply UNK penalty.
-        // if self.unk_idx is not None:
-        //     lprobs[:, :, self.unk_idx] -= self.opts.unk_penalty
+        // Apply UNK penalty.
+        if (job.unk_idx >= 0 && job.opts.unk_penalty != 0) {
+            // lprobs[:, :, self.unk_idx] -= self.opts.unk_penalty
+            auto lprobs_raw = ggml_get_data_f32(lprobs);
+            for (size_t i = 0; i < beam_size; ++i)
+                lprobs_raw[vocab_size * i + job.unk_idx] -= job.opts.unk_penalty;
+        }
+
 
         // Determine candidates for the next step.
         // (N, 2 x B)
@@ -871,24 +883,24 @@ extern "C" float generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         ggml_tensor* new_seqs = seqs;
+        // ggml_get_rows and ggml_set only work with floats ...
+        new_seqs->type = GGML_TYPE_F32;
         ggml_tensor* new_scores = scores;
         if (step_nr > start_step) {
             // (B, S), (B) -> (B, S)
-            // ggml_get_rows only work with floats ...
-            new_seqs->type = GGML_TYPE_F32;
             new_seqs = ggml_get_rows(ctx, seqs, beam_indices);
             new_scores = ggml_get_rows(ctx, new_scores, beam_indices);
         }
 
         // new_seqs[:, step_nr + 1] = next_tokens
-        ggml_set_1d_inplace(ctx, new_seqs, next_tokens, new_seqs->nb[0] * (step_nr + 1));
-        ggml_set_1d_inplace(ctx, new_scores, next_scores, new_scores->nb[0] * (step_nr + 1));
-
-        gf = ggml_build_forward(new_seqs);
+        gf = ggml_build_forward(ggml_set_1d_inplace(ctx, new_seqs, next_tokens, new_seqs->nb[0] * (step_nr + 1)));
         ggml_graph_compute_with_ctx(ctx, &gf, 1);
+        ggml_detach(new_seqs);
         new_seqs->type = GGML_TYPE_I32;
-        gf = ggml_build_forward(new_scores);
+
+        gf = ggml_build_forward(ggml_set_1d_inplace(ctx, new_scores, next_scores, new_scores->nb[0] * (step_nr + 1)));
         ggml_graph_compute_with_ctx(ctx, &gf, 1);
+        ggml_detach(new_scores);
 
         // TODO the old seqs and score buffers could be reused for next step
         seqs = new_seqs;
