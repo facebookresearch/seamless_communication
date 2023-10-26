@@ -4,6 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+import yaml
 
 from dataclasses import dataclass
 from typing import Dict, Any, Union, get_origin, get_args, List, Literal, Optional
@@ -23,7 +24,7 @@ class Config:
 
     @classmethod
     def _is_config(cls, type_like: Any) -> bool:
-        """ checks if type_like class is a subclass of Config"""
+        """Checks if type_like class is a subclass of Config"""
         try:
             if issubclass(type_like, Config):
                 return True
@@ -33,7 +34,7 @@ class Config:
 
     @classmethod
     def _is_optional_config(cls, type_like: Any) -> bool:
-        """ checks if type_like == Optional[subclass of Config] """
+        """Checks if type_like == Optional[subclass of Config]"""
         if not get_origin(type_like) == Union:
             return False
         args = [arg for arg in get_args(type_like) if arg is not type(None)]
@@ -47,7 +48,11 @@ class Config:
             # Optional[Config]
             if cls._is_optional_config(field_desc.type):
                 if non_null:
-                    type_arg = [arg for arg in get_args(field_desc.type) if arg is not type(None)][0]
+                    type_arg = [
+                        arg
+                        for arg in get_args(field_desc.type)
+                        if arg is not type(None)
+                    ][0]
                     kwargs[key] = type_arg.deserialize(asdict[key])
                 else:
                     kwargs[key] = None
@@ -62,6 +67,14 @@ class Config:
             else:
                 kwargs[key] = asdict.get(key)
         return cls(**kwargs)
+
+    @classmethod
+    def from_string(cls, serialized_config: str):
+        return cls.deserialize(yaml.load(serialized_config, Loader=yaml.FullLoader))
+
+    @classmethod
+    def from_file(cls, config_path: str):
+        return cls.deserialize(yaml.load(config_path, Loader=yaml.FullLoader))
 
 
 @dataclass

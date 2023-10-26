@@ -372,13 +372,21 @@ class UnitYTrainer:
         self._release_memory(batch)
 
     def _release_memory(self, batch: dataloader.MultimodalSeqsBatch) -> None:
-        """ Explicitly release large memory consumers """
+        """Explicitly release large memory consumers"""
         del batch
+
+    def _strip_state_key_prefixes(self, key: str) -> str:
+        """Removes state_dict keys prefixes associated with model wrappers"""
+        to_strip = ["module.", "model."]
+        for prefix in to_strip:
+            if key.startswith(prefix):
+                key = key[len(prefix):]
+        return key
 
     def _get_state(self) -> Dict[str, Any]:
         model_state_dict = self.model.state_dict()
         model_state_dict = {
-            key.replace("module.model.", ""): value
+            self._strip_state_key_prefixes(key): value
             for key, value in model_state_dict.items()
         }
         return model_state_dict
