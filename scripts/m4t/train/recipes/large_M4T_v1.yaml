@@ -77,10 +77,10 @@ train_data:
     num_units: null
   unit_tokenizer_name: seamlessM4T_large
 training:
-  eval_steps: 1000
+  eval_steps: 5000
   float_dtype: bf16
   label_smoothing: 0.2
-  learning_rate: 0.00005
+  learning_rate: 0.0001
   log_steps: 200
   max_epochs: 100
   patience: 10

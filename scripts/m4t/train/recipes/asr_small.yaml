@@ -36,7 +36,7 @@ model:
     model_embed_dim: 768
     nllb_decoder_layers: 3
     nllb_encoder_layers: 1
-    nllb_vocabulary_size: 256102
+    nllb_vocabulary_size: 20010
     t2u_decoder_layers: 1
     t2u_encoder_layers: 1
     unit_vocabulary_size: 10082
