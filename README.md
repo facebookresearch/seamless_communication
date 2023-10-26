@@ -146,8 +146,13 @@ scipy.io.wavfile.write("out_from_text.wav", rate=sample_rate, data=audio_array_f
 # scipy.io.wavfile.write("out_from_audio.wav", rate=sample_rate, data=audio_array_from_audio)
 ```
 
+> [!NOTE]  
+> Although the 🤗 Transformers integration uses the same weights and code, some of the generation strategies of the original seamlessM4T version - namely soft maximum length and n-gram deduplication - are not yet implemented. To obtain generations of similar quality, you can add `num_beams=5` to the generate method.
+
 For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
-[SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t).
+[SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/explanatory_notebooks/blob/main/seamless_m4t_hugging_face.ipynb).
+
+
 
 # Citation
 If you use SeamlessM4T in your work or any models/datasets/artifacts published in SeamlessM4T, please cite :
