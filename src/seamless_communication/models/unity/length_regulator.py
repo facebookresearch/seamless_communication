@@ -185,7 +185,7 @@ class VarianceAdaptor(Module):
         )
 
         # We need to apply the padding_mask again since we clamp by min_duration.
-        durations = apply_padding_mask(durations, padding_mask, fill_value=0)
+        durations = apply_padding_mask(durations, padding_mask, pad_value=0)
 
         # TODO: Implement pitch, energy predictors.
         # TODO: Implement GaussianUpsampling.
