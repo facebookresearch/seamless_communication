@@ -46,7 +46,7 @@ class EncDecAttentionsCollect(AttentionWeightHook):
         self.attn_scores = []
 
 
-class Token:
+class TranscriptionToken:
     text: str
     time_s: float
     prob: float
@@ -59,9 +59,9 @@ class Token:
 
 class Transcription:
     text: str
-    tokens: List[Token]
+    tokens: List[TranscriptionToken]
 
-    def __init__(self, tokens: List[Token]):
+    def __init__(self, tokens: List[TranscriptionToken]):
         self.text = " ".join([t.text for t in tokens])
         self.tokens = tokens
 
@@ -205,7 +205,7 @@ class Transcriber(nn.Module):
     @classmethod
     def _collect_word_level_stats(
         cls, pieces: List[str], token_timestamps: List[float], step_scores: List[float]
-    ) -> List[Token]:
+    ) -> List[TranscriptionToken]:
         assert len(pieces) == len(token_timestamps) and len(token_timestamps) == len(
             step_scores
         )
@@ -223,7 +223,8 @@ class Transcriber(nn.Module):
                 word_stats[-1][0] += token.replace("▁", " ")
                 word_stats[-1][2].append(np.exp(score))
         word_stats = [
-            Token(word, start, np.mean(probs)) for word, start, probs in word_stats
+            TranscriptionToken(word, start, np.mean(probs))
+            for word, start, probs in word_stats
         ]
         return word_stats
 
