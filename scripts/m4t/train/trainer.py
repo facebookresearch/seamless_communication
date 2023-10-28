@@ -67,10 +67,7 @@ class UnitYTrainWrapper(nn.Module):
         )
         text_logits = self.model.final_proj(text_decoder_out)
         # t2u
-        (
-            unit_encoder_out,
-            unit_encoder_padding_mask,
-        ) = self.t2u.encode(
+        (unit_encoder_out, unit_encoder_padding_mask,) = self.t2u.encode(
             text_decoder_output=text_decoder_out,
             text_decoder_padding_mask=text_decoder_padding_mask,
         )
@@ -380,7 +377,7 @@ class UnitYTrainer:
         to_strip = ["module.", "model."]
         for prefix in to_strip:
             if key.startswith(prefix):
-                key = key[len(prefix):]
+                key = key[len(prefix) :]
         return key
 
     def _get_state(self) -> Dict[str, Any]:

@@ -27,7 +27,12 @@ class SPMTokenizer(TextTokenizer):
     langs: Set[str]
     prepend_target_langtok_to_target: bool
 
-    def __init__(self, pathname: PathLike, langs: Sequence[str], prepend_target_langtok_to_target: bool = True) -> None:
+    def __init__(
+        self,
+        pathname: PathLike,
+        langs: Sequence[str],
+        prepend_target_langtok_to_target: bool = True,
+    ) -> None:
         """
         :param pathname:
             The pathname of the SentencePiece model file.
@@ -79,18 +84,24 @@ class SPMTokenizer(TextTokenizer):
         assert lang is not None
 
         if lang not in self.langs:
-            raise ValueError(f"`lang` must be a supported language, but is '{lang}' instead.")
+            raise ValueError(
+                f"`lang` must be a supported language, but is '{lang}' instead."
+            )
 
         if mode is None or mode == "source":
             prefix_tokens = []
             suffix_tokens = ["</s>"]
         elif mode == "target":
             prefix_tokens = (
-                ["</s>"] + [self._lang_tok_to_internal(lang)] if self.prepend_target_langtok_to_target else []
+                ["</s>"] + [self._lang_tok_to_internal(lang)]
+                if self.prepend_target_langtok_to_target
+                else []
             )
             suffix_tokens = ["</s>"]
         else:
-            raise ValueError(f"`mode` must be 'source' or 'target', but is '{mode}' instead.")
+            raise ValueError(
+                f"`mode` must be 'source' or 'target', but is '{mode}' instead."
+            )
 
         return SentencePieceEncoder(
             self.model,

@@ -128,10 +128,14 @@ def main() -> None:
 
     assert job_name is not None
     assert len(job_name.split()) == 1, "spaces in job name not allowed"
-    assert partitions and len(partitions.split()) == 1, "spaces in partitions not allowed"
+    assert (
+        partitions and len(partitions.split()) == 1
+    ), "spaces in partitions not allowed"
     assert os.path.exists(params_file), "config file is missing"
     training_script_path = os.path.join(os.path.dirname(__file__), "run_training.py")
-    assert os.path.exists(training_script_path), f"Can't find training script {training_script_path}"
+    assert os.path.exists(
+        training_script_path
+    ), f"Can't find training script {training_script_path}"
     assert num_nodes > 0
     if not os.path.exists(work_dir):
         logger.info(f"Creating workdir {work_dir}")

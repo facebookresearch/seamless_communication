@@ -61,14 +61,17 @@ class Translator(nn.Module):
         # Load the model.
         if device == torch.device("cpu"):
             dtype = torch.float32
-        self.model: UnitYModel = self.load_model_for_inference(
+        self.model = self.load_model_for_inference(
             load_unity_model, model_name_or_card, device, dtype
         )
+        assert isinstance(self.model, UnitYModel)
+
         self.text_tokenizer = load_unity_text_tokenizer(model_name_or_card)
+
+        self.unit_tokenizer: Optional[UnitTokenizer] = None
         if self.model.t2u_model is not None:
             self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
-        else:
-            self.unit_tokenizer = None
+
         self.device = device
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
         self.convert_to_fbank = WaveformToFbankConverter(
@@ -83,9 +86,10 @@ class Translator(nn.Module):
             pad_value=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
         # Load the vocoder.
-        self.vocoder: Vocoder = self.load_model_for_inference(
+        self.vocoder = self.load_model_for_inference(
             load_vocoder_model, vocoder_name_or_card, device, torch.float32
         )
+        assert isinstance(self.vocoder, Vocoder)
 
     @staticmethod
     def load_model_for_inference(
@@ -223,11 +227,14 @@ class Translator(nn.Module):
                 raise ValueError("src_lang must be specified for T2ST, T2TT tasks.")
 
             text = input
+            assert isinstance(text, str)
+
             self.token_encoder = self.text_tokenizer.create_encoder(
                 task="translation", lang=src_lang, mode="source", device=self.device
             )
             src = self.collate(self.token_encoder(text))
 
+        assert isinstance(self.model, UnitYModel)
         result = self.get_prediction(
             self.model,
             self.text_tokenizer,

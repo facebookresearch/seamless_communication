@@ -45,7 +45,7 @@ class NGramRepeatBlockProcessor(LogitsProcessor):
         :returns:
             modified lprobs tensor with banned tokens set to -inf
         """
-        banned_tokens = [[] for _ in range(batch_size * beam_size)]
+        banned_tokens: List[List[int]] = [[] for _ in range(batch_size * beam_size)]
 
         if step_nr + 2 - self.no_repeat_ngram_size >= 0:
             cpu_tokens: List[List[int]] = seqs.cpu().tolist()

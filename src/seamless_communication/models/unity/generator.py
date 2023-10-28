@@ -236,7 +236,7 @@ class UnitYGenerator:
             unit_seqs = unit_decoder_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.
             unit_seqs = apply_padding_mask(
-                unit_seqs, decoder_padding_mask, fill_value=unit_decoder_output.pad_idx
+                unit_seqs, decoder_padding_mask, pad_value=unit_decoder_output.pad_idx
             )
 
         # Convert to speech units.
