@@ -227,12 +227,7 @@ def test_to_numpy_works_with_transposed(ctx: Ctx) -> None:
     a[...] = np.arange(50).reshape(5, 10).astype(dtype=np.float32)
 
     gat = ggml.ggml_transpose(ctx, ga)
-
-    gf = ggml.ggml_build_forward(ga)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
     at = ggml.to_numpy(gat)
-
     assert np.allclose(a.T, at)
 
 
@@ -242,17 +237,28 @@ def test_ggml_slice(ctx: Ctx) -> None:
     a[...] = np.arange(50).reshape(5, 10).astype(dtype=np.float32)
 
     gs0 = ggml.ggml_slice(ctx, ga, 0, 3, 7)
-    gf = ggml.ggml_build_forward(ga)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
     s0 = ggml.to_numpy(gs0)
-
     assert np.allclose(a[:, 3:7], s0)
 
     gs1 = ggml.ggml_slice(ctx, ga, 1, 2, 5)
-    gf = ggml.ggml_build_forward(ga)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
     s1 = ggml.to_numpy(gs1)
     assert np.allclose(a[2:5, :], s1)
+
+
+@pytest.mark.xfail(reason="not implemented")
+def test_ggml_transpose_and_slice(ctx: Ctx) -> None:
+    ga = ggml.ggml_new_tensor_2d(ctx, ggml.GGML_TYPE_F32, 10, 5)
+    a = ggml.to_numpy(ga)
+    a[...] = np.arange(50).reshape(5, 10).astype(dtype=np.float32)
+
+    gat = ggml.ggml_transpose(ctx, ga)
+    gs0 = ggml.ggml_slice(ctx, gat, 0, 2, 5)
+    s0 = ggml.to_numpy(gs0)
+    assert np.allclose(a.T[:, 2:5], s0)
+
+    gs1 = ggml.ggml_slice(ctx, gat, 1, 3, 7)
+    s1 = ggml.to_numpy(gs1)
+    assert np.allclose(a.T[3:7, :], s1)
 
 
 def test_numpy_mul_mat(ctx: Ctx) -> None:

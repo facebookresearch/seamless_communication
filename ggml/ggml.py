@@ -59,6 +59,11 @@ def nb(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
         tensor = tensor.contents
     return tuple([tensor.nb[i] for i in range(4)])
 
+def ne(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
+    if isinstance(tensor, ctypes._Pointer):
+        tensor = tensor.contents
+    return tuple([tensor.ne[i] for i in range(4)])
+
 
 def strides(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
     if isinstance(tensor, ctypes._Pointer):
@@ -71,7 +76,8 @@ def strides(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
 
 def to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
     if not ggml_is_contiguous(tensor_p):
-        return _strided_to_numpy(tensor_p)
+        if not _almost_contiguous(tensor_p):
+            return _strided_to_numpy(tensor_p)
     tensor = tensor_p.contents
 
     res = _void_p_to_np_array(tensor.data, shape(tensor), numpy_dtype(tensor.type))
@@ -81,6 +87,24 @@ def to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
         res.strides = strides(tensor)  # type: ignore[assignment]
 
     return res
+
+
+def _almost_contiguous(tensor_p: ggml_tensor_p) -> bool:
+    """Distinguishes between fully strided and just transposed."""
+    tensor = tensor_p.contents
+    num_bytes = nb(tensor)
+    num_elem = ne(tensor)
+
+    # Sort the axis according to 'num_bytes'
+    nbe = sorted(zip(num_bytes, num_elem))
+    itemsize = ggml_type_size(tensor.type)
+    stride_exp = itemsize
+    for stride, e in nbe:
+        if stride != stride_exp:
+            return False
+        stride_exp *= e
+
+    return True
 
 
 def _strided_to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
