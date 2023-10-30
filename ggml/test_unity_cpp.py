@@ -108,8 +108,35 @@ def test_causal_attention_mask(ctx: Ctx):
     assert np.all(mask == mask_exp)
 
 
-def test_forward_ffn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
-    x = torch.empty((21, 1024))  # (seq_len, model_dim)
+
+def test_LayerNorm_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+    x = torch.empty((2, 21, 1024))
+    torch.nn.init.uniform_(x, -1, 1)
+
+    y_exp = pt_model.text_encoder.layers[0].ffn_layer_norm(x).numpy()
+    gx = ggml.from_numpy(ctx, x)
+    gy = ggml.forward("LayerNorm", g_model, "text_encoder.layers.0.ffn_layer_norm", gx)
+    ggml.build_and_compute(ctx, gy)
+
+    y = ggml.to_numpy(gy)
+    assert np.allclose(y_exp, y, atol=1e-5)
+
+
+def test_Linear_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+    x = torch.empty((2, 21, 1024))
+    torch.nn.init.uniform_(x, -1, 1)
+
+    y_exp = pt_model.text_encoder.layers[0].ffn.inner_proj(x).numpy()
+    gx = ggml.from_numpy(ctx, x)
+    gy = ggml.forward("Linear", g_model, "text_encoder.layers.0.ffn.inner_proj", gx)
+    ggml.build_and_compute(ctx, gy)
+
+    y = ggml.to_numpy(gy)
+    assert np.allclose(y_exp, y, atol=1e-5)
+
+
+def test_FeedForwardNetwork_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+    x = torch.empty((2, 21, 1024))  # (bs, seq_len, model_dim)
     torch.nn.init.uniform_(x, -1 / 32, 1 / 32)
 
     # Test FFN without LayerNorm
@@ -118,25 +145,10 @@ def test_forward_ffn(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     gy = ggml.forward(
         "StandardFeedForwardNetwork", g_model, "text_encoder.layers.0.ffn", gx
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    ggml.build_and_compute(ctx, gy)
 
-    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1])
+    y = ggml.to_numpy(gy)
     assert np.allclose(y_exp, y, atol=1e-5)
-
-
-def test_forward_layer_norm(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
-    x = torch.empty((21, 1024))
-    torch.nn.init.uniform_(x, -1, 1)
-
-    y_exp = pt_model.text_encoder.layers[0].ffn_layer_norm(x).numpy()
-    gx = ggml.from_numpy(ctx, x)
-    gy = ggml.forward("LayerNorm", g_model, "text_encoder.layers.0.ffn_layer_norm", gx)
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
-    y = ggml.to_numpy(gf.nodes[gf.n_nodes - 1])
-    assert np.allclose(y_exp, y, rtol=1e-3, atol=1e-4)
 
 
 def _name(tensor: ggml.ggml_tensor_p) -> bytes:

@@ -59,6 +59,7 @@ def nb(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
         tensor = tensor.contents
     return tuple([tensor.nb[i] for i in range(4)])
 
+
 def ne(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
     if isinstance(tensor, ctypes._Pointer):
         tensor = tensor.contents
@@ -360,6 +361,13 @@ def forward(
 
     with CppStr(prefix) as std_prefix:
         return fwd(model, std_prefix, *inputs)  # ignore: type[no-any-return]
+
+
+def build_and_compute(
+    ctx: ggml_context_p, tensor: ggml_tensor_p, num_threads: int = 1
+) -> None:
+    gf = ggml_build_forward(tensor)
+    ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), num_threads)
 
 
 @c_fn(lib)
