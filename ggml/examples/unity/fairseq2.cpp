@@ -396,32 +396,11 @@ extern "C" ggml_tensor* StandardTransformerDecoderLayer_forward(
     return seqs;
 }
 
-ggml_tensor* causal_mask_cache = nullptr;
-
 extern "C" ggml_tensor* causal_attention_mask(ggml_context* ctx, ggml_tensor* seqs) {
     auto seq_len = seqs->ne[1];
-    auto mask = causal_mask_cache;
-    // TODO: this cache only works as long as we don't change the size/device too often
     // TODO: allow other ggml_type
-    if (mask == nullptr || mask->backend != seqs->backend || mask->ne[0] < seq_len) {
-        printf("new causal_mask (%ld, %ld) created\n", seq_len, seq_len);
-        mask = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, seq_len, seq_len);
-        char* data = (char*)mask->data;
-
-        // tensor([[0., -inf, -inf, -inf],
-        //         [0.,   0., -inf, -inf],
-        //         [0.,   0.,   0., -inf],
-        //         [0.,   0.,   0.,   0.]])
-        for (int i = 0; i < seq_len; ++i) {
-            char* row = data + i * mask->nb[1];
-            for (int j = 0; j <= i; ++j) {*(float*)(row + j * mask->nb[0]) = 0;}
-            for (int j = i + 1; j < seq_len; ++j) {*(float*)(row + j * mask->nb[0]) = -INFINITY;}
-        }
-
-        causal_mask_cache = mask;
-    }
-
-    return ggml_view_2d(ctx, mask, seq_len, seq_len, mask->nb[1], 0);
+    ggml_tensor* mask = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, seq_len, seq_len);
+    return ggml_diag_mask_inf(ctx, mask, 0);
 }
 
 extern "C" ggml_tensor* StandardTransformerDecoder_forward(
