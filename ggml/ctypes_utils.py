@@ -55,6 +55,10 @@ def _py_type_to_ctype(t: type):
 
 def _c_fn(module, fn):
     c_fn = getattr(module, fn.__name__)
+    annotations = fn.__annotations__
+    if "return" not in annotations:
+        raise ValueError("@c_fn decorator requires type annotations on the decorated function.")
+
     c_fn.argtypes = [
         _py_type_to_ctype(t) for k, t in fn.__annotations__.items() if k != "return"
     ]

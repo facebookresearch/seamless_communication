@@ -27,6 +27,13 @@ extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_con
 extern "C" std::string* std_string_alloc(char* c_str);
 extern "C" void std_string_free(std::string* str);
 
+extern "C" ggml_tensor* ggml_slice(
+    struct ggml_context* ctx,
+    struct ggml_tensor* a,
+    int axis,
+    int64_t start,
+    int64_t end
+);
 
 extern "C" ggml_tensor* Linear_forward(
     fairseq2_model& model,

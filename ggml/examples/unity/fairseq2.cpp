@@ -103,7 +103,8 @@ ggml_tensor* reshape_num_head(ggml_context* ctx, ggml_tensor* x, int num_heads) 
     return x;
 }
 
-// TODO: flash_attn doesn't seem to work for cross attention because it assumes Q <= K
+// flash_attn doesn't work for cross attention because it assumes Q <= K
+// TODO: enable flash_attn only for the encoder
 # define UNITY_FLASH_ATTN 0
 
 extern "C" ggml_tensor* MultiheadAttention_forward(

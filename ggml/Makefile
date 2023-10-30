@@ -15,4 +15,4 @@ run: build/bin/unity
 	$< --model examples/unity/models/unity-large/ggml-model.bin
 
 tests: build/src/libggml.so
-	pytest test_unity_cpp.py -s
+	pytest ./*.py -s

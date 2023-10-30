@@ -21,17 +21,18 @@ from ctypes_utils import c_struct, c_fn, Ptr
 ### Helpers
 
 
-def numpy_dtype(ggml_type: ctypes.c_int) -> type:
+@functools.lru_cache(4)
+def numpy_dtype(ggml_type: ctypes.c_int) -> np.dtype:
     if ggml_type == 0:
         # GGML_TYPE_F32  = 0,
-        return np.float32
+        return np.dtype(np.float32)
 
     if ggml_type == 1:
         # GGML_TYPE_F16  = 1,
-        return np.float16
+        return np.dtype(np.float16)
 
     if ggml_type == 18:
-        return np.int32
+        return np.dtype(np.int32)
 
     raise NotImplementedError(f"Can't convert GGML_TYPE({ggml_type}) to a numpy.dtype")
 
@@ -60,36 +61,78 @@ def nb(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
 
 
 def strides(tensor: Union[ggml_tensor, ggml_tensor_p]) -> Tuple[int, ...]:
-    raise NotImplementedError()
     if isinstance(tensor, ctypes._Pointer):
         tensor = tensor.contents
     ndims = tensor.n_dims
     num_bytes = tuple([tensor.nb[i] for i in range(ndims)])
-    # TODO: convert to numpy strides
-    return num_bytes
+    strides = num_bytes[::-1]
+    return strides
 
 
-def to_numpy(tensor: Union[ggml_tensor, ggml_tensor_p]) -> np.ndarray:
-    if isinstance(tensor, ctypes._Pointer):
-        tensor = tensor.contents
+def to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
+    if not ggml_is_contiguous(tensor_p):
+        return _strided_to_numpy(tensor_p)
+    tensor = tensor_p.contents
+
+    res = _void_p_to_np_array(tensor.data, shape(tensor), numpy_dtype(tensor.type))
+
+    if ggml_is_transposed(tensor_p):
+        # Patch up strides to work with transposed ggml_tensor
+        res.strides = strides(tensor)  # type: ignore[assignment]
+
+    return res
+
+
+def _strided_to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
+    if ggml_is_transposed(tensor_p):
+        raise NotImplementedError(
+            "to_numpy doesn't support tensors both transposed and strided."
+        )
+
+    tensor = tensor_p.contents
 
     n_dim = tensor.n_dims
     t_shape = shape(tensor)
-    strides = nb(tensor)[:n_dim][::-1]
+    t_strides = strides(tensor)
 
-    # Convert the ggml data pointer to a pointer to ints with the same size (float16 -> uint16)
-    # This is needed because Python ctypes doesn't have "float16", and `as_array` only works with ctypes
     type_size = ggml_type_size(tensor.type)
-    int_width: type = getattr(ctypes, f"c_uint{8 * type_size}")
-    ptr = ctypes.cast(tensor.data, ctypes.POINTER(int_width))
-    # Create a numpy array with the wrong dtype
-    int_arr = np.ctypeslib.as_array(ptr, shape=t_shape)
-    # Reinterpret it to the right dtype
-    res = np.frombuffer(int_arr, dtype=numpy_dtype(tensor.type)).reshape(t_shape)
-    # Patch up strides to work with transposed ggml_tensor
-    res.strides = strides
+
+    full_shape = []
+    num_bytes = nb(tensor)
+
+    # Determine the full backing slice of bytes to read.
+    # TODO make this work for transposed array
+    n = 1
+    total_elements = 1
+    for d in range(n_dim - 1):
+        n = num_bytes[d + 1] // type_size // n
+        full_shape.append(n)
+        total_elements *= n
+    # We don't need to guess for the first dimension, since this doesn't impact striding.
+    full_shape.append(t_shape[0])
+    total_elements *= t_shape[0]
+    full_shape = full_shape[::-1]
+
+    res = _void_p_to_np_array(tensor.data, tuple(full_shape), numpy_dtype(tensor.type))
+
+    # Extract the correct slice
+    res = res[*(slice(0, n) for n in t_shape)]
+    # TODO: we could handle transposition here
 
     return res
+
+
+def _void_p_to_np_array(
+    data: ctypes.c_void_p, shape: Tuple[int, ...], dtype: np.dtype
+) -> np.ndarray:
+    # Convert the ggml data pointer to a pointer of bytes
+    # This is needed because Python ctypes doesn't have "float16", and `as_array` only works with ctypes
+    int_width: type = getattr(ctypes, f"c_uint{8 * dtype.itemsize}")
+    ptr = ctypes.cast(data, ctypes.POINTER(int_width))
+    # Create a numpy array with the wrong dtype
+    int_arr = np.ctypeslib.as_array(ptr, shape=shape)
+    # Reinterpret it to the right dtype
+    return np.frombuffer(int_arr, dtype=dtype).reshape(shape)
 
 
 GgmlNElem = ctypes.c_int64 * GGML_MAX_DIMS
@@ -299,7 +342,18 @@ def forward(
 def causal_attention_mask(
     ctx: ggml_context_p, seqs: Ptr[ggml_tensor]
 ) -> Ptr[ggml_tensor]:
-    return lib.causal_attention_mask(ctx, seqs)  # type: ignore[no-any-return]
+    ...
+
+
+@c_fn(lib)
+def ggml_slice(
+    ctx: ggml_context_p,
+    a: Ptr[ggml_tensor],
+    axis: int,
+    start: ctypes.c_int64,
+    end: ctypes.c_int64,
+) -> Ptr[ggml_tensor]:
+    ...
 
 
 @c_struct
