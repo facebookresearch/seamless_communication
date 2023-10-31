@@ -141,7 +141,7 @@ def _strided_to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
     res = _void_p_to_np_array(tensor.data, tuple(full_shape), numpy_dtype(tensor.type))
 
     # Extract the correct slice
-    res = res.__getitem__(*[slice(0, n) for n in t_shape])
+    res = res.__getitem__(tuple(slice(0, n) for n in t_shape))
     # TODO: we could handle transposition here
 
     return res
@@ -175,7 +175,7 @@ def _shape_to_ne(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
     # in GGML ne[0] indicates the contiguous dimension, ie the last one in numpy and torch
     ne = shape[::-1]
     if len(ne) >= GGML_MAX_DIMS:
-        return ne # type: ignore
+        return ne  # type: ignore
 
     # ne is always of the same length
     padding = (1,) * (GGML_MAX_DIMS - len(ne))
@@ -386,6 +386,20 @@ def ggml_slice(
     end: ctypes.c_int64,
 ) -> Ptr[ggml_tensor]:
     ...
+
+
+@c_fn(lib)
+def ggml_flatten_1d(
+    ctx: ggml_context_p, a: Ptr[ggml_tensor], dim: int
+) -> Ptr[ggml_tensor]:
+    return a
+
+
+@c_fn(lib)
+def ggml_unflatten_1d(
+    ctx: ggml_context_p, a: Ptr[ggml_tensor], dim: int, num_el: int
+) -> Ptr[ggml_tensor]:
+    return a
 
 
 @c_struct

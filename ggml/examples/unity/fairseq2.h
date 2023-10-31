@@ -35,6 +35,17 @@ extern "C" ggml_tensor* ggml_slice(
     int64_t end
 );
 
+/// Merge the given dimension and the previous one in the tensor.
+/// (..., num_heads, N, ...) -> (..., num_heads * N, ...)
+/// dim is the position of the resulting merged dimension
+/// ggml_flatten_1d(x, d) <==> torch.flatten(x, -1-d-1, -1-d0
+extern "C" ggml_tensor* ggml_flatten_1d(ggml_context* ctx, ggml_tensor* x, int dim);
+
+/// Split the given dimension.
+/// (..., K * N, ...) -> (..., K, N, ...)
+/// dim is the position of the output dimension with the given number of element (N).
+extern "C" ggml_tensor* ggml_unflatten_1d(ggml_context* ctx, ggml_tensor* x, int dim, int num_el);
+
 extern "C" ggml_tensor* Linear_forward(
     fairseq2_model& model,
     const std::string &prefix,

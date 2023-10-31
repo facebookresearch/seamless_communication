@@ -167,7 +167,7 @@ def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) 
     # Note: we use different lengths for queries and keys,
     # this tests the implementation in decoding context too.
     # Note2: ggml_flash_attn requires that we have more keys than queries
-    gxq = ggml.from_numpy(ctx, x[:, :11, :])
+    gxq = ggml.from_numpy(ctx, x[:, :11, :].contiguous())
     gx = ggml.from_numpy(ctx, x)
     ggml.ggml_set_name(gx, b"x")
     gy = ggml.forward(
@@ -182,7 +182,7 @@ def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) 
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
-    q_exp = self_attn._project_q(x[:, :11, :], None, None).numpy()
+    q_exp = self_attn.q_proj(x[:, :11, :]).numpy()
 
     y = ggml.to_numpy(gy)
     nodes = {}
@@ -206,13 +206,13 @@ def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) 
     if not UNITY_FLASH_ATTN:
         attn_weights = nodes[b"attn_weights"]
         [attn_weights_exp] = attn_weights_hook._storage
-        # Fix the shape of attn_weights_exp
-        attn_weights_exp = attn_weights_exp.unflatten(0, (2, 16)).numpy()
+        attn_weights_exp = attn_weights_exp.numpy()
         assert attn_weights_exp.shape == attn_weights.shape
-        # GGML is very agressively reducing small softmax weights to 0.
-        # assert np.allclose(attn_weights_exp, attn_weights, atol=1e-3)
+        # GGML is very agressively reducing small softmax weights to 0,
+        # so the error isn't that small
+        assert np.allclose(attn_weights_exp, attn_weights, atol=1e-3)
         # But the sums should be close to 1
-        assert np.allclose(np.sum(attn_weights, axis=-1), np.ones((2, 16, 11)))
+        assert np.allclose(np.sum(attn_weights, axis=-1), np.ones((2 * 16, 11)))
         # And the maximum index should match the original ones.
         assert np.allclose(
             np.argmax(attn_weights_exp, axis=-1), np.argmax(attn_weights, axis=-1)
