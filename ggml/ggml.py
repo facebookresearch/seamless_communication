@@ -175,7 +175,7 @@ def _shape_to_ne(shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
     # in GGML ne[0] indicates the contiguous dimension, ie the last one in numpy and torch
     ne = shape[::-1]
     if len(ne) >= GGML_MAX_DIMS:
-        return  # type: ignore
+        return ne # type: ignore
 
     # ne is always of the same length
     padding = (1,) * (GGML_MAX_DIMS - len(ne))

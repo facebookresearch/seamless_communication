@@ -8,6 +8,7 @@ import fairseq2.nn
 import fairseq2.nn.transformer
 import logging
 import sys
+from typing import Tuple
 from pathlib import Path
 from ctypes_utils import Ptr
 from ctypes import c_void_p
@@ -316,16 +317,17 @@ def test_torch_spda_vs_ggml_flash_attn(ctx: Ctx) -> None:
     assert np.allclose(y_exp, y)
 
 
-def test_ggml_softmax_vs_torch(ctx: Ctx) -> None:
-    x = torch.empty((5, 8, 4))
+@pytest.mark.parametrize("shape", [(5, 8, 4), (2, 5, 8, 4)])
+def test_ggml_softmax_vs_torch(ctx: Ctx, shape: Tuple[int, ...]) -> None:
+    x = torch.empty(shape)
     torch.nn.init.uniform_(x, -1, 1)
     y_exp = torch.softmax(x, dim=-1).numpy()
 
     gx = ggml.from_numpy(ctx, x.numpy())
     gy = ggml.ggml_soft_max(ctx, gx)
+
+    ggml.build_and_compute(ctx, gy)
+
     y = ggml.to_numpy(gy)
-
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
     assert np.allclose(y_exp, y, rtol=1e-3)
+    assert np.allclose(np.argmax(y_exp, axis=-1), np.argmax(y, axis=-1))
