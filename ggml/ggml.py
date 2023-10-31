@@ -141,7 +141,7 @@ def _strided_to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
     res = _void_p_to_np_array(tensor.data, tuple(full_shape), numpy_dtype(tensor.type))
 
     # Extract the correct slice
-    res = res[*(slice(0, n) for n in t_shape)]
+    res = res.__getitem__(*[slice(0, n) for n in t_shape])
     # TODO: we could handle transposition here
 
     return res
