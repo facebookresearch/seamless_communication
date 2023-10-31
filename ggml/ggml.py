@@ -406,7 +406,7 @@ def ggml_unflatten_1d(
 class SequenceGeneratorOptions:
     beam_size: int
     min_seq_len: int
-    soft_max_seq_len_a: int
+    soft_max_seq_len_a: float
     soft_max_seq_len_b: int
     hard_max_seq_len: int
     len_penalty: float

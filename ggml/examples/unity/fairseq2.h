@@ -114,7 +114,7 @@ struct SequenceGeneratorOptions {
     /// sequence length. The generated sequences (including prefix sequence) will
     /// have the maximum length of ``min(hard_max_seq_len, ax + b)``. See also
     /// ``hard_max_seq_len``.
-    int soft_max_seq_len_a = 1;
+    float soft_max_seq_len_a = 1;
     int soft_max_seq_len_b = 200;
 
     /// The hard limit on maximum length of generated sequences.

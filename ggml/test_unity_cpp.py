@@ -224,16 +224,16 @@ def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) 
 def test_StandardTransformerEncoderLayer_forward(
     ctx: Ctx, g_model: c_void_p, pt_model: Any
 ) -> None:
-    x = torch.empty((1, 21, 1024))
-    padding_mask = torch.ones((1, 21))
+    x = torch.empty((2, 21, 1024))
+    padding_mask = torch.ones((2, 21))
     torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
     layer = pt_model.text_encoder.layers[0]
 
-    gx = ggml.from_numpy(ctx, x[0])
+    gx = ggml.from_numpy(ctx, x)
     ggml.ggml_set_name(gx, b"x")
-    gpad = ggml.from_numpy(ctx, padding_mask[0])
+    gpad = ggml.from_numpy(ctx, padding_mask)
     ggml.ggml_set_name(gpad, b"padding_mask")
     gy = ggml.forward(
         "StandardTransformerEncoderLayer",
@@ -248,7 +248,7 @@ def test_StandardTransformerEncoderLayer_forward(
     y = ggml.to_numpy(gy)
 
     y_exp, _ = layer(x, padding_mask)
-    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+    y_exp = y_exp.numpy()
 
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-2)
@@ -257,14 +257,14 @@ def test_StandardTransformerEncoderLayer_forward(
 def test_StandardTransformerEncoder_forward(
     ctx: Ctx, g_model: c_void_p, pt_model: Any
 ) -> None:
-    x = torch.empty((1, 21, 1024))
-    padding_mask = torch.ones((1, 21))
+    x = torch.empty((2, 21, 1024))
+    padding_mask = torch.ones((2, 21))
     torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
-    gx = ggml.from_numpy(ctx, x[0])
+    gx = ggml.from_numpy(ctx, x)
     ggml.ggml_set_name(gx, b"x")
-    gpad = ggml.from_numpy(ctx, padding_mask[0])
+    gpad = ggml.from_numpy(ctx, padding_mask)
     ggml.ggml_set_name(gpad, b"padding_mask")
     gy = ggml.forward(
         "StandardTransformerEncoder",
@@ -279,7 +279,7 @@ def test_StandardTransformerEncoder_forward(
     y = ggml.to_numpy(gy)
 
     y_exp, _ = pt_model.text_encoder(x, padding_mask)
-    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+    y_exp = y_exp.numpy()
 
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-2)

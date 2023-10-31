@@ -502,7 +502,7 @@ int _determine_max_seq_len(const SequenceGeneratorJob& job, int source_seq_len) 
     if (source_seq_len <= 0 || opts.soft_max_seq_len_a <= 0) {
         max_seq_len = opts.hard_max_seq_len;
     } else {
-        max_seq_len = std::min(opts.hard_max_seq_len, int(opts.soft_max_seq_len_a * source_seq_len + opts.soft_max_seq_len_b));
+        max_seq_len = std::min(opts.hard_max_seq_len, int(opts.soft_max_seq_len_a * source_seq_len) + opts.soft_max_seq_len_b);
     }
 
     if (opts.min_seq_len > max_seq_len) {
@@ -839,14 +839,16 @@ extern "C" float generate_sequence(
             encoder_output,
             encoder_padding_mask
             // state_bag=state_bag,
-        );
+        ); // (B, S, D)
 
         // state_bag.increment_step()
 
         // Because of no IncrementalStateBag decoder_output here is of shape (B, S, D)
         // Just look at the last token.
         decoder_output = ggml_slice(ctx, decoder_output, 1, step_nr, step_nr+1);
-        ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
+        decoder_output = ggml_cont(ctx, decoder_output);
+        decoder_output = ggml_flatten_1d(ctx, decoder_output, 0);  // (B, model_dim)
+        ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);  // (B, vocab_size)
         ggml_tensor* lprobs = ggml_log_softmax(ctx, logits);
 
         // Compute lprobs here so we can modify it in place in the lprob tweaking phase
