@@ -19,6 +19,7 @@ Links:
 - [Paper](https://dl.fbaipublicfiles.com/seamless/seamless_m4t_paper.pdf)
 - [Demo](https://seamless.metademolab.com/)
 - [🤗 Hugging Face space](https://huggingface.co/spaces/facebook/seamless_m4t)
+- [🤗 Hugging Face SeamlessM4T's docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t)
 
 # Quick Start
 ## Installation
@@ -96,6 +97,62 @@ Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also relea
 
 ## SeamlessAlign mined dataset
 We open-source the metadata to SeamlessAlign, the largest open dataset for multimodal translation, totaling 270k+ hours of aligned Speech and Text data. The dataset can be rebuilt by the community based on the [SeamlessAlign readme](docs/m4t/seamless_align_README.md).
+
+## 🤗 Transformers Usage
+
+SeamlessM4T is available in the Transformers library, requiring minimal dependencies. Steps to get started:
+
+1. First install the 🤗 [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
+
+```
+pip install git+https://github.com/huggingface/transformers.git sentencepiece
+```
+
+2. Run the following Python code to generate speech samples. Here the target language is Russian:
+
+```py
+from transformers import AutoProcessor, SeamlessM4TModel
+
+processor = AutoProcessor.from_pretrained("facebook/hf-seamless-m4t-medium")
+model = SeamlessM4TModel.from_pretrained("facebook/hf-seamless-m4t-medium")
+
+# from audio
+audio = ... # must be a 16 kHz waveform array (list or numpy array)
+audio_inputs = processor(audios=audio, return_tensors="pt")
+audio_array_from_audio = model.generate(**audio_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+
+# from text
+text_inputs = processor(text = "Hello, my dog is cute", src_lang="eng", return_tensors="pt")
+audio_array_from_text = model.generate(**text_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+```
+
+3. Listen to the audio samples either in an ipynb notebook:
+
+```py
+from IPython.display import Audio
+
+sample_rate = model.sampling_rate
+Audio(audio_array_from_text, rate=sample_rate)
+# Audio(audio_array_from_audio, rate=sample_rate)
+```
+
+Or save them as a `.wav` file using a third-party library, e.g. `scipy`:
+
+```py
+import scipy
+
+sample_rate = model.sampling_rate
+scipy.io.wavfile.write("out_from_text.wav", rate=sample_rate, data=audio_array_from_text)
+# scipy.io.wavfile.write("out_from_audio.wav", rate=sample_rate, data=audio_array_from_audio)
+```
+
+> [!NOTE]  
+> Although the 🤗 Transformers integration uses the same weights and code, some of the generation strategies of the original seamlessM4T version - namely soft maximum length and n-gram deduplication - are not yet implemented. To obtain generations of similar quality, you can add `num_beams=5` to the generate method.
+
+For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
+[SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/explanatory_notebooks/blob/main/seamless_m4t_hugging_face.ipynb).
+
+
 
 # Citation
 If you use SeamlessM4T in your work or any models/datasets/artifacts published in SeamlessM4T, please cite :
