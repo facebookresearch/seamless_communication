@@ -112,5 +112,11 @@ class SPMTokenizer(TextTokenizer):
         )
 
     @finaloverride
+    def create_raw_encoder(
+        self, *, device: Optional[Device] = None, pin_memory: bool = False
+    ) -> TextTokenEncoder:
+        return SentencePieceEncoder(self.model, device=device, pin_memory=pin_memory)
+
+    @finaloverride
     def create_decoder(self) -> TextTokenDecoder:
         return SentencePieceDecoder(self.model)
