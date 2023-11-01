@@ -81,14 +81,12 @@ class ChunkTransformerEncoder(TransformerEncoder):
 
     @finaloverride
     def forward(
-        self,
-        seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
-        *,
-        layer_output_hook: Optional[EncoderLayerOutputHook] = None,
+        self, seqs: Tensor, padding_mask: Optional[PaddingMask]
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        if layer_output_hook is not None and self.layers.drop_p > 0.0:
-            raise ValueError("`layer_hook` must be `None` when LayerDrop is enabled.")
+        if self._layer_output_hooks and self.layers.drop_p > 0.0:
+            raise ValueError(
+                "The layer output hooks cannot be run when LayerDrop is enabled."
+            )
 
         if self.preliminary_dropout is not None:
             seqs = self.preliminary_dropout(seqs)
@@ -100,8 +98,8 @@ class ChunkTransformerEncoder(TransformerEncoder):
         for layer_idx, layer in enumerate(self.layers.drop_iter()):
             seqs, padding_mask = layer(seqs, padding_mask, self_attn_mask)
 
-            if layer_output_hook is not None:
-                if not layer_output_hook(layer_idx, seqs, padding_mask, num_layers):
+            for hook in self._layer_output_hooks.values():
+                if not hook(layer_idx, seqs, padding_mask, num_layers):
                     break
 
         return seqs, padding_mask

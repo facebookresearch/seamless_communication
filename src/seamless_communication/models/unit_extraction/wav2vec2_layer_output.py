@@ -112,9 +112,10 @@ class Wav2Vec2LayerOutputModel(nn.Module):
             The batch of sequences to process.
         """
         seqs, padding_mask = self.encoder_frontend(batch.seqs, batch.padding_mask)
+
         w2v2_layer_output = None
 
-        def layer_output_hook(
+        def hook(
             layer_idx: int,
             layer_output: Tensor,
             layer_padding_mask: Optional[PaddingMask],
@@ -130,7 +131,9 @@ class Wav2Vec2LayerOutputModel(nn.Module):
 
             return True
 
-        _, _ = self.encoder(seqs, padding_mask, layer_output_hook=layer_output_hook)
+        with self.encoder.register_layer_output_hook(hook):
+            _, _ = self.encoder(seqs, padding_mask)
 
         assert w2v2_layer_output is not None
+
         return w2v2_layer_output
