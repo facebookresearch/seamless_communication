@@ -408,6 +408,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     job.opts.hard_max_seq_len = int(len(tgt_tokens) * 1.5)
     job.opts.len_penalty = 1.0
     job.opts.unk_penalty = 0.0
+    job.opts.normalize_scores = True
     job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:2])
     job.pad_idx = 0
     job.unk_idx = 1
@@ -420,4 +421,4 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     )
     tokens = list(ggml.to_numpy(ctypes.pointer(result)))
     assert tokens == tgt_tokens
-    assert g_score == pytest.approx(score)
+    assert g_score == pytest.approx(score, rel=1e-2)

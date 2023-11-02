@@ -634,13 +634,13 @@ void _bootstrap_seqs_and_scores(
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
-    for (int i = 0; i < prefix_seq_len; ++i) {
+    for (int i = 1; i < prefix_seq_len; ++i) {
         int p = ggml_get_i32_1d(job.prefix_seq, i);
         p_score += ggml_get_f32_1d(lprobs, i * vocab_size + p);
         for (int b = 0; b < beam_size; ++b) {
             // scores: (N, S)
             // Note: First step (e.g. BOS)'s score is always 0.
-            ggml_set_f32_1d(scores, b * max_seq_len + i + 1, p_score);
+            ggml_set_f32_1d(scores, b * max_seq_len + i, p_score);
         }
     }
 }
@@ -658,57 +658,26 @@ struct Hypothesis {
 };
 
 
-/// Represents a standard beam search algoritm.
-int StandardBeamSearch_step(
+/// Finds the topk indices
+int topk(
     ggml_context* ctx,
-    int step_nr,
-    bool is_start_step,
     ggml_tensor* lprobs,  // (B, V)
-    ggml_tensor* last_scores,  // (B)
+    std::int64_t k,
     ggml_tensor* candidate_indices
 ) {
-    GGML_ASSERT(lprobs->n_dims == 2);
-    int vocab_size = lprobs->ne[0];
-    int beam_size = lprobs->ne[1];
-    GGML_ASSERT(last_scores->n_dims == 2);
-    GGML_ASSERT(last_scores->ne[0] == 1);
-    GGML_ASSERT(last_scores->ne[1] == beam_size);
-    GGML_ASSERT(candidate_indices->ne[0] == beam_size * vocab_size);
-
-    // should this be done by the caller ?
-    if (is_start_step) {
-        // At the initial step, all hypotheses are equally likely, so we use
-        // only the first beam.
-        lprobs = ggml_slice(ctx, lprobs, 1, 0, 1);
-        lprobs = ggml_cont(ctx, lprobs);
-        // The first step always indicates the beginning of the sequence and
-        // has no score.
-        if (step_nr > 0) {
-            last_scores = ggml_slice(ctx, last_scores, 1, 0, 1);
-            lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
-        }
-    } else {
-        // Make probabilities contain cumulative scores for each hypothesis.
-        // TODO this seems incorrect
-        lprobs = ggml_add(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
-    }
-
-    ggml_cgraph gf = ggml_build_forward(lprobs);
-    ggml_graph_compute_with_ctx(ctx, &gf, 1);
-
     // Take the best 2 x `beam_size` predictions. We'll choose the first
     // `beam_size` of these which don't predict EOS to continue with.
     // (N, 2 x B)
     // `vocab_size` - 1 to never select PAD.
-    int topk = std::min(2 * beam_size, vocab_size - 1);
-
+    std::int64_t K = std::min(k, ggml_nelements(lprobs));
     auto comp = [lprobs](std::int32_t a, std::int32_t b) {
         return ggml_get_f32_1d(lprobs, a) > ggml_get_f32_1d(lprobs, b);
     };
+    GGML_ASSERT(ggml_nelements(candidate_indices) >= k);
     auto cand = (std::int32_t*)candidate_indices->data;
-    std::partial_sort(cand, cand + topk, cand + (beam_size * vocab_size), comp);
+    std::partial_sort(cand, cand + K, cand + ggml_nelements(lprobs), comp);
 
-    return topk;
+    return K;
 }
 
 
@@ -751,6 +720,7 @@ int _finalize_hypothesis(
     // Convert from cumulative to per-step scores.
     auto sc = (float*)step_scores->data;
     float last_score = tok_score;
+    sc[step_nr + 1] = last_score;
     for (int i = step_nr; i >= 0; --i) {
         float sc0 = ggml_get_f32_1d(scores, scores->ne[0] * beam + i);
         sc[i] = last_score - sc0;
@@ -912,21 +882,34 @@ extern "C" float generate_sequence(
                 lprobs_raw[vocab_size * i + job.unk_idx] -= job.opts.unk_penalty;
         }
 
+        ggml_tensor* last_scores = ggml_slice(ctx, scores, 0, step_nr, step_nr+1);
+        if (step_nr == start_step) {
+            // At the initial step, all hypotheses are equally likely, so we use
+            // only the first beam.
+            lprobs = ggml_slice(ctx, lprobs, 1, 0, 1);
+            lprobs = ggml_cont(ctx, lprobs);
+            // The first step always indicates the beginning of the sequence and has no score.
+            if (step_nr > 0) {
+                last_scores = ggml_slice(ctx, last_scores, 1, 0, 1);
+                lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
+            }
+        } else {
+            // Make probabilities contain cumulative scores for each hypothesis.
+            lprobs = ggml_add(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
+        }
+
+        gf = ggml_build_forward(lprobs);
+        ggml_graph_compute_with_ctx(ctx, &gf, 1);
 
         // Determine candidates for the next step.
         // (N, 2 x B)
-        int topk = StandardBeamSearch_step(
-            ctx,
-            step_nr,
-            step_nr == start_step,
-            lprobs,
-            ggml_slice(ctx, scores, 0, step_nr, step_nr+1),
-            candidate_indices
+        std::int64_t K = topk(
+            ctx, lprobs, std::min(2 * beam_size, vocab_size - 1), candidate_indices
         );
 
         std::size_t ongoing_beams = 0;
         int new_num_searches = 0;
-        for (std::int32_t i = 0; i < topk; ++i) {
+        for (std::int32_t i = 0; i < K; ++i) {
             int c = ggml_get_f32_1d(candidate_indices, i);
             float tok_score = ggml_get_f32_1d(lprobs, c);
             int finished = _finalize_hypothesis(job, ctx, step_nr, vocab_size, c, tok_score, seqs, scores, finished_searches);
@@ -948,24 +931,29 @@ extern "C" float generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         ggml_tensor* new_seqs = seqs;
-        // ggml_get_rows and ggml_set only work with floats ...
-        new_seqs->type = GGML_TYPE_F32;
         ggml_tensor* new_scores = scores;
         if (step_nr > start_step) {
             // (B, S), (B) -> (B, S)
+            // ggml_get_rows and ggml_set only work with floats ...
+            new_seqs->type = GGML_TYPE_F32;
             new_seqs = ggml_get_rows(ctx, seqs, beam_indices);
-            new_scores = ggml_get_rows(ctx, new_scores, beam_indices);
+            new_scores = ggml_get_rows(ctx, scores, beam_indices);
+            gf = ggml_build_forward(new_seqs);
+            ggml_graph_compute_with_ctx(ctx, &gf, 1);
+            ggml_detach(new_seqs);
+            new_seqs->type = GGML_TYPE_I32;
+
+            gf = ggml_build_forward(new_scores);
+            ggml_graph_compute_with_ctx(ctx, &gf, 1);
+            ggml_detach(new_scores);
         }
 
         // new_seqs[:, step_nr + 1] = next_tokens
-        gf = ggml_build_forward(ggml_set_1d_inplace(ctx, new_seqs, next_tokens, new_seqs->nb[0] * (step_nr + 1)));
-        ggml_graph_compute_with_ctx(ctx, &gf, 1);
-        ggml_detach(new_seqs);
-        new_seqs->type = GGML_TYPE_I32;
-
-        gf = ggml_build_forward(ggml_set_1d_inplace(ctx, new_scores, next_scores, new_scores->nb[0] * (step_nr + 1)));
-        ggml_graph_compute_with_ctx(ctx, &gf, 1);
-        ggml_detach(new_scores);
+        // new_scores[:, step_nr + 1] = next_scores
+        for (std::size_t i = 0; i < beam_size; ++i) {
+            ((std::int32_t*)new_seqs->data)[step_nr + 1 + i * max_seq_len] = ggml_get_i32_1d(next_tokens, i);
+            ((float*)new_scores->data)[step_nr + 1 + i * max_seq_len] = ggml_get_f32_1d(next_scores, i);
+        }
 
         // TODO the old seqs and score buffers could be reused for next step
         seqs = new_seqs;
