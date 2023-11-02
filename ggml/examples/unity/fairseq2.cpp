@@ -212,6 +212,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_set_name(qk, "qk_scaled");
 
     // TODO: Should we replace this by ggml_diag_mask_inf ?
+    // TODO: masks have the wrong shape to be added here
     if (mask) qk = ggml_add(ctx, qk, mask);
     // TODO: upgrade qk to float32 if needed
     ggml_tensor* attn_weights = ggml_soft_max(ctx, qk);  // (B * H, S, Sk)
@@ -341,7 +342,14 @@ extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
         embeds = ggml_get_rows(ctx, embed_weights, seqs);
     } else {
         // ggml_get_rows isn't very flexible, we have to handle the reshape ourselves.
-        embeds = ggml_get_rows(ctx, embed_weights, ggml_reshape_1d(ctx, seqs, ggml_nelements(seqs)));
+        ggml_tensor* flat_seqs = seqs;
+        if (!ggml_is_contiguous(seqs)) {
+            flat_seqs->type = GGML_TYPE_F32;
+            flat_seqs = ggml_cont(ctx, flat_seqs);
+        }
+        flat_seqs = ggml_reshape_1d(ctx, flat_seqs, ggml_nelements(seqs));
+        flat_seqs->type = GGML_TYPE_I32;
+        embeds = ggml_get_rows(ctx, embed_weights, flat_seqs);
         embeds = ggml_reshape_4d(ctx, embeds, embed_weights->ne[0], seqs->ne[0], seqs->ne[1], seqs->ne[2]);
         embeds->n_dims = seqs->n_dims + 1;
     }
@@ -551,8 +559,8 @@ void _fan_out_encoder_output(
     // (S_enc, M) -> (B, S_enc, M)
     *encoder_output_out = ggml_repeat(ctx, encoder_output, shape);
     // (S_enc) -> (B, S_enc)
-    ggml_tensor* shape_mask = ggml_new_tensor_2d(ctx, GGML_TYPE_I8, encoder_padding_mask->ne[0], beam_size);
     if (encoder_padding_mask != nullptr) {
+        ggml_tensor* shape_mask = ggml_new_tensor_3d(ctx, GGML_TYPE_I8, encoder_padding_mask->ne[0], 1, beam_size);
         *encoder_padding_mask_out = ggml_repeat(ctx, encoder_padding_mask, shape_mask);
     }
 }
@@ -599,6 +607,7 @@ void _bootstrap_seqs_and_scores(
     // output to correctly initialize its incremental state.
     // Note: we don't start decoding the last prefix token just yet.
     seqs = ggml_slice(ctx, seqs, 0, 0, prefix_seq_len - 1);
+    seqs->type = GGML_TYPE_I32;
 
     // Bootstrap the model state with prefix sequence.
     seqs = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", seqs);
@@ -608,7 +617,7 @@ void _bootstrap_seqs_and_scores(
         seqs,
         /*padding_mask*/ nullptr,
         encoder_output,
-        encoder_padding_mask
+        /*encoder_padding_mask*/ nullptr // TODO: do we need padding for encoder ?
         // TODO: state_bag
     );
     // TODO state_bag.increment_step(prefix_seq_len - 1)
@@ -675,6 +684,7 @@ int StandardBeamSearch_step(
         // The first step always indicates the beginning of the sequence and
         // has no score.
         if (step_nr > 0) {
+            last_scores = ggml_slice(ctx, last_scores, 1, 0, 1);
             lprobs = ggml_add_inplace(ctx, lprobs, ggml_repeat(ctx, last_scores, lprobs));
         }
     } else {
@@ -791,7 +801,9 @@ extern "C" float generate_sequence(
     // Initialize buffers. (B, S)
     ggml_tensor* seqs = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, max_seq_len, beam_size);
     ggml_set_i32(seqs, 0);
+    ggml_set_name(seqs, "seqs_0");
     ggml_tensor* scores = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, max_seq_len, beam_size);
+    ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
 
     IncrementalStateBag state_bag = {};
@@ -845,7 +857,7 @@ extern "C" float generate_sequence(
             decoder_input,
             nullptr,  // We never generate PAD.
             encoder_output,
-            encoder_padding_mask
+            /*encoder_padding_mask*/ nullptr // TODO: do we need padding for encoder ?
             // state_bag=state_bag,
         ); // (B, S, D)
 

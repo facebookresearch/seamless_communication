@@ -401,7 +401,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     encoder_padding_mask = ggml.from_numpy(ctx, text_out["encoder_padding_mask"])
 
     job = ggml.SequenceGeneratorJob()
-    job.opts.beam_size = 1
+    job.opts.beam_size = 2
     job.opts.min_seq_len = 1
     job.opts.soft_max_seq_len_a = 1
     job.opts.soft_max_seq_len_b = 200
