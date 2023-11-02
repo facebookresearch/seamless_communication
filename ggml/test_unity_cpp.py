@@ -308,19 +308,20 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
 def test_TransformerEmbeddingFrontend_forward(
     ctx: Ctx, g_model: c_void_p, pt_model: Any
 ) -> None:
-    seq = torch.arange(20).reshape(1, 20)
-    seq_len = torch.tensor([20])
-    gseq = ggml.from_numpy(ctx, seq[0].numpy().astype(np.int32))
+    seq = torch.arange(2 * 20).reshape(2, 20)
+    seq[1, 15:] = 0  # padding for second sentence
+    seq_len = torch.tensor([20, 15])
+    gseq = ggml.from_numpy(ctx, seq.numpy().astype(np.int32))
+
     ggml.ggml_set_name(gseq, b"seq")
     gy = ggml.forward(
         "TransformerEmbeddingFrontend", g_model, "text_decoder_frontend", gseq
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    ggml.build_and_compute(ctx, gy)
     y = ggml.to_numpy(gy)
 
     y_exp, _ = pt_model.text_decoder_frontend(seq, seq_len)
-    y_exp = y_exp.squeeze(0).numpy()  # remove batch dimension
+    y_exp = y_exp.numpy()
 
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-6)
