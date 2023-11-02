@@ -24,10 +24,10 @@ Links:
 # Quick Start
 ## Installation
 > [!NOTE]
-> One of the prerequisites of SeamlessM4T is [fairseq2](https://github.com/facebookresearch/fairseq2) which has pre-built packages available only
+> One of the prerequisites of SeamlessM4T is [fairseq2 v0.1.1](https://github.com/facebookresearch/fairseq2/tree/v0.1.1) which has pre-built packages available only
 > for Linux x84-86 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
 > might not be installed on your machine. If you experience any installation issues, please refer to its
-> [README](https://github.com/facebookresearch/fairseq2) for further instructions.
+> [README](https://github.com/facebookresearch/fairseq2/tree/v0.1.1) for further instructions.
 
 ```
 pip install .
@@ -151,8 +151,6 @@ scipy.io.wavfile.write("out_from_text.wav", rate=sample_rate, data=audio_array_f
 
 For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
 [SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/explanatory_notebooks/blob/main/seamless_m4t_hugging_face.ipynb).
-
-
 
 # Citation
 If you use SeamlessM4T in your work or any models/datasets/artifacts published in SeamlessM4T, please cite :
