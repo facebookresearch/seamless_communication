@@ -127,7 +127,7 @@ void read_unity_hparams(unity_hparams* out, std::ifstream &fin) {
     fin.read((char*) &out->model_byte_size, sizeof(out->model_byte_size));
     fin.read((char*) &out->__end_of_hparams__, sizeof(out->__end_of_hparams__));
 
-};
+}
 
 class unity_model_loader: public model_loader {
     public:

@@ -60,7 +60,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 
     printf("%s: model size  = %8.2f MB\n", __func__, total_size/1024.0/1024.0);
     return 0;
-};
+}
 
 ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
 {
@@ -82,7 +82,7 @@ ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
     ggml_tensor* tensor = ggml_new_tensor(ctx, type, n_dims, ne);
     fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
     return tensor;
-};
+}
 
 std::string
 model_loader::get_name(std::ifstream& fin)
@@ -96,4 +96,4 @@ model_loader::get_name(std::ifstream& fin)
     fin.read(&name[0], length);
 
     return name;
-};
+}
