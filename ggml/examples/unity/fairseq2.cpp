@@ -13,14 +13,23 @@ extern "C" fairseq2_model* fairseq2_model_alloc() {
     // pre-allocate some memory to write hyperparameters and tensors pointers
     auto* model = new fairseq2_model;
     model->hparams = new std::uint8_t[8 * 1024];
-    model->arch = new std::uint64_t[16 * 1024];  // max tensors allowed
     model->tensors_ctx = nullptr;
     return model;
 }
 
+
+double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name) {
+    const std::int64_t* data = &model.layer_config.at(name);
+    return *(double*)data;
+}
+
+std::int64_t fairseq2_model_layer_config_int(const fairseq2_model& model, std::string name) {
+    return model.layer_config.at(name);
+}
+
+
 extern "C" void fairseq2_model_free(fairseq2_model* model) {
     if (model->tensors_ctx) ggml_free(model->tensors_ctx);
-    delete (std::uint64_t*)(model->arch);
     delete (std::uint8_t*)model->hparams;
     delete model;
 }
@@ -68,8 +77,9 @@ extern "C" ggml_tensor* LayerNorm_forward(
     GGML_ASSERT(bias != nullptr);
 
     auto ctx = model.ctx;
-    // TODO: should `eps` be part of unity hparams ?
-    input = ggml_norm(ctx, input, /*eps*/1e-5);
+    double eps = fairseq2_model_layer_config_double(model, prefix + ".eps");
+
+    input = ggml_norm(ctx, input, /*eps*/eps);
     return ggml_add_inplace(
         ctx,
         ggml_mul_inplace(ctx, ggml_repeat(ctx, weight, input), input),

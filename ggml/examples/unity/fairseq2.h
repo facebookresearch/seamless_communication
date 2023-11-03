@@ -12,12 +12,14 @@ struct fairseq2_model {
     ggml_context* tensors_ctx;
     // Named tensors, all tensors should belong to tensors_ctx
     std::map<std::string, struct ggml_tensor *> tensors;
-    void* arch;
+    std::map<std::string, std::int64_t> layer_config;
     void* hparams;
     // an inference context, not managed by this object
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
     ggml_context* ctx;
 };
+
+double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name);
 
 /// allocate the fairseq2 model and hyperparameters
 extern "C" fairseq2_model* fairseq2_model_alloc();

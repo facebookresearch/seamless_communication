@@ -27,6 +27,8 @@ public:
 
     int load_model_weights(fairseq2_model &model, std::ifstream &fin);
 
+    int load_layer_config(fairseq2_model &model, std::ifstream &fin);
+
 private:
     ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);
 
@@ -51,6 +53,9 @@ int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
     };
     model.tensors_ctx = ggml_init(params);
 
-    return loader.load_model_weights(model, fin);
+    int err = loader.load_model_weights(model, fin);
+    if (err) return err;
+
+    return loader.load_layer_config(model, fin);
 }
 

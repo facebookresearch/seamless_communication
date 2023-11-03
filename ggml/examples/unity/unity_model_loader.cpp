@@ -15,7 +15,7 @@
 void unity_model_loader::load_hparams(fairseq2_model& model, std::ifstream &fin)
 {
     unity_hparams* hparams = (unity_hparams*)model.hparams;
-    read_unity_hparams(hparams, fin);
+    read_unity_hparams(*hparams, fin);
     if (hparams->__end_of_hparams__ != 6877961321223123048) {
         throw std::invalid_argument("");
     }

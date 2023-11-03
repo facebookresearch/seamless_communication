@@ -38,8 +38,10 @@ void register_prefix(fairseq2_model &model, const std::string& name) {
 int
 model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 {
+    int num_tensor = 0;
+    fin.read((char*) &num_tensor, sizeof(num_tensor));
     size_t total_size = 0;
-    while (!fin.eof()) {
+    for (int i = 0; i < num_tensor; ++i) {
         std::string name = get_name(fin);
         if (name.length() == 0)
             break;
@@ -59,6 +61,22 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
     }
 
     printf("%s: model size  = %8.2f MB\n", __func__, total_size/1024.0/1024.0);
+    return 0;
+}
+
+
+int
+model_loader::load_layer_config(fairseq2_model &model, std::ifstream &fin)
+{
+    std::int64_t value;
+    while (!fin.eof()) {
+        std::string name = get_name(fin);
+        if (name.length() == 0)
+            break;
+        fin.read((char*) &value, sizeof(value));
+        model.layer_config[name] = value;
+    }
+
     return 0;
 }
 

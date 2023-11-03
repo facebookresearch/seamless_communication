@@ -14,6 +14,8 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 import math
 import torch
 import ggml
+from typing import Callable
+from typing import Optional
 from typing import List
 from fairseq2.assets import AssetCard
 from fairseq2.models.transformer.frontend import TransformerEmbeddingFrontend
@@ -84,6 +86,7 @@ def convert_model(model_name: str, out: Optional[Path] = None) -> None:
 
     with out.open("wb") as o:
         write_ggml_file(o, hparams, state_dict)
+        write_layer_config(o, model)
 
     with out.with_suffix(".hparams.h").open("w") as h:
         h.write(generate_hparams_struct(hparams, "unity_hparams"))
@@ -174,8 +177,8 @@ def write_hparams(out: BufferedWriter, hparams: Dict[str, Any]) -> None:
             # TODO: this is not cross platform, what's the standard way of writing hparams in GGML ?
             ctype, cvalue = to_ctype(value)
             out.write(struct.pack(ctype, cvalue))
-        except ValueError as e:
-            logging.warning(f"[Warning] {e}. Skipping config for key {key}")
+        except ValueError:
+            logging.warning(f"Skipping config for key {key}={value!r}")
             continue
 
 
@@ -185,6 +188,7 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
     :paras state_dict:
         state dict returned by pytorch model
     """
+    out.write(struct.pack("i", len(state_dict)))
     for key, value in state_dict.items():
         write_string(out, key)
         if key.endswith(".bias") and value.ndim == 1 and "adaptor" not in key:
@@ -195,6 +199,27 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
         if "depthwise_conv" in key:
             value = value.squeeze(1)
         write_tensor(out, value.contiguous())
+
+
+def write_layer_config(out: BufferedWriter, model: torch.nn.Module) -> None:
+    for name, node in find_children(model, torch.nn.Module):
+        for k, v in node.__dict__.items():
+            # Skip special members. In particular all children module and tensors
+            # will be hidden in special dicts `_parameters` and `_modules`
+            if k.startswith("_"):
+                continue
+            # All modules have a "training" flag
+            if k == "training":
+                continue
+            if v is None:
+                continue
+            try:
+                ctype, cvalue = to_ctype(v)
+                write_string(out, f"{name}.{k}")
+                out.write(struct.pack(ctype, cvalue))
+            except ValueError as e:
+                logging.warning(f"Skipping config for {name}.{k}={v!r}")
+                continue
 
 
 def write_string(out: BufferedWriter, value: str) -> None:
@@ -301,11 +326,18 @@ def to_ctype(value: Any) -> Tuple[str, Any]:
     if isinstance(value, int):
         return ("l", value)
     if isinstance(value, float):
-        return ("f", value)
+        return ("d", value)
     if isinstance(value, bool):
-        return ("?", value)
+        return ("l", value)
     if isinstance(value, Enum):
-        return ("i", value.value)
+        return ("l", value.value)
+    if isinstance(value, tuple) and len(value) == 1:
+        return to_ctype(value[0])
+    if isinstance(value, str) and len(value) < 8:
+        value = bytes(value, "ascii")
+        if len(value) < 8:
+            value = value + (8 - len(value)) * b"\0"
+        return ("l", struct.unpack("l", value)[0])
 
     raise ValueError(f"Unsupported type {type(value)}")
 
@@ -331,6 +363,8 @@ def get_cpp_type(value: Any) -> str:
         return "std::int64_t"
     if ctype == "f":
         return "float"
+    if ctype == "d":
+        return "double"
     if ctype == "?":
         return "bool"
 
