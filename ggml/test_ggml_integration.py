@@ -23,12 +23,12 @@ from seamless_communication.models.inference.translator import Translator, Modal
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024, mem_buffer=None)
+CTX_PARAMS = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
 
 
 @pytest.fixture(name="ctx")
 def _ctx() -> Iterator[Ctx]:
-    """Allocate a new context with 1024 MB of memory"""
+    """Allocate a new context with 16 MB of memory"""
     try:
         ctx = ggml.ggml_init(params=CTX_PARAMS)
         yield ctx
@@ -353,3 +353,14 @@ def test_ggml_softmax_vs_torch(ctx: Ctx, shape: Tuple[int, ...]) -> None:
     y = ggml.to_numpy(gy)
     assert np.allclose(y_exp, y, rtol=1e-3)
     assert np.allclose(np.argmax(y_exp, axis=-1), np.argmax(y, axis=-1))
+
+
+def test_can_return_hypothesis_ptr(ctx: Ctx) -> None:
+    hyp_ptr = ggml._testing_return_hypothesis_ptr(ctx)
+
+    hyp0, hyp1 = hyp_ptr[0], hyp_ptr[1]
+    assert ggml.to_numpy(hyp0.seq).tolist() == [314]
+    assert hyp0.score == pytest.approx(3.14)
+
+    assert ggml.to_numpy(hyp1.seq).tolist() == [421]
+    assert hyp1.score == pytest.approx(4.21)

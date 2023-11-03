@@ -8,6 +8,7 @@ import fairseq2.nn
 import fairseq2.nn.transformer
 import logging
 import sys
+import functools
 from pathlib import Path
 from ctypes_utils import Ptr
 from ctypes import c_void_p
@@ -32,40 +33,34 @@ def _ctx() -> Iterator[Ctx]:
     """Allocate a new context with 1024 MB of memory"""
     try:
         ctx = ggml.ggml_init(params=CTX_PARAMS)
-        yield ctx
+        with torch.inference_mode():
+            yield ctx
     finally:
         ggml.ggml_free(ctx)
 
 
-@pytest.fixture(scope="module")
-def g_model_once() -> Iterator[c_void_p]:
+@functools.lru_cache()
+def _load_g_model_once() -> NativeObj:
     model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
     if not model_file.exists():
         convert_model("seamlessM4T_medium", model_file)
-    with ggml.load_unity_ggml_file(model_file) as model:
-        yield model
-
+    return ggml.load_unity_ggml_file(model_file)
 
 @pytest.fixture()
-def g_model(ctx: Ctx, g_model_once: c_void_p) -> c_void_p:
-    ggml.lib.fairseq2_model_set_inference_ctx(g_model_once, ctx)
-    return g_model_once
+def g_model(ctx: Ctx) -> c_void_p:
+    model = _load_g_model_once()
+    ggml.lib.fairseq2_model_set_inference_ctx(model.ptr, ctx)
+    return model.ptr
 
 
-@pytest.fixture(scope="module")
-def translator() -> Iterator[Any]:
-    tr = Translator(
+@functools.lru_cache(maxsize=1)
+def load_translator() -> Translator:
+    return Translator(
         "seamlessM4T_medium", "vocoder_36langs", torch.device("cpu"), torch.float32
     )
-    with torch.inference_mode():
-        yield tr
 
-
-@pytest.fixture(scope="module")
-def pt_model(translator: Translator) -> Any:
-    model = translator.model
-    print(model)
-    return model
+def load_pt_model() -> Any:
+    return load_translator().model
 
 
 @pytest.mark.xfail(reason="TODO")
@@ -108,10 +103,11 @@ def test_causal_attention_mask(ctx: Ctx):
     assert np.all(mask == mask_exp)
 
 
-def test_LayerNorm_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+def test_LayerNorm_forward(ctx: Ctx, g_model: c_void_p) -> None:
     x = torch.empty((2, 21, 1024))
     torch.nn.init.uniform_(x, -1, 1)
 
+    pt_model = load_pt_model()
     y_exp = pt_model.text_encoder.layers[0].ffn_layer_norm(x).numpy()
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward("LayerNorm", g_model, "text_encoder.layers.0.ffn_layer_norm", gx)
@@ -121,10 +117,11 @@ def test_LayerNorm_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     assert np.allclose(y_exp, y, atol=1e-5)
 
 
-def test_Linear_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+def test_Linear_forward(ctx: Ctx, g_model: c_void_p) -> None:
     x = torch.empty((2, 21, 1024))
     torch.nn.init.uniform_(x, -1, 1)
 
+    pt_model = load_pt_model()
     y_exp = pt_model.text_encoder.layers[0].ffn.inner_proj(x).numpy()
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward("Linear", g_model, "text_encoder.layers.0.ffn.inner_proj", gx)
@@ -134,11 +131,12 @@ def test_Linear_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
     assert np.allclose(y_exp, y, atol=1e-5)
 
 
-def test_FeedForwardNetwork_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+def test_FeedForwardNetwork_forward(ctx: Ctx, g_model: c_void_p) -> None:
     x = torch.empty((2, 21, 1024))  # (bs, seq_len, model_dim)
     torch.nn.init.uniform_(x, -1 / 32, 1 / 32)
 
     # Test FFN without LayerNorm
+    pt_model = load_pt_model()
     y_exp = pt_model.text_encoder.layers[0].ffn(x).numpy()
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward(
@@ -157,11 +155,12 @@ def _name(tensor: ggml.ggml_tensor_p) -> bytes:
         return b"???"
 
 
-def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) -> None:
+def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p) -> None:
     x = torch.empty((2, 21, 1024))
     torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
+    pt_model = load_pt_model()
     self_attn = pt_model.text_encoder.layers[0].self_attn
 
     # Note: we use different lengths for queries and keys,
@@ -222,13 +221,14 @@ def test_MultiheadAttention_forward(ctx: Ctx, g_model: c_void_p, pt_model: Any) 
 
 
 def test_StandardTransformerEncoderLayer_forward(
-    ctx: Ctx, g_model: c_void_p, pt_model: Any
+    ctx: Ctx, g_model: c_void_p
 ) -> None:
     x = torch.empty((2, 21, 1024))
     padding_mask = torch.ones((2, 21))
     torch.random.manual_seed(0)
     torch.nn.init.uniform_(x, -1, 1)
 
+    pt_model = load_pt_model()
     layer = pt_model.text_encoder.layers[0]
 
     gx = ggml.from_numpy(ctx, x)
@@ -255,7 +255,7 @@ def test_StandardTransformerEncoderLayer_forward(
 
 
 def test_StandardTransformerEncoder_forward(
-    ctx: Ctx, g_model: c_void_p, pt_model: Any
+    ctx: Ctx, g_model: c_void_p
 ) -> None:
     x = torch.empty((2, 21, 1024))
     padding_mask = torch.ones((2, 21))
@@ -278,6 +278,7 @@ def test_StandardTransformerEncoder_forward(
 
     y = ggml.to_numpy(gy)
 
+    pt_model = load_pt_model()
     y_exp, _ = pt_model.text_encoder(x, padding_mask)
     y_exp = y_exp.numpy()
 
@@ -306,7 +307,7 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
 
 
 def test_TransformerEmbeddingFrontend_forward(
-    ctx: Ctx, g_model: c_void_p, pt_model: Any
+    ctx: Ctx, g_model: c_void_p
 ) -> None:
     seq = torch.arange(2 * 20).reshape(2, 20)
     seq[1, 15:] = 0  # padding for second sentence
@@ -320,6 +321,7 @@ def test_TransformerEmbeddingFrontend_forward(
     ggml.build_and_compute(ctx, gy)
     y = ggml.to_numpy(gy)
 
+    pt_model = load_pt_model()
     y_exp, _ = pt_model.text_decoder_frontend(seq, seq_len)
     y_exp = y_exp.numpy()
 
@@ -328,7 +330,7 @@ def test_TransformerEmbeddingFrontend_forward(
 
 
 def test_StandardTransformerDecoder_forward(
-    ctx: Ctx, g_model: c_void_p, pt_model: Any
+    ctx: Ctx, g_model: c_void_p
 ) -> None:
     x = torch.empty((2, 13, 1024))
     encoder_out = torch.empty((2, 21, 1024))
@@ -353,6 +355,7 @@ def test_StandardTransformerDecoder_forward(
     ggml.build_and_compute(ctx, gy)
     y = ggml.to_numpy(gy)
 
+    pt_model = load_pt_model()
     y_exp, _ = pt_model.text_decoder(x, padding_mask, encoder_out, None)
     y_exp = y_exp.numpy()
 
@@ -361,64 +364,82 @@ def test_StandardTransformerDecoder_forward(
 
 
 def test_t2tt(ctx: Ctx, g_model: c_void_p):
-    # def test_t2tt(ctx: Ctx, g_model: c_void_p, translator):
-    # device = translator.device
     src_lang = "eng"
     src_text = "We are all in a yellow submarine."
     tgt_lang = "fra"
-    # token_encoder = translator.text_tokenizer.create_encoder(
-    #     task="translation", lang=src_lang, mode="source", device=device
-    # )
-    # src = translator.collate(token_encoder(src_text))
+    sample_file = Path(__file__).parent / "sample_input.npz"
+    beam_size = 2
 
-    # text_out, _ = translator.get_prediction(
-    #     translator.model,
-    #     translator.text_tokenizer,
-    #     translator.unit_tokenizer,
-    #     src,
-    #     input_modality=Modality.TEXT,
-    #     output_modality=Modality.TEXT,
-    #     tgt_lang=tgt_lang,
-    # )
+    if not sample_file.exists():
+        translator = load_translator()
+        device = translator.device
+        token_encoder = translator.text_tokenizer.create_encoder(
+            task="translation", lang=src_lang, mode="source", device=device
+        )
+        src = translator.collate(token_encoder(src_text))
 
-    # tgt_text = str(text_out.sentences[0])
-    # assert tgt_text == "Nous sommes tous dans un sous-marin jaune."
-    # tgt_tokens = text_out.generator_output.results[0][0].seq
-    # score = text_out.generator_output.results[0][0].score.item()
-    # np.savez(
-    #     Path(__file__).parent / "sample_input.npz",
-    #     score=score,
-    #     encoder_output=text_out.encoder_output.squeeze(0).numpy(),
-    #     encoder_padding_mask=text_out.encoder_padding_mask.squeeze(0).numpy(),
-    #     tgt_tokens=tgt_tokens.numpy(),
-    # )
+        text_out, _ = translator.get_prediction(
+            translator.model,
+            translator.text_tokenizer,
+            translator.unit_tokenizer,
+            src,
+            input_modality=Modality.TEXT,
+            output_modality=Modality.TEXT,
+            tgt_lang=tgt_lang,
+            beam_size=beam_size,
+        )
 
-    text_out = np.load(Path(__file__).parent / "sample_input.npz")
-    score = text_out["score"].item()
+        tgt_text = str(text_out.sentences[0])
+        assert tgt_text == "Nous sommes tous dans un sous-marin jaune."
+        hypotheses = [
+            {
+                "seq": h.seq.tolist(),
+                "score": h.score.item(),
+                "step_scores": h.step_scores.numpy(),
+            }
+            for h in text_out.generator_output.results[0]
+        ]
+        np.savez(
+            sample_file,
+            encoder_output=text_out.encoder_output.numpy(),
+            encoder_padding_mask=text_out.encoder_padding_mask.numpy(),
+            hypotheses=hypotheses,
+        )
 
-    tgt_tokens = list(text_out["tgt_tokens"])
+    # allow_pickle to load the hyp dicts
+    text_out = np.load(sample_file, allow_pickle=True)
     encoder_out = ggml.from_numpy(ctx, text_out["encoder_output"])
     encoder_padding_mask = ggml.from_numpy(ctx, text_out["encoder_padding_mask"])
+    prefix_seq = np.array(text_out["hypotheses"][0]["seq"][:2]).astype(np.int32)
+    max_seq_len = max(len(h["seq"]) for h in text_out["hypotheses"])
 
     job = ggml.SequenceGeneratorJob()
-    job.opts.beam_size = 2
+    job.opts.beam_size = beam_size
     job.opts.min_seq_len = 1
     job.opts.soft_max_seq_len_a = 1
     job.opts.soft_max_seq_len_b = 200
-    job.opts.hard_max_seq_len = int(len(tgt_tokens) * 1.5)
+    job.opts.hard_max_seq_len = int(max_seq_len * 1.5)
     job.opts.len_penalty = 1.0
     job.opts.unk_penalty = 0.0
     job.opts.normalize_scores = True
-    job.prefix_seq = ggml.from_numpy(ctx, text_out["tgt_tokens"].astype(np.int32)[:2])
+
+    job.prefix_seq = ggml.from_numpy(ctx, prefix_seq)
     job.pad_idx = 0
     job.unk_idx = 1
     job.bos_idx = 2
     job.eos_idx = 3
 
-    result = ggml.ggml_tensor()
-    g_score = ggml.generate_sequence(
-        g_model, job, encoder_out, encoder_padding_mask, ctypes.byref(result)
+    result_ptr = ggml.generate_sequence(
+        g_model, job, encoder_out, encoder_padding_mask, ctx
     )
-    tokens = list(ggml.to_numpy(ctypes.pointer(result)))
-    assert tokens == tgt_tokens
-    assert g_score == pytest.approx(score, rel=1e-2)
+    results = [result_ptr[i] for i in range(beam_size)]
+
+    assert len(results) == len(text_out["hypotheses"])
+    for g_hyp, exp in zip(results, text_out["hypotheses"]):
+        g_tokens = list(ggml.to_numpy(g_hyp.seq))
+        g_step_scores = ggml.to_numpy(g_hyp.step_scores)
+        assert g_tokens == exp["seq"]
+        assert g_hyp.score == pytest.approx(exp["score"], rel=1e-2)
+        # The score error is big, this may negatively impact the beam search.
+        assert np.allclose(g_step_scores, exp["step_scores"], atol=0.1)
+

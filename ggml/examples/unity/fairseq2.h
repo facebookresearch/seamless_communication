@@ -142,11 +142,23 @@ struct SequenceGeneratorJob {
     std::int32_t eos_idx;
 };
 
+/// Represents a hypothesis produced by a sequence generator.
+struct Hypothesis {
+    /// The generated sequence.
+    ggml_tensor* seq;
 
-extern "C" float generate_sequence(
+    /// The score of the hypothesis.
+    float score;
+
+    /// The score of each individual sequence step.
+    ggml_tensor* step_scores;
+};
+
+
+extern "C" Hypothesis* generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& opts,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_tensor* output_seq
+    ggml_context* result_ctx
 );

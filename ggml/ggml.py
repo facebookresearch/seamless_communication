@@ -424,12 +424,28 @@ class SequenceGeneratorJob:
     eos_idx: int
 
 
+@c_struct
+class Hypothesis:
+    seq: Ptr[ggml_tensor]
+    """The generated sequence."""
+
+    score: float
+    """The score of the hypothesis."""
+
+    step_scores: Ptr[ggml_tensor]
+    """The score of each individual sequence step."""
+
+
 @c_fn(lib)
 def generate_sequence(
     model: ctypes.c_void_p,
     job: Ptr[SequenceGeneratorJob],
     encoder_output: Ptr[ggml_tensor],
     encoder_padding_mask: Ptr[ggml_tensor],
-    output_seq: Ptr[ggml_tensor],
-) -> float:
+    result_ctx: ggml_context_p,
+) -> Ptr[Hypothesis]:
     ...
+
+@c_fn(lib)
+def _testing_return_hypothesis_ptr(ctx: ggml_context_p) -> Ptr[Hypothesis]:
+    return Ptr()

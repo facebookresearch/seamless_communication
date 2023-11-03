@@ -617,7 +617,8 @@ void _bootstrap_seqs_and_scores(
         seqs,
         /*padding_mask*/ nullptr,
         encoder_output,
-        /*encoder_padding_mask*/ nullptr // TODO: do we need padding for encoder ?
+        // we assume there is only one input, and therefore we don't need padding.
+        /*encoder_padding_mask*/ nullptr
         // TODO: state_bag
     );
     // TODO state_bag.increment_step(prefix_seq_len - 1)
@@ -645,22 +646,8 @@ void _bootstrap_seqs_and_scores(
     }
 }
 
-/// Represents a hypothesis produced by a sequence generator.
-struct Hypothesis {
-    /// The generated sequence.
-    ggml_tensor* seq;
-
-    /// The score of the hypothesis.
-    float score;
-
-    /// The score of each individual sequence step.
-    ggml_tensor* step_scores;
-};
-
-
-/// Finds the topk indices
+/// Finds the topk indices, and write the winning indices in "candidate_indices" array.
 int topk(
-    ggml_context* ctx,
     ggml_tensor* lprobs,  // (B, V)
     std::int64_t k,
     ggml_tensor* candidate_indices
@@ -687,6 +674,7 @@ void ggml_detach(ggml_tensor* a) {
 }
 
 
+/// Copies the sequence and scores of a given candidate beam.
 void _finalize_hypothesis(
     const SequenceGeneratorJob& job,
     ggml_context* ctx,
@@ -698,7 +686,6 @@ void _finalize_hypothesis(
     ggml_tensor* scores, // (beam_size, seq_len)
     std::vector<Hypothesis>& hypotheses
 ) {
-    // If the candidate beam is "finished", let's copy the score and sequence
     ggml_tensor* tokens = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
     ggml_tensor* step_scores = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, step_nr + 2);
 
@@ -711,12 +698,12 @@ void _finalize_hypothesis(
     // Convert from cumulative to per-step scores.
     auto sc = (float*)step_scores->data;
     float last_score = eos_score;
-    sc[step_nr + 1] = last_score;
     for (int i = step_nr; i >= 0; --i) {
         float sc0 = ggml_get_f32_1d(scores, scores->ne[0] * beam + i);
-        sc[i] = last_score - sc0;
+        sc[i + 1] = last_score - sc0;
         last_score = sc0;
     }
+    sc[0] = 0;
 
     if (job.opts.normalize_scores)
         // Skip first EOS since it is always 0 and skews normalization.
@@ -725,21 +712,21 @@ void _finalize_hypothesis(
     hypotheses.emplace_back(Hypothesis{tokens, eos_score, step_scores});
 }
 
+// Uses ggml_context to store any object.
+#define GGML_CTX_ALLOC(ctx, Type, n) \
+    (Type*)(ggml_new_tensor_1d(ctx, GGML_TYPE_I8, sizeof(Type) * n)->data);
+
+
 /// Generates a translation for a single sequence
-// TODO: finish this for beam_size=1
-// * find out why score is different (seq is the same though)
 // TODO: add IncrementalStateBag support to avoid a O(N^3) generation.
-// TODO: support beam_size > 1:
-// * most layers assume un-batched input, but we want to handle several beams at once
-// * need to port "reorder_state_dict"
-// TODO: clean up
-// * replace manual tensor tweaking with ggml_set_*d (ggml_set_slice could be useful)
-extern "C" float generate_sequence(
+// TODO: clean ups
+// * replace manual tensor tweaking with ggml_set_*d (a ggml_set_slice could be useful)
+extern "C" Hypothesis* generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_tensor* output_seq
+    ggml_context* result_ctx
 ) {
     ggml_context* ctx = model.ctx;
     size_t eos_idx = job.eos_idx;
@@ -787,25 +774,6 @@ extern "C" float generate_sequence(
     // there should be a per-step ggml_context for intermediary results
     // start of beam search:
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
-        // if (beam_indices != nullptr) {
-        //     // If not `None`, it means in the last step we finalized one or
-        //     // more searches. We should ensure that we adjust `beam_indices`
-        //     // before reordering `decoder`'s incremental state.
-        //     if (search_indices != nullptr) {
-        //         num_searches = search_indices->ne[0];
-
-        //         // (N)
-        //         delta = search_indices - torch.arange(num_searches, device=device)
-
-        //         // (N) -> (N, 1)
-        //         delta.unsqueeze_(-1)
-
-        //         // Adjust indices to take into account removed searches.
-        //         beam_indices.view(num_searches, beam_size).add_(delta * beam_size)
-        //     }
-
-        //     // state_bag.reorder(beam_indices)
-        // }
         // because of no IncrementalStateBag we pass input from the start
         // decoder_input = seqs[:, 0 : step_nr + 1]
         ggml_tensor* decoder_input = ggml_slice(ctx, seqs, 0, 0, step_nr + 1);
@@ -845,7 +813,6 @@ extern "C" float generate_sequence(
         }
 
         // If we have reached the maximum length, force the last step to be EOS.
-        // TODO: should this be done in an adhoc loop ? how often does that happen anyway ?
         if (step_nr == max_seq_len - 2) {
             // lprobs[:, :, : self.eos_idx]       = -torch.inf
             // lprobs[:, :,   self.eos_idx + 1 :] = -torch.inf
@@ -856,7 +823,6 @@ extern "C" float generate_sequence(
                 for (t = eos_idx + 1; t < vocab_size; ++t)
                     ggml_set_f32_1d(lprobs, vocab_size * b + t, -INFINITY);
             }
-
         }
 
         // Never allow PAD.
@@ -890,10 +856,10 @@ extern "C" float generate_sequence(
         gf = ggml_build_forward(lprobs);
         ggml_graph_compute_with_ctx(ctx, &gf, 1);
 
-        // Determine candidates for the next step.
+        // Determine (beam, token) candidates for the next step.
         // (N, 2 x B)
         std::int64_t K = topk(
-            ctx, lprobs, std::min(2 * beam_size, vocab_size - 1), candidate_indices
+            lprobs, std::min(2 * beam_size, vocab_size - 1), candidate_indices
         );
 
         std::size_t ongoing_beams = 0;
@@ -907,7 +873,7 @@ extern "C" float generate_sequence(
             bool eos = token == job.eos_idx;
             eos &= tok_score != -INFINITY;
             if (eos) {
-                _finalize_hypothesis(job, ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches);
+                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches);
                 if (finished_searches.size() >= beam_size)
                     goto end_of_beam_search;
                 continue;
@@ -960,9 +926,25 @@ end_of_beam_search:
         [](Hypothesis a, Hypothesis b) { return a.score > b.score; }
     );
 
-    // For now just return the best sequence
-    // TODO: return structured output
-    *output_seq = *(finished_searches[0].seq);
+    // Copy the scores to an object in the result_ctx.
+    GGML_ASSERT(finished_searches.size() <= beam_size);
+    Hypothesis* result = GGML_CTX_ALLOC(result_ctx, struct Hypothesis, beam_size);
+    std::copy(finished_searches.begin(), finished_searches.end(), result);
+    // In case we have less searches than expected, still make sure to initialize the memory.
+    for (std::size_t i = finished_searches.size(); i < beam_size; ++i)
+        result[i] = Hypothesis{nullptr, -INFINITY, nullptr};
 
-    return finished_searches[0].score;
+    return result;
+}
+
+extern "C" Hypothesis* _testing_return_hypothesis_ptr(ggml_context* ctx) {
+    Hypothesis* result = GGML_CTX_ALLOC(ctx, struct Hypothesis, 2);
+
+    result[0] = {ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1), 3.14f, (ggml_tensor*)result};
+    ggml_set_i32_1d(result[0].seq, 0, 314);
+
+    result[1] = {ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1), 4.21f, nullptr};
+    ggml_set_i32_1d(result[1].seq, 0, 421);
+
+    return result;
 }

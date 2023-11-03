@@ -12,12 +12,13 @@ class Ptr(Generic[T]):
     contents: T
 
     def __new__(cls):
+        breakpoint()
         return ctypes.pointer()
 
 
 def c_struct(cls):
     struct = types.new_class(cls.__name__, bases=(ctypes.Structure,))
-    struct.__module__ = "ctypes"
+    struct.__module__ = cls.__module__
     struct._fields_ = [
         (k, _py_type_to_ctype(v)) for k, v in cls.__annotations__.items()
     ]
@@ -33,8 +34,11 @@ def _py_type_to_ctype(t: type):
         )
     if t.__module__ == "ctypes":
         return t
-    if isinstance(t, type) and issubclass(t, ctypes.Structure):
-        return t
+    if isinstance(t, type):
+        if issubclass(t, ctypes.Structure):
+            return t
+        if issubclass(t, ctypes._Pointer):
+            return t
     if t is int:
         return ctypes.c_int
     if t is float:
@@ -66,7 +70,8 @@ def _c_fn(module, fn):
 
     @functools.wraps(fn)
     def actual_fn(*args, **kwargs):
-        return c_fn(*args, **kwargs)
+        raw_res = c_fn(*args, **kwargs)
+        return raw_res
 
     return actual_fn
 
