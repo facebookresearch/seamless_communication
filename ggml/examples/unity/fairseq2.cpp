@@ -175,7 +175,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* queries,  // (slen, d_in)
     ggml_tensor* keys,  // (klen, d_in)
     ggml_tensor* values,  // (klen, d_out)
-    ggml_tensor* mask // (klen, slen)
+    ggml_tensor* attn_mask // (klen, slen)
 ) {
     int model_dim = queries->ne[0];
     int num_heads = 16;  // TODO: read from hparams
@@ -197,7 +197,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
 
 #if UNITY_FLASH_ATTN
     // For flash_attn, we assume either no masks, or triangular masks.
-    ggml_tensor* attn = ggml_flash_attn(ctx, q, k, v, /*masked*/mask != nullptr);  // (B * H, S, H_dim)
+    ggml_tensor* attn = ggml_flash_attn(ctx, q, k, v, /*masked*/attn_mask != nullptr);  // (B * H, S, H_dim)
     ggml_set_name(attn, "attn");
     // TODO test !
     attn = ggml_unflatten_1d(ctx, attn, 2, num_heads);  // (B, H, H_dim, S)
@@ -212,8 +212,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_set_name(qk, "qk_scaled");
 
     // TODO: Should we replace this by ggml_diag_mask_inf ?
-    // TODO: masks have the wrong shape to be added here
-    if (mask) qk = ggml_add(ctx, qk, mask);
+    if (attn_mask) qk = ggml_add(ctx, qk, attn_mask);
     // TODO: upgrade qk to float32 if needed
     ggml_tensor* attn_weights = ggml_soft_max(ctx, qk);  // (B * H, S, Sk)
     ggml_set_name(attn_weights, "attn_weights");
@@ -257,7 +256,7 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
         seqs,
         seqs,
         seqs,
-        /*attention masks=*/nullptr
+        /*attn_mask=*/nullptr
     );
 
     if (has_layer(model, prefix + ".self_attn_norm"))
@@ -415,7 +414,7 @@ extern "C" ggml_tensor* StandardTransformerDecoderLayer_forward(
         seqs,
         seqs,
         seqs,
-        /*attention masks=*/self_attn_mask
+        /*attn_mask=*/self_attn_mask
     );
 
     if (has_layer(model, prefix + ".self_attn_norm"))
@@ -617,8 +616,7 @@ void _bootstrap_seqs_and_scores(
         seqs,
         /*padding_mask*/ nullptr,
         encoder_output,
-        // we assume there is only one input, and therefore we don't need padding.
-        /*encoder_padding_mask*/ nullptr
+        encoder_padding_mask
         // TODO: state_bag
     );
     // TODO state_bag.increment_step(prefix_seq_len - 1)
@@ -684,12 +682,14 @@ void _finalize_hypothesis(
     float eos_score,
     ggml_tensor* seqs, // (beam_size, seq_len)
     ggml_tensor* scores, // (beam_size, seq_len)
-    std::vector<Hypothesis>& hypotheses
+    Hypothesis* hypothesis
 ) {
-    ggml_tensor* tokens = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
+    ggml_tensor* seq = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
+    hypothesis->seq = seq;
     ggml_tensor* step_scores = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, step_nr + 2);
+    hypothesis->step_scores = step_scores;
 
-    auto tok = (std::int32_t*)tokens->data;
+    auto tok = (std::int32_t*)seq->data;
     for (int i = 0; i < step_nr + 1; ++i) {
         tok[i] = ggml_get_i32_1d(seqs, seqs->ne[0] * beam + i);
     }
@@ -708,8 +708,7 @@ void _finalize_hypothesis(
     if (job.opts.normalize_scores)
         // Skip first EOS since it is always 0 and skews normalization.
         eos_score /= (float)std::pow((step_nr + 1), job.opts.len_penalty);
-
-    hypotheses.emplace_back(Hypothesis{tokens, eos_score, step_scores});
+    hypothesis->score = eos_score;
 }
 
 // Uses ggml_context to store any object.
@@ -741,8 +740,11 @@ extern "C" Hypothesis* generate_sequence(
     // (S_enc, M) -> (B, S_enc, M)
     _fan_out_encoder_output(ctx, &encoder_output, &encoder_padding_mask, beam_size);
 
-    std::vector<Hypothesis> finished_searches;
-    finished_searches.reserve(beam_size);
+    // Allocate results in the context provided by the caller.
+    Hypothesis* finished_searches_begin = GGML_CTX_ALLOC(result_ctx, Hypothesis, beam_size);
+    Hypothesis* finished_searches = finished_searches_begin;
+    for (std::size_t i = 0; i < beam_size; ++i) finished_searches[i] = {nullptr, -INFINITY, nullptr};
+    Hypothesis* finished_searches_end = finished_searches + beam_size;
 
     // Initialize buffers. (B, S)
     ggml_tensor* seqs = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, max_seq_len, beam_size);
@@ -770,9 +772,7 @@ extern "C" Hypothesis* generate_sequence(
     for (std::size_t i = 0; i < vocab_size * beam_size; ++i)
         ((int32_t *)(candidate_indices->data))[i] = i;
 
-    // TODO: memory management
-    // there should be a per-step ggml_context for intermediary results
-    // start of beam search:
+    // TODO: memory management, there should be a per-step ggml_context for intermediary results
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         // because of no IncrementalStateBag we pass input from the start
         // decoder_input = seqs[:, 0 : step_nr + 1]
@@ -784,7 +784,7 @@ extern "C" Hypothesis* generate_sequence(
             decoder_input,
             nullptr,  // We never generate PAD.
             encoder_output,
-            /*encoder_padding_mask*/ nullptr // TODO: do we need padding for encoder ?
+            encoder_padding_mask
             // state_bag=state_bag,
         ); // (B, S, D)
 
@@ -873,8 +873,8 @@ extern "C" Hypothesis* generate_sequence(
             bool eos = token == job.eos_idx;
             eos &= tok_score != -INFINITY;
             if (eos) {
-                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches);
-                if (finished_searches.size() >= beam_size)
+                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches++);
+                if (finished_searches == finished_searches_end)
                     goto end_of_beam_search;
                 continue;
             }
@@ -921,20 +921,12 @@ extern "C" Hypothesis* generate_sequence(
 end_of_beam_search:
     // Ensure that hypotheses are sorted by decreasing scores before returning.
     std::sort(
-        finished_searches.begin(),
-        finished_searches.end(),
+        finished_searches_begin,
+        finished_searches_end,
         [](Hypothesis a, Hypothesis b) { return a.score > b.score; }
     );
 
-    // Copy the scores to an object in the result_ctx.
-    GGML_ASSERT(finished_searches.size() <= beam_size);
-    Hypothesis* result = GGML_CTX_ALLOC(result_ctx, struct Hypothesis, beam_size);
-    std::copy(finished_searches.begin(), finished_searches.end(), result);
-    // In case we have less searches than expected, still make sure to initialize the memory.
-    for (std::size_t i = finished_searches.size(); i < beam_size; ++i)
-        result[i] = Hypothesis{nullptr, -INFINITY, nullptr};
-
-    return result;
+    return finished_searches_begin;
 }
 
 extern "C" Hypothesis* _testing_return_hypothesis_ptr(ggml_context* ctx) {

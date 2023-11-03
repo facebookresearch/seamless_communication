@@ -432,7 +432,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     result_ptr = ggml.generate_sequence(
         g_model, job, encoder_out, encoder_padding_mask, ctx
     )
-    results = [result_ptr[i] for i in range(beam_size)]
+    results = [result_ptr[i] for i in range(beam_size) if result_ptr[i].seq != None]
 
     assert len(results) == len(text_out["hypotheses"])
     for g_hyp, exp in zip(results, text_out["hypotheses"]):
