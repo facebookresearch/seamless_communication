@@ -7,8 +7,6 @@ SeamlessM4T models currently support five tasks:
 - Text-to-text translation (T2TT)
 - Automatic speech recognition (ASR)
 
-
-
 ## Quick start:
 Inference is run with the CLI, from the root directory of the repository.
 
@@ -70,16 +68,16 @@ translator = Translator("seamlessM4T_large", "vocoder_36langs", torch.device("cu
 Now `predict()` can be used to run inference as many times on any of the supported tasks.
 
 Given an input audio with `<path_to_input_audio>` or an input text `<input_text>` in `<src_lang>`,
-we can translate into `<tgt_lang>` as follows:
+we first set the `text_generation_opts`, `unit_generation_opts` and then translate into `<tgt_lang>` as follows:
 
 ## S2ST and T2ST:
 
 ```python
 # S2ST
-translated_text, wav, sr = translator.predict(<path_to_input_audio>, "s2st", <tgt_lang>)
+text_output, speech_output = translator.predict(<path_to_input_audio>, "s2st", <tgt_lang>, text_generation_opts=text_generation_opts, unit_generation_opts=unit_generation_opts)
 
 # T2ST
-translated_text, wav, sr = translator.predict(<input_text>, "t2st", <tgt_lang>, src_lang=<src_lang>)
+text_output, speech_output = translator.predict(<input_text>, "t2st", <tgt_lang>, src_lang=<src_lang>, text_generation_opts=text_generation_opts,unit_generation_opts=unit_generation_opts)
 
 ```
 Note that `<src_lang>` must be specified for T2ST.
@@ -87,27 +85,25 @@ Note that `<src_lang>` must be specified for T2ST.
 The generated units are synthesized and the output audio file is saved with:
 
 ```python
-wav, sr = translator.synthesize_speech(<speech_units>, <tgt_lang>)
-
 # Save the translated audio generation.
 torchaudio.save(
     <path_to_save_audio>,
-    wav[0].cpu(),
-    sample_rate=sr,
+    speech_output.audio_wavs[0][0].cpu(),
+    sample_rate=speech_output.sample_rate,
 )
 ```
 ## S2TT, T2TT and ASR:
 
 ```python
 # S2TT
-translated_text, _, _ = translator.predict(<path_to_input_audio>, "s2tt", <tgt_lang>)
+text_output, _ = translator.predict(<path_to_input_audio>, "s2tt", <tgt_lang>, text_generation_opts=text_generation_opts, unit_generation_opts=None)
 
 # ASR
 # This is equivalent to S2TT with `<tgt_lang>=<src_lang>`.
-transcribed_text, _, _ = translator.predict(<path_to_input_audio>, "asr", <src_lang>)
+text_output, _ = translator.predict(<path_to_input_audio>, "asr", <src_lang>, text_generation_opts=text_generation_opts, unit_generation_opts=None)
 
 # T2TT
-translated_text, _, _ = translator.predict(<input_text>, "t2tt", <tgt_lang>, src_lang=<src_lang>)
+text_output, _ = translator.predict(<input_text>, "t2tt", <tgt_lang>, src_lang=<src_lang>, text_generation_opts=text_generation_opts, unit_generation_opts=None)
 
 ```
 Note that `<src_lang>` must be specified for T2TT

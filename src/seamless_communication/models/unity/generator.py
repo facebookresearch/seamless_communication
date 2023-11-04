@@ -168,6 +168,9 @@ class UnitYGenerator:
             The type of modality to encode.
         :param output_modality:
             The type of modality to decode.
+        :param ngram_filtering:
+            If True, removes consecutive repeated ngrams
+            from the decoded unit output.
 
         :returns:
             - The output of the text generator.

@@ -13,6 +13,7 @@ import torchaudio
 from huggingface_hub import hf_hub_download
 from seamless_communication.models.inference.translator import Translator
 
+
 DESCRIPTION = """# SeamlessM4T
 
 [SeamlessM4T](https://github.com/facebookresearch/seamless_communication) is designed to provide high-quality
@@ -321,6 +322,7 @@ def predict(
     target_language: str,
 ) -> tuple[tuple[int, np.ndarray] | None, str]:
     task_name = task_name.split()[0]
+
     source_language_code = (
         LANGUAGE_NAME_TO_CODE[source_language] if source_language else None
     )
@@ -345,17 +347,24 @@ def predict(
         torchaudio.save(input_data, new_arr, sample_rate=int(AUDIO_SAMPLE_RATE))
     else:
         input_data = input_text
-    text_out, wav, sr = translator.predict(
-        input=input_data,
-        task_str=task_name,
-        tgt_lang=target_language_code,
+
+    assert input_data is not None
+    text_output, speech_output = translator.predict(
+        input_data,
+        task_name,
+        target_language_code,
         src_lang=source_language_code,
-        ngram_filtering=True,
+        unit_generation_ngram_filtering=True,
     )
     if task_name in ["S2ST", "T2ST"]:
-        return (sr, wav.cpu().detach().numpy()), text_out
+        assert speech_output is not None
+
+        return (
+            speech_output.sample_rate,
+            speech_output.audio_wavs[0].cpu().detach().numpy(),
+        ), str(text_output[0])
     else:
-        return None, text_out
+        return None, str(text_output[0])
 
 
 def process_s2st_example(

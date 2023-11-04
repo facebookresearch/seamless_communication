@@ -1,17 +1,21 @@
-## Evaluation protocols for various SeamlessM4T tasks
-Refer to the [inference tutorial](../../scripts/m4t/predict/README.md) for detailed guidance on how to run inference using SeamlessM4T models. In this tutorial, the evaluation protocol used for all tasks supported by SeamlessM4T is briefly described.
+# Evaluating SeamlessM4T models
+Refer to the [inference tutorial](../predict/README.md) for the supported tasks to run inference with SeamlessM4T models.
 
-### S2TT
-[Sacrebleu library](https://github.com/mjpost/sacrebleu) is used to compute the BLEU scores. To be consistent with Whisper, a character-level (*char*) tokenizer for Mandarin Chinese (cmn), Japanese (jpn), Thai (tha), Lao (lao), and Burmese (mya) is used. The default *13a* tokenizer is used for other languages. Raw (unnormalized) references and predictions are used for computing the scores.
+## Quick start:
+Evaluation can be run with the CLI, from the root directory of the repository.
 
-```python
-import sacrebleu
+The model can be specified with `--model_name`: `seamlessM4T_v2_large` or `seamlessM4T_large` or `seamlessM4T_medium`
 
-bleu_metric = sacrebleu.BLEU(tokenize=<TOKENIZER>)
-bleu_score = bleu_metric.corpus_score(<PREDICTIONS>, [<REFERENCES>])
+```bash
+m4t_evaluate <path_to_data_tsv_file> <task_name> <tgt_lang> --output_path <path_to_save_audio> --ref_field <ref_field_name> --audio_root_dir <path_to_audio_root_directory>
 ```
 
+### S2TT
+If provided a test_fleurs/dev_fleurs data tsv file, we parse through every example in the file, run model inference and save the first pass text generations and the computed first pass (S2TT) BLEU.
+
 ### S2ST and T2ST
+Additionally from S2TT, we also save the unit generations, run vocoder inference to generate the translated audio waveforms and save the .wav files to a directory.
+
 To measure the quality of the translated speech outputs, the audios are first transcribed using Whisper ASR model and BLEU score is computed on these ASR transcriptions comparing them with the ground truth text references.
 
 Whisper large-v2 is used for non-English target languages and medium.en trained on English-only data is used for English due to its superior performance.

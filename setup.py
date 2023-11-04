@@ -63,6 +63,7 @@ setup(
     extras_require={"dev": default_requirements + dev_requirements},
     entry_points={
         "console_scripts": [
+            "m4t_evaluate=m4t_scripts.evaluate.evaluate:main",
             "m4t_predict=m4t_scripts.predict.predict:main",
             "m4t_finetune=m4t_scripts.finetune.finetune:main",
             "m4t_prepare_dataset=m4t_scripts.finetune.dataset:main",

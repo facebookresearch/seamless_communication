@@ -1,6 +1,7 @@
 pre-commit
 datasets
 torchaudio
+tqdm
 soundfile
 librosa
 fairseq2==0.2.*
