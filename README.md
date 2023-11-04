@@ -102,10 +102,10 @@ We open-source the metadata to SeamlessAlign, the largest open dataset for multi
 
 SeamlessM4T is available in the Transformers library, requiring minimal dependencies. Steps to get started:
 
-1. First install the 🤗 [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
+1. First install the 🤗 [Transformers library](https://github.com/huggingface/transformers) v4.35 or higher and [sentencepiece](https://github.com/google/sentencepiece):
 
 ```
-pip install git+https://github.com/huggingface/transformers.git sentencepiece
+pip install transformers sentencepiece
 ```
 
 2. Run the following Python code to generate speech samples. Here the target language is Russian:
