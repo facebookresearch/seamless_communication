@@ -5,8 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from torch.nn import Parameter
-from typing import Optional
+from typing import Union, Optional
 
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
@@ -33,6 +32,7 @@ from seamless_communication.models.unity.adaptor_block import (
 from seamless_communication.models.unity.model import UnitYModel
 from seamless_communication.models.unity.t2u_builder import (
     UnitYT2UBuilder,
+    UnitYNART2UBuilder,
     UnitYT2UConfig,
     unity_t2u_archs,
 )
@@ -176,7 +176,7 @@ class UnitYBuilder:
     config: UnitYConfig
     w2v2_encoder_builder: Wav2Vec2EncoderBuilder
     mt_model_builder: NllbBuilder
-    t2u_builder: Optional["UnitYT2UBuilder"]
+    t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None]
     device: Optional[Device]
     dtype: Optional[DataType]
 
@@ -185,7 +185,7 @@ class UnitYBuilder:
         config: UnitYConfig,
         w2v2_encoder_builder: Wav2Vec2EncoderBuilder,
         mt_model_builder: NllbBuilder,
-        t2u_builder: Optional["UnitYT2UBuilder"],
+        t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None],
         *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -389,10 +389,14 @@ def create_unity_model(
             config.w2v2_encoder_config, device=device, dtype=dtype
         )
 
+    t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None]
+
     if config.t2u_config is None:
         t2u_builder = None
-    else:
+    elif config.t2u_config.nar_decoder_config is None:
         t2u_builder = UnitYT2UBuilder(config.t2u_config, device=device, dtype=dtype)
+    else:
+        t2u_builder = UnitYNART2UBuilder(config.t2u_config, device=device, dtype=dtype)
 
     mt_model_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
     unity_builder = UnitYBuilder(

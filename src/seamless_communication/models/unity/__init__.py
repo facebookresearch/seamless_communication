@@ -56,6 +56,9 @@ from seamless_communication.models.unity.t2u_builder import (
     UnitYT2UBuilder as UnitYT2UBuilder,
 )
 from seamless_communication.models.unity.t2u_builder import (
+    UnitYNART2UBuilder as UnitYNART2UBuilder,
+)
+from seamless_communication.models.unity.t2u_builder import (
     UnitYT2UConfig as UnitYT2UConfig,
 )
 from seamless_communication.models.unity.t2u_builder import (
