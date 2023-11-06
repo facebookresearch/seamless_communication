@@ -291,8 +291,12 @@ class Translator(nn.Module):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it
                 # in the unit sequence. tgt_lang is fed as an argument to the vocoder.
                 units = unit_output.units[:, 1:]
+                duration_prediction = True
             else:
                 units = unit_output.units
+                # Vocoder duration predictions not required since the NAR
+                # T2U model already predicts duration in the units.
+                duration_prediction = False
 
             audio_wavs = []
             speech_units = []
@@ -305,7 +309,7 @@ class Translator(nn.Module):
                 speech_units.append(u)
                 # TODO: Implement batched inference for vocoder.
                 translated_audio_wav = self.vocoder(
-                    u, tgt_lang, spkr, dur_prediction=True
+                    u, tgt_lang, spkr, dur_prediction=duration_prediction
                 )
                 audio_wavs.append(translated_audio_wav)
 

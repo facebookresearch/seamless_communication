@@ -48,7 +48,7 @@ def test_seamless_m4t_v2_large_t2tt() -> None:
     else:
         dtype = torch.float16
 
-    translator = Translator(model_name, "vocoder_commercial", device, dtype=dtype)
+    translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
     text_output, _ = translator.predict(
         ENG_SENTENCE,
         "t2tt",
@@ -71,7 +71,7 @@ def test_seamless_m4t_v2_large_multiple_tasks() -> None:
     else:
         dtype = torch.float16
 
-    translator = Translator(model_name, "vocoder_commercial", device, dtype=dtype)
+    translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
 
     # Generate english speech for the english text.
     _, english_speech_output = translator.predict(

@@ -55,7 +55,7 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         "--vocoder_name",
         type=str,
         help="Vocoder model name",
-        default="vocoder_commercial",
+        default="vocoder_v2",
     )
     # Text generation args.
     parser.add_argument(
