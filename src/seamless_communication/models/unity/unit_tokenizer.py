@@ -57,9 +57,9 @@ class UnitTokenizer:
         try:
             return (
                 self.num_units
-                + (self.lang_symbol_repititions - 1) * len(self.langs)
+                + (self.lang_symbol_repititions - 1) * (len(self.langs) + 1)
                 + self.lang_map[lang]
-                + 5
+                + 4
             )
         except KeyError:
             langs = ", ".join(self.langs)
@@ -73,8 +73,8 @@ class UnitTokenizer:
         relative_idx = (
             idx
             - self.num_units
-            - (self.lang_symbol_repititions - 1) * len(self.langs)
-            - 5
+            - (self.lang_symbol_repititions - 1) * (len(self.langs) + 1)
+            - 4
         )
 
         if relative_idx < 0 or relative_idx >= len(self.langs):
@@ -92,7 +92,7 @@ class UnitTokenizer:
         :param lang:
             The language of generated token indices.
         """
-        return UnitTokenEncoder(self, lang, device)
+        return UnitTokenEncoder(self, lang, self.is_nar_decoder, device=device)
 
     def create_decoder(self) -> "UnitTokenDecoder":
         """Create a token decoder."""
@@ -106,10 +106,14 @@ class UnitTokenEncoder:
     eos_idx: int
     unk_idx: int
     lang_idx: int
-    prefix_indices: Tensor
+    prefix_indices: Optional[Tensor]
 
     def __init__(
-        self, tokenizer: UnitTokenizer, lang: str, device: Optional[Device] = None
+        self,
+        tokenizer: UnitTokenizer,
+        lang: str,
+        is_nar_decoder: bool,
+        device: Optional[Device] = None,
     ) -> None:
         """
         :param tokenizer:
@@ -125,6 +129,7 @@ class UnitTokenEncoder:
             )
 
         self.tokenizer = tokenizer
+        self.is_nar_decoder = is_nar_decoder
 
         assert tokenizer.vocab_info.eos_idx is not None
         assert tokenizer.vocab_info.unk_idx is not None
@@ -137,10 +142,13 @@ class UnitTokenEncoder:
         if device is None:
             device = Device("cpu")
 
-        # We always start sequences with EOS, followed by the language token.
-        self.prefix_indices = torch.tensor(
-            [self.eos_idx, self.lang_idx], device=device, dtype=torch.int64
-        )
+        if not self.is_nar_decoder:
+            # We always start sequences with EOS, followed by the language token.
+            self.prefix_indices = torch.tensor(
+                [self.eos_idx, self.lang_idx], device=device, dtype=torch.int64
+            )
+        else:
+            self.prefix_indices = None
 
     def __call__(self, units: Tensor) -> Tensor:
         """Encode ``units`` to token indices.
@@ -156,13 +164,18 @@ class UnitTokenEncoder:
         """
         batch_size = units.size(0)
 
-        token_indices = torch.cat(
-            [self.prefix_indices.clone().expand(batch_size, -1), units.detach()], dim=1
-        )
+        if self.prefix_indices is not None:
+            token_indices = torch.cat(
+                [self.prefix_indices.clone().expand(batch_size, -1), units.detach()],
+                dim=1,
+            )
 
-        # Ensure that non-symbol indices larger than `num_units` are replaced
-        # with UNK.
-        seqs = token_indices[:, 2:]
+            # Ensure that non-symbol indices larger than `num_units` are replaced
+            # with UNK.
+            seqs = token_indices[:, 2:]
+        else:
+            token_indices = units.clone().detach()
+            seqs = token_indices
 
         # Add offset for control symbols.
         seqs += 4

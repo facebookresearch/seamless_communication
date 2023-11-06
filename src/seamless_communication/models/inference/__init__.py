@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from seamless_communication.models.inference.ngram_repeat_block_processor import (
-    NGramRepeatBlockProcessor,
+    NGramRepeatBlockProcessor as NGramRepeatBlockProcessor,
 )
 from seamless_communication.models.inference.translator import (
     BatchedSpeechOutput as BatchedSpeechOutput,

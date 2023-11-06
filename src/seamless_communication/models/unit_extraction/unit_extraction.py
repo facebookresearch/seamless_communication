@@ -4,13 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Union
+from itertools import groupby
 from pathlib import Path
+from torch import Tensor, nn
+from typing import Union
+
+import logging
 import torch
 import torch.nn.functional as F
-
-from itertools import groupby
-from torch import Tensor, nn
 
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
@@ -28,6 +29,14 @@ from seamless_communication.models.unit_extraction.wav2vec2_layer_output import 
 from seamless_communication.models.unit_extraction.kmeans import KmeansModel
 from seamless_communication.models.inference import Translator
 from seamless_communication.models.vocoder import load_vocoder_model, Vocoder
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 
 class UnitExtractor(nn.Module):
@@ -63,6 +72,15 @@ class UnitExtractor(nn.Module):
                 block = MemoryBlock(fb.read())
             decoded_audio = self.decode_audio(block)
         else:
+            assert audio.dim() <= 2, "The audio tensor can't be more than 2 dimensions."
+            if audio.dim() == 1:
+                audio = audio.unsqueeze(1)
+            elif audio.dim() == 2 and audio.size(0) < audio.size(1):
+                logger.warning(
+                    f"Transposing audio tensor from (bsz, seq_len) -> (seq_len, bsz)."
+                )
+                audio = audio.transpose(0, 1)
+
             decoded_audio = {
                 "waveform": audio,
                 "sample_rate": sample_rate,
