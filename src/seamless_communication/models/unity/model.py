@@ -18,6 +18,7 @@ from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
 
+from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 
 
@@ -335,7 +336,7 @@ class UnitYNART2UModel(Module):
     model_dim: int
     encoder: Optional[TransformerEncoder]
     decoder_frontend: NARDecoderFrontend
-    decoder: TransformerDecoder
+    decoder: NARTransformerDecoder
     final_proj: Projection
     pad_idx: Optional[int]
 
@@ -343,7 +344,7 @@ class UnitYNART2UModel(Module):
         self,
         encoder: Optional[TransformerEncoder],
         decoder_frontend: NARDecoderFrontend,
-        decoder: TransformerDecoder,
+        decoder: NARTransformerDecoder,
         final_proj: Projection,
         pad_idx: Optional[int],
     ) -> None:
@@ -377,8 +378,6 @@ class UnitYNART2UModel(Module):
         self,
         text_decoder_output: Tensor,
         text_decoder_padding_mask: Optional[PaddingMask],
-        target_seqs: Optional[Tensor],
-        target_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
     ) -> Tuple[SequenceModelOutput, Optional[PaddingMask]]:
         encoder_output, encoder_padding_mask = self.encode(
@@ -386,8 +385,6 @@ class UnitYNART2UModel(Module):
         )
 
         decoder_output, decoder_padding_mask = self.decode(
-            target_seqs,
-            target_padding_mask,
             encoder_output,
             encoder_padding_mask,
             text_seqs,
@@ -407,8 +404,6 @@ class UnitYNART2UModel(Module):
 
     def decode(
         self,
-        seqs: Optional[Tensor],
-        padding_mask: Optional[PaddingMask],
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
@@ -416,7 +411,7 @@ class UnitYNART2UModel(Module):
         # encoder_output: (N, S, M)
         # text_seqs: (N, S)
         seqs, padding_mask = self.decoder_frontend(
-            seqs, padding_mask, encoder_output, encoder_padding_mask, text_seqs
+            encoder_output, encoder_padding_mask, text_seqs
         )
 
         return self.decoder(seqs, padding_mask)  # type: ignore[no-any-return]

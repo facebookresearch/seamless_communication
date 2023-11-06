@@ -231,8 +231,6 @@ class UnitYGenerator:
             unit_decoder_output, decoder_padding_mask = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
-                target_seqs=None,
-                target_padding_mask=None,
                 text_seqs=text_seqs,
             )
             # (B, S_unit, V_unit)

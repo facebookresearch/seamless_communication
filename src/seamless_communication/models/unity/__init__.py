@@ -49,6 +49,9 @@ from seamless_communication.models.unity.model import UnitYOutput as UnitYOutput
 from seamless_communication.models.unity.nar_decoder_frontend import (
     NARDecoderFrontend as NARDecoderFrontend,
 )
+from seamless_communication.models.unity.nar_decoder import (
+    NARTransformerDecoder as NARTransformerDecoder,
+)
 from seamless_communication.models.unity.nar_decoder_layer import (
     NARTransformerDecoderLayer as NARTransformerDecoderLayer,
 )

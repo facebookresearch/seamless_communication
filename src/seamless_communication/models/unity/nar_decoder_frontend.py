@@ -303,8 +303,6 @@ class NARDecoderFrontend(Module):
     @finaloverride
     def forward(
         self,
-        target_seqs: Optional[Tensor],
-        target_padding_mask: Optional[PaddingMask],
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],

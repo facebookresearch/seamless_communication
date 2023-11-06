@@ -38,6 +38,7 @@ from fairseq2.models.nllb.loader import NllbTokenizerLoader
 
 
 from seamless_communication.assets import asset_store
+from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
 from seamless_communication.models.unity.nar_decoder_layer import (
     NARTransformerDecoderLayer,
     Conv1dBlock,
@@ -550,21 +551,21 @@ class UnitYNART2UBuilder:
             dtype=self.dtype,
         )
 
-    def build_decoder(self) -> TransformerDecoder:
+    def build_decoder(self) -> NARTransformerDecoder:
         """Build a Transformer decoder."""
 
         num_layers = self.config.num_decoder_layers
 
         layers = [self.build_decoder_layer() for _ in range(num_layers)]
 
-        return StandardTransformerDecoder(
+        return NARTransformerDecoder(
             layers,
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
         )
 
-    def build_decoder_layer(self) -> TransformerDecoderLayer:
+    def build_decoder_layer(self) -> NARTransformerDecoderLayer:
         """Build a Transformer decoder layer."""
 
         assert self.config.nar_decoder_config is not None
