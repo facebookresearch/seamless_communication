@@ -300,7 +300,6 @@ lib.std_string_free.restype = None
 NativeObj._cache["std_string"] = (lib.std_string_alloc, lib.std_string_free)
 
 
-@functools.lru_cache(1024)
 def CppStr(content: str) -> NativeObj:
     c_str = ctypes.create_string_buffer(content.encode("utf-8"))
     cpp_str = lib.std_string_alloc(c_str)
