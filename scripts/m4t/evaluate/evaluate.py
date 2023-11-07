@@ -12,12 +12,12 @@ import subprocess
 import torch
 import torchaudio
 
+from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
 from torch import Tensor
 from tqdm import tqdm
-from typing import List, Optional, Tuple
-from sacrebleu.metrics import BLEU
+from typing import List, Optional, Tuple, Dict
 
 from fairseq2.data import Collater, DataPipeline, FileMapper
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
@@ -33,6 +33,9 @@ from seamless_communication.models.inference import (
     Translator,
 )
 from seamless_communication.models.unity import load_unity_text_tokenizer
+from scripts.eval_utils.compute_metrics import (
+    compute_quality_metrics,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -218,7 +221,10 @@ def adjust_output_for_corrupted_inputs(
 
 
 def run_eval(
-    translator: Translator, text_tokenizer: TextTokenizer, ctx: EvalContext
+    translator: Translator,
+    text_tokenizer: TextTokenizer,
+    ctx: EvalContext,
+    whisper_model_name: Optional[str] = None,
 ) -> None:
     pipeline = build_data_pipeline(ctx, text_tokenizer)
 
@@ -232,17 +238,18 @@ def run_eval(
         waveforms_dir = output_path / f"waveform_{ctx.data_file.stem}"
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
-    hyps = []
-    refs = []
-
-    with open(
-        output_path / f"text_output-{ctx.data_file.stem}.txt", "w"
-    ) as hyp_file, open(
-        output_path / f"unit_output-{ctx.data_file.stem}.txt", "w"
+    model_outputs_tsv = output_path / f"model-outputs-{ctx.data_file.stem}.txt"
+    unit_outputs_tsv = output_path / f"unit_output-{ctx.data_file.stem}.txt"
+    with open(model_outputs_tsv, "w") as hyp_file, open(
+        unit_outputs_tsv, "w"
     ) if ctx.output_modality == Modality.SPEECH else contextlib.nullcontext(
         itertools.repeat(None)
     ) as unit_file:
         sample_id = 0
+        if ctx.output_modality == Modality.SPEECH:
+            hyp_file.write(f"ref_tgt_text\tpred_tgt_text\tpred_tgt_audio\n")
+        else:
+            hyp_file.write(f"ref_tgt_text\tpred_tgt_text\n")
         for example in pipeline:
             valid_sequences: Optional[Tensor] = None
             if ctx.input_modality == Modality.SPEECH:
@@ -262,7 +269,10 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                (text_output, speech_output,) = translator.predict(
+                (
+                    text_output,
+                    speech_output,
+                ) = translator.predict(
                     src,
                     ctx.task,
                     ctx.target_lang,
@@ -279,56 +289,58 @@ def run_eval(
                     speech_output = None
 
             if valid_sequences is not None and not valid_sequences.all():
-                (text_output, speech_output,) = adjust_output_for_corrupted_inputs(
+                (
+                    text_output,
+                    speech_output,
+                ) = adjust_output_for_corrupted_inputs(
                     valid_sequences,
                     text_output,
                     speech_output,
                 )
 
-            hyps += [str(s) for s in text_output]
-            refs += [str(s) for s in example[ctx.ref_field]]
+            hyps = [str(s) for s in text_output]
+            refs = [str(s) for s in example[ctx.ref_field]]
 
             for i in range(len(text_output)):
                 t = text_output[i]
-                hyp_file.write(f"{t}\n")
-
                 if ctx.output_modality == Modality.SPEECH:
                     assert speech_output is not None
                     u = speech_output.units[i]
                     str_units = [str(i) for i in u]
                     unit_file.write(" ".join(str_units) + "\n")
+                    wav_fp = str(waveforms_dir / f"{sample_id}_pred.wav")
                     torchaudio.save(
-                        waveforms_dir / f"{sample_id}_pred.wav",
+                        wav_fp,
                         speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
                         sample_rate=speech_output.sample_rate,
                     )
+                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\t{wav_fp}\n")
+                else:
+                    hyp_file.write(f"{refs[i]}\t{hyps[i]}\n")
 
                 sample_id += 1
                 progress_bar.update(1)
 
     progress_bar.close()
-    logger.info(f"Processed {len(hyps)} hyps, {len(refs)} refs")
+    logger.info(f"Processed {sample_id} samples")
 
-    assert len(hyps) == len(refs)
-    if len(hyps) > 0:
-        if ctx.target_lang in ("cmn", "jpn", "lao", "mya", "tha"):
-            tokenizer = "char"
-        else:
-            tokenizer = "13a"
-
-        bleu = BLEU(tokenize=tokenizer)
-        score = bleu.corpus_score(hyps, [refs])
-        bleu_filename = output_path / f"{ctx.data_file.stem}_text_output_bleu.json"
-        with open(bleu_filename, "w") as f:
-            f.write(score.format(signature=str(bleu.get_signature()), is_json=True))
-        logger.info(score.format(signature=bleu.get_signature()))
+    compute_quality_metrics(
+        output_manifest_tsv_path=model_outputs_tsv,
+        output_dir=output_path,
+        tgt_lang=ctx.target_lang,
+        task=ctx.task,
+        device=ctx.device,
+        whisper_model_name=whisper_model_name,
+    )
 
 
-def main():
+def main(optional_args: Optional[Dict] = None):
     parser = argparse.ArgumentParser(
         description="M4T evaluation for tasks supported by Translator."
     )
-    parser.add_argument("data_file", type=str, help="Data file (.tsv) to be evaluated.")
+    parser.add_argument(
+        "--data_file", type=str, help="Data file (.tsv) to be evaluated."
+    )
 
     parser = add_inference_arguments(parser)
     parser.add_argument(
@@ -349,7 +361,21 @@ def main():
         help="Reference target text field to compute the BLEU score against.",
         default="tgt_text",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--whisper_model_name",
+        type=str,
+        help="Whisper model to be used for ASR-BLEU scoring",
+        default="large",
+    )
+    args, unknown = parser.parse_known_args()
+    default_args = vars(args)
+    default_args.update(optional_args) if optional_args else default_args
+    args = Namespace(**default_args)
+
+    if not args.data_file or not args.task or not args.tgt_lang:
+        raise Exception(
+            "Please provide required arguments for evaluation - data_file, task, tgt_lang"
+        )
 
     input_modality, output_modality = Translator.get_modalities_from_task_str(args.task)
 
@@ -407,7 +433,7 @@ def main():
     # fmt: on
     logger.info(f"Running inference on {device=} with {dtype=}, {ctx.batch_size=}.")
 
-    run_eval(translator, text_tokenizer, ctx)
+    run_eval(translator, text_tokenizer, ctx, args.whisper_model_name)
 
 
 if __name__ == "__main__":

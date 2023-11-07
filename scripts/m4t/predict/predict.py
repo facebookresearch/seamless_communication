@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    parser.add_argument("task", type=str, help="Task type")
+    parser.add_argument("--task", type=str, help="Task type")
     parser.add_argument(
-        "tgt_lang", type=str, help="Target language to translate/transcribe into."
+        "--tgt_lang", type=str, help="Target language to translate/transcribe into."
     )
     parser.add_argument(
         "--src_lang",
@@ -178,6 +178,10 @@ def main():
 
     parser = add_inference_arguments(parser)
     args = parser.parse_args()
+    if not args.task or not args.tgt_lang:
+        raise Exception(
+            "Please provide required arguments for evaluation -  task, tgt_lang"
+        )
 
     if args.task.upper() in {"S2ST", "T2ST"} and args.output_path is None:
         raise ValueError("output_path must be provided to save the generated audio")
