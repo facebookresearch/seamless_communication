@@ -16,7 +16,7 @@ from typing import Any
 from pathlib import Path
 from typing import Iterator
 from ggml import NativeObj
-from ggml_convert import convert_model
+from ggml_convert import convert_model, read_layer_config
 from seamless_communication.models.inference.translator import Translator, Modality
 from fairseq2.data.audio import WaveformToFbankConverter
 import torchaudio
@@ -46,7 +46,7 @@ def _load_g_model_once() -> NativeObj:
     model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
     if not model_file.exists():
         convert_model("seamlessM4T_medium", model_file)
-    return ggml.load_unity_ggml_file(model_file)
+    return ggml.load_fairseq2_ggml_file(model_file)
 
 @pytest.fixture()
 def g_model(ctx: Ctx) -> c_void_p:
@@ -65,14 +65,18 @@ def load_pt_model() -> Any:
     return load_translator().model
 
 
-@pytest.mark.xfail(reason="TODO")
-def test_hparams_code_is_up_to_date() -> None:
-    model_file = Path(__file__).parent / "seamlessM4T_medium.ggml"
+def test_convert_linear(tmp_path: Path) -> None:
+    module = fairseq2.nn.Linear(16, 24, True)
 
-    hparams_header_file = model_file.with_suffix(".hparams.h")
-    hparams_struct = hparams_header_file.read_text().strip()
-    actual_code = (UNITY_MODELS.parent / "unity_model_loader.h").read_text()
-    assert hparams_struct in actual_code
+    layer_config = read_layer_config(module)
+    assert layer_config == {"input_dim": 16, "output_dim": 24, "skip_init": False}
+
+    module_file = Path("module.ggml")
+    convert_model(module, module_file)
+    g_module = ggml.load_fairseq2_ggml_file(module_file)
+
+    for k, v in layer_config.items():
+        assert ggml.fairseq2_model_layer_config_int(g_module.ptr, bytes(k, "ascii")) == v
 
 
 def test_causal_attention_mask(ctx: Ctx):

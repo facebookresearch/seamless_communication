@@ -35,12 +35,22 @@ void register_prefix(fairseq2_model &model, const std::string& name) {
 }
 
 
-int
+std::int64_t
 model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 {
-    int num_tensor = 0;
+    std::int64_t num_tensor = 0;
+    std::int64_t ctx_size = 0;
     fin.read((char*) &num_tensor, sizeof(num_tensor));
-    size_t total_size = 0;
+    fin.read((char*) &ctx_size, sizeof(ctx_size));
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ static_cast<std::size_t>(ctx_size),
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false,
+    };
+    model.tensors_ctx = ggml_init(params);
+
+    size_t model_size = 0;
     for (int i = 0; i < num_tensor; ++i) {
         std::string name = get_name(fin);
         if (name.length() == 0)
@@ -49,7 +59,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         if (tensor == nullptr) {
             // Abort in case of error, the input stream is corrupted at this point.
             printf("Error while reading tensor %s\n", name.c_str() );
-            return 1;
+            throw std::invalid_argument("Error while reading tensor from file.");
         }
         register_prefix(model, name);
         ggml_set_name(tensor, name.c_str());
@@ -57,27 +67,57 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         if (DEBUG_MODEL_LOAD) {
             printf("%s [%5ld, %5ld], type = %6s, %6.2f MB, %9zu bytes\n", name.c_str(), tensor->ne[0], tensor->ne[1], ggml_type_name(tensor->type), ggml_nbytes(tensor)/1024.0/1024.0, ggml_nbytes(tensor));
         }
-        total_size += ggml_nbytes(tensor);
+        model_size += ggml_nbytes(tensor);
     }
 
-    printf("%s: model size  = %8.2f MB\n", __func__, total_size/1024.0/1024.0);
-    return 0;
+    double mb = 1024.0 * 1024.0;
+    printf("%s: model size  = %8.2f MB, memory used = %8.2f MB, memory reserved = %8.2f \n",
+        __func__,
+        model_size / mb,
+        ggml_used_mem(model.tensors_ctx) / mb,
+        ctx_size / mb
+    );
+
+    return ctx_size;
+}
+
+void assert_endianness() {
+    union {
+        unsigned int i;
+        char c[4];
+    } un;
+    un.i = 0x12345678;
+
+    if (un.c[0] == 0x78 && un.c[3] == 0x12) {
+        printf("little-endian\n");
+    }
+    else if (un.c[0] == 0x12 && un.c[3] == 0x78) {
+        printf("big-endian\n");
+        GGML_ASSERT(false); // model_loader.cpp assumes the system is little-endian
+    }
+    else {
+        printf("unknown-endian\n");
+        GGML_ASSERT(false); // model_loader.cpp assumes the system is little-endian
+    }
 }
 
 
-int
-model_loader::load_layer_config(fairseq2_model &model, std::ifstream &fin)
+void model_loader::load_hparams(std::unordered_map<std::string, std::int64_t>& hparams, std::ifstream &fin)
 {
+    std::int64_t num_params = 0;
+    fin.read(reinterpret_cast<char*>(&num_params), sizeof num_params);
+    GGML_ASSERT(fin.gcount() == 8);
+
+    hparams.reserve(num_params);
+
     std::int64_t value;
-    while (!fin.eof()) {
+    for (int i = 0; i < num_params; ++i) {
         std::string name = get_name(fin);
         if (name.length() == 0)
             break;
         fin.read((char*) &value, sizeof(value));
-        model.layer_config[name] = value;
+        hparams[name] = value;
     }
-
-    return 0;
 }
 
 ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
@@ -107,11 +147,21 @@ model_loader::get_name(std::ifstream& fin)
 {
     std::uint32_t length = 0;
     fin.read(reinterpret_cast<char *>(&length), sizeof(length));
+    if (length == 0)
+        return "";
+
     std::string name(length, 0);
-    if (length == 0) {
-        return name;
-    };
     fin.read(&name[0], length);
 
     return name;
+}
+
+extern "C" int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname) {
+    model_loader loader;
+    assert_endianness();
+    auto fin = open_ggml_file(fname);
+    loader.load_hparams(model.hparams, fin);
+    loader.load_hparams(model.layer_config, fin);
+    loader.load_model_weights(model, fin);
+    return 0;
 }

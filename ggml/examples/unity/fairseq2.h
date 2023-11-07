@@ -1,6 +1,6 @@
 #pragma once
 
-#include <map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include "ggml.h"
@@ -10,10 +10,17 @@
 struct fairseq2_model {
     // Context containing all tensors memory
     ggml_context* tensors_ctx;
+
     // Named tensors, all tensors should belong to tensors_ctx
-    std::map<std::string, struct ggml_tensor *> tensors;
-    std::map<std::string, std::int64_t> layer_config;
-    void* hparams;
+    std::unordered_map<std::string, struct ggml_tensor *> tensors;
+
+    // Hashmap containing model hyper-parameters.
+    std::unordered_map<std::string, std::int64_t> hparams;
+
+    // Hashmap containing layers hyper-parameters.
+    // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
+    std::unordered_map<std::string, std::int64_t> layer_config;
+
     // an inference context, not managed by this object
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
     ggml_context* ctx;
@@ -147,6 +154,7 @@ extern "C" ggml_tensor* StandardConformerEncoderAdaptor_forward(
     ggml_tensor* padding_mask
 );
 // Specifies the Layer Normalization order.
+// see fairseq2/nn/transformer/norm_order.py
 enum TransformerNormOrder {
     TRANSFORMER_NORM_ORDER_POST = 0,
     TRANSFORMER_NORM_ORDER_PRE = 1,

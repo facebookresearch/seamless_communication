@@ -307,14 +307,14 @@ def CppStr(content: str) -> NativeObj:
     return NativeObj("std_string", cpp_str)
 
 
-lib.load_unity_ggml_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-lib.load_unity_ggml_file.restype = ctypes.c_int
+lib.load_fairseq2_ggml_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+lib.load_fairseq2_ggml_file.restype = ctypes.c_int
 
 
-def load_unity_ggml_file(model_file: Path) -> NativeObj:
+def load_fairseq2_ggml_file(model_file: Path) -> NativeObj:
     model = Fairseq2Model()
     bytes_file = ctypes.create_string_buffer(str(model_file).encode("utf-8"))
-    err = lib.load_unity_ggml_file(model.ptr, bytes_file)
+    err = lib.load_fairseq2_ggml_file(model.ptr, bytes_file)
     if err:
         raise Exception("Failed to load model")
     return model
@@ -446,6 +446,12 @@ def generate_sequence(
 ) -> Ptr[Hypothesis]:
     ...
 
+
 @c_fn(lib)
 def _testing_return_hypothesis_ptr(ctx: ggml_context_p) -> Ptr[Hypothesis]:
     return Ptr()
+
+
+@c_fn(lib)
+def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: str) -> int:
+    pass

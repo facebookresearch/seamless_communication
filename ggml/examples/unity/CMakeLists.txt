@@ -7,5 +7,4 @@ target_sources(unity
     PRIVATE
         fairseq2.cpp
         model_loader.cpp
-        unity_model_loader.cpp
 )

@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <iostream>

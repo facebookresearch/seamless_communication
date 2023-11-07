@@ -68,28 +68,37 @@ def pos_enc(max_seq_len=4096, encoding_dim=1024):
 
     return weight
 
-def convert_model(model_name: str, out: Optional[Path] = None) -> None:
-    if out is None:
-        out = Path(model_name).with_suffix(".ggml")
+def convert_model(
+    model_name: Union[str, torch.nn.Module],
+    out: Optional[Path] = None,
+    hparams: Optional[Dict[str, Any]] = None,
+) -> None:
+    if isinstance(model_name, str):
+        # Load the corresponding fairseq2 model
+        if out is None:
+            out = Path(model_name).with_suffix(".ggml")
 
-    # The type of model depends on the name
-    if "unity" in model_name or "seamlessM4T" in model_name:
-        model_config = load_unity_config(model_name)
-        hparams = flatten_config(dataclasses.asdict(model_config), separator="__")
-        print(hparams)
-        model = load_unity_model(model_name)
+        # The type of model depends on the name
+        if "unity" in model_name or "seamlessM4T" in model_name:
+            if hparams is None:
+                model_config = load_unity_config(model_name)
+                hparams = flatten_config(dataclasses.asdict(model_config), separator="__")
+                print(hparams)
+            model = load_unity_model(model_name)
+        else:
+            raise ValueError(f"Unsupported model type: {model_name}")
     else:
-        raise ValueError(f"Unsupported model type: {model_name}")
+        # Use the model passed explicitly
+        assert out is not None, "output path is required when explicitly passing a module"
+        hparams = hparams or {}
+        model = model_name
 
     state_dict = model.state_dict()
     fixup_model(model, state_dict)
+    layer_config = read_layer_config(model)
 
     with out.open("wb") as o:
-        write_ggml_file(o, hparams, state_dict)
-        write_layer_config(o, model)
-
-    with out.with_suffix(".hparams.h").open("w") as h:
-        h.write(generate_hparams_struct(hparams, "unity_hparams"))
+        write_ggml_file(o, hparams, layer_config, state_dict)
 
 
 def _nested_getattr(model: Any, name: str) -> Any:
@@ -120,7 +129,10 @@ def find_children(model: torch.nn.Module, t: type) -> List[Tuple[str, torch.nn.M
 def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> None:
     # Bake the embedding scaling into the weights
     frontends = find_children(model, TransformerEmbeddingFrontend)
-    print("Upgrading the following TransformerEmbeddingFrontend:", [x[0] for x in frontends])
+    print(
+        "Upgrading the following TransformerEmbeddingFrontend:",
+        [x[0] for x in frontends],
+    )
     for name, frontend in frontends:
         embed_weights = state_dict[name + ".embed.weight"]
         state_dict[name + ".embed.weight"] = embed_weights * frontend.scale
@@ -128,7 +140,10 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
     # Sinusoidal embeddings are typically not saved since they are easily recomputed,
     # but this allows to avoid porting the sinusoidal logic to GGML
     pos_encoders = find_children(model, SinusoidalPositionEncoder)
-    print("Upgrading the following SinusoidalPositionEncoder:", [x[0] for x in pos_encoders])
+    print(
+        "Upgrading the following SinusoidalPositionEncoder:",
+        [x[0] for x in pos_encoders],
+    )
     for name, pos_encoder in pos_encoders:
         assert isinstance(pos_encoder.weight, torch.Tensor)
         assert name not in state_dict
@@ -137,29 +152,19 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
     state_dict["speech_encoder.pos_enc"] = pos_enc()
 
 def write_ggml_file(
-    out: BufferedWriter, hparams: Dict[str, Any], state_dict: Dict[str, torch.Tensor]
+    out: BufferedWriter,
+    hparams: Dict[str, Any],
+    layer_config: Dict[str, Any],
+    state_dict: Dict[str, torch.Tensor],
 ) -> None:
     write_ggml_header(out)
-
-    # Apppend the byte size to the hparams.
-    if "model_byte_size" not in hparams:
-        # Size of each tensor
-        byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
-        # + tensor overhead
-        byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
-        hparams["model_byte_size"] = byte_size
-        logging.warning(
-            f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3)} GGML Gb"
-        )
-    # 6877961321223123048
-    hparams["__end_of_hparams__"] = struct.unpack("l", b"hparams_")[0]
-
     write_hparams(out, hparams)
+    write_hparams(out, layer_config)
     write_state_dict(out, state_dict)
 
 
 def write_ggml_header(out: BufferedWriter) -> None:
-    """Write GGML header (in reverse cause why not)"""
+    """Write GGML header (in reverse cause big-endian)"""
     out.write(b"ggml"[::-1])
 
 
@@ -170,16 +175,22 @@ def write_hparams(out: BufferedWriter, hparams: Dict[str, Any]) -> None:
         flattened dict containing model's hyper parameters.
 
     """
-    # TODO: should we preprend the size of the hparams struct ?
-    # this would help catch out of sync writer/loader code
+    simple_vals = {}
     for key, value in hparams.items():
         try:
-            # TODO: this is not cross platform, what's the standard way of writing hparams in GGML ?
-            ctype, cvalue = to_ctype(value)
-            out.write(struct.pack(ctype, cvalue))
+            simple_vals[key] = to_ctype(value)
         except ValueError:
             logging.warning(f"Skipping config for key {key}={value!r}")
             continue
+
+    out.write(struct.pack("<q", len(simple_vals)))
+    for key, (ctype, cvalue) in simple_vals.items():
+        write_string(out, key)
+        b = struct.pack(ctype, cvalue)
+        assert len(b) == 8
+        out.write(b)
+
+    logging.info(f"Saved {len(simple_vals)} params.")
 
 
 def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -> None:
@@ -188,7 +199,15 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
     :paras state_dict:
         state dict returned by pytorch model
     """
-    out.write(struct.pack("i", len(state_dict)))
+    out.write(struct.pack("<q", len(state_dict)))
+    # Size of each tensor
+    byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
+    # + tensor overhead
+    byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
+    out.write(struct.pack("<q", byte_size))
+    logging.warning(
+        f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3):.3f} GGML Gb"
+    )
     for key, value in state_dict.items():
         write_string(out, key)
         if key.endswith(".bias") and value.ndim == 1 and "adaptor" not in key:
@@ -201,27 +220,6 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
         write_tensor(out, value.contiguous())
 
 
-def write_layer_config(out: BufferedWriter, model: torch.nn.Module) -> None:
-    for name, node in find_children(model, torch.nn.Module):
-        for k, v in node.__dict__.items():
-            # Skip special members. In particular all children module and tensors
-            # will be hidden in special dicts `_parameters` and `_modules`
-            if k.startswith("_"):
-                continue
-            # All modules have a "training" flag
-            if k == "training":
-                continue
-            if v is None:
-                continue
-            try:
-                ctype, cvalue = to_ctype(v)
-                write_string(out, f"{name}.{k}")
-                out.write(struct.pack(ctype, cvalue))
-            except ValueError as e:
-                logging.warning(f"Skipping config for {name}.{k}={v!r}")
-                continue
-
-
 def write_string(out: BufferedWriter, value: str) -> None:
     """Write string in utf-8 format.
 
@@ -229,7 +227,9 @@ def write_string(out: BufferedWriter, value: str) -> None:
         string value to dump.
     """
     str_ = value.encode("utf-8")
-    out.write(struct.pack("i", len(str_)))
+    packed_len = struct.pack("<i", len(str_))
+    assert len(packed_len) == 4
+    out.write(packed_len)
     out.write(str_)
 
 
@@ -243,7 +243,7 @@ def write_tensor(out: BufferedWriter, value: torch.Tensor) -> None:
         Tensor to dump.
     """
     if value.dtype is torch.int64:
-        # GGML doesn't ahve int64, downcast it
+        # GGML doesn't have int64, downcast it
         value = value.to(dtype=torch.int32)
 
     if value.ndim == 0:
@@ -256,11 +256,11 @@ def write_tensor(out: BufferedWriter, value: torch.Tensor) -> None:
     assert n_dims >= 1, "ggml doesn't support 0 dim tensors"
 
     ftype = torch_to_ggml_type(value.dtype)
-    out.write(struct.pack("i", n_dims))
-    out.write(struct.pack("i", ftype))
+    out.write(struct.pack("<i", n_dims))
+    out.write(struct.pack("<i", ftype))
     for i in range(n_dims):
         # ggml uses long for shape
-        out.write(struct.pack("l", data.shape[n_dims - 1 - i]))
+        out.write(struct.pack("<q", data.shape[n_dims - 1 - i]))
 
     data.tofile(out)
 
@@ -314,8 +314,39 @@ def flatten_config(
     return __flatten(config)
 
 
+def read_layer_config(model: torch.nn.Module) -> Dict[str, Any]:
+    layer_config = {}
+
+    def _append_node_config(node: Any, prefix: str) -> None:
+        for k, v in node.__dict__.items():
+            # Skip special members. In particular all children module and tensors
+            # will be hidden in special dicts `_parameters` and `_modules`
+            if k.startswith("_"):
+                continue
+            # All modules have a "training" flag
+            if k == "training":
+                continue
+            if v is None:
+                continue
+
+            try:
+                to_ctype(v)
+            except ValueError:
+                logging.warning(f"Skipping layer config {k}={v!r}")
+                continue
+            layer_config[prefix + k] = v
+
+    _append_node_config(model, "")
+    for name, node in find_children(model, torch.nn.Module):
+        _append_node_config(node, name + ".")
+    return layer_config
+
+
 def to_ctype(value: Any) -> Tuple[str, Any]:
     """Transform python type to ctype.
+
+    Note: we always use little-endian and 8-byte types.
+    This make the format independent of the current platform.
 
     :params value:
         value to cast into ctype
@@ -324,20 +355,20 @@ def to_ctype(value: Any) -> Tuple[str, Any]:
         A tuple of ctype and cvalue.
     """
     if isinstance(value, int):
-        return ("l", value)
+        return ("<q", value)
     if isinstance(value, float):
-        return ("d", value)
+        return ("<d", value)
     if isinstance(value, bool):
-        return ("l", value)
+        return ("<q", value)
     if isinstance(value, Enum):
-        return ("l", value.value)
+        return ("<q", value.value)
     if isinstance(value, tuple) and len(value) == 1:
         return to_ctype(value[0])
     if isinstance(value, str) and len(value) < 8:
         value = bytes(value, "ascii")
         if len(value) < 8:
             value = value + (8 - len(value)) * b"\0"
-        return ("l", struct.unpack("l", value)[0])
+        return ("8s", value)
 
     raise ValueError(f"Unsupported type {type(value)}")
 
