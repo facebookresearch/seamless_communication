@@ -10,6 +10,7 @@ from typing import Optional, Tuple, List
 import torch
 
 from torch import Tensor
+from fairseq2.data import VocabularyInfo
 from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     Seq2SeqGenerator,
@@ -94,7 +95,7 @@ class UnitYGenerator:
             decoder_frontend=model.text_decoder_frontend,
             decoder=model.text_decoder,
             final_proj=model.final_proj,
-            pad_idx=model.pad_idx,
+            target_vocab_info=model.target_vocab_info,
         )
         self.s2t_generator = SequenceToTextGenerator(
             s2t_model, text_tokenizer, target_lang, text_opts
@@ -111,7 +112,7 @@ class UnitYGenerator:
                 decoder_frontend=model.text_decoder_frontend,
                 decoder=model.text_decoder,
                 final_proj=model.final_proj,
-                pad_idx=model.pad_idx,
+                target_vocab_info=model.target_vocab_info,
             )
             self.t2t_generator = SequenceToTextGenerator(
                 t2t_model, text_tokenizer, target_lang, text_opts
@@ -237,7 +238,7 @@ class UnitYGenerator:
             unit_seqs = unit_decoder_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.
             unit_seqs = apply_padding_mask(
-                unit_seqs, decoder_padding_mask, pad_value=unit_decoder_output.pad_idx
+                unit_seqs, decoder_padding_mask, unit_decoder_output.vocab_info.pad_idx
             )
 
         # Convert to speech units.

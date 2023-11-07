@@ -88,11 +88,8 @@ class UnitYT2UConfig:
     unit_max_seq_len: int
     """The expected maximum unit sequence length."""
 
-    unit_vocabulary_size: int
-    """The size of the unit vocabulary."""
-
-    unit_pad_idx: Optional[int]
-    """The index of the pad symbol in the unit vocabulary."""
+    target_vocab_info: VocabularyInfo
+    """The target vocabulary information."""
 
     num_encoder_layers: int
     """The number of Transformer encoder layers."""
@@ -134,8 +131,9 @@ def _base_t2u() -> UnitYT2UConfig:
     return UnitYT2UConfig(
         model_dim=1024,
         unit_max_seq_len=2048,
-        unit_vocabulary_size=10082,
-        unit_pad_idx=1,
+        target_vocab_info=VocabularyInfo(
+            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+        ),
         num_encoder_layers=6,
         num_decoder_layers=6,
         nar_decoder_frontend_config=None,
@@ -152,8 +150,9 @@ def _medium_t2u() -> UnitYT2UConfig:
     return UnitYT2UConfig(
         model_dim=1024,
         unit_max_seq_len=2048,
-        unit_vocabulary_size=10082,
-        unit_pad_idx=1,
+        target_vocab_info=VocabularyInfo(
+            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+        ),
         num_encoder_layers=4,
         num_decoder_layers=4,
         nar_decoder_frontend_config=None,
@@ -192,8 +191,9 @@ def _base_nar() -> UnitYT2UConfig:
     return UnitYT2UConfig(
         model_dim=1024,
         unit_max_seq_len=4096,
-        unit_vocabulary_size=10082,
-        unit_pad_idx=1,
+        target_vocab_info=VocabularyInfo(
+            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+        ),
         num_encoder_layers=6,
         num_decoder_layers=6,
         nar_decoder_frontend_config=nar_decoder_frontend_config,
@@ -253,16 +253,16 @@ class UnitYT2UBuilder:
             decoder_frontend,
             decoder,
             final_proj,
-            self.config.unit_pad_idx,
+            self.config.target_vocab_info,
         )
 
     def build_unit_embedding(self) -> StandardEmbedding:
         """Build a unit embedding table."""
 
         return StandardEmbedding(
-            num_embeddings=self.config.unit_vocabulary_size,
+            num_embeddings=self.config.target_vocab_info.size,
             embedding_dim=self.config.model_dim,
-            pad_idx=self.config.unit_pad_idx,
+            pad_idx=self.config.target_vocab_info.pad_idx,
             init_fn=init_scaled_embedding,
             device=self.device,
             dtype=self.dtype,
@@ -306,7 +306,7 @@ class UnitYT2UBuilder:
         pos_encoder = SinusoidalPositionEncoder(
             self.config.model_dim,
             self.config.unit_max_seq_len,
-            _legacy_pad_idx=self.config.unit_pad_idx,
+            _legacy_pad_idx=self.config.target_vocab_info.pad_idx,
             device=self.device,
         )
         return TransformerEmbeddingFrontend(
@@ -424,16 +424,16 @@ class UnitYNART2UBuilder:
             decoder_frontend,
             decoder,
             final_proj,
-            self.config.unit_pad_idx,
+            self.config.target_vocab_info,
         )
 
     def build_unit_embedding(self) -> StandardEmbedding:
         """Build a unit embedding table."""
 
         return StandardEmbedding(
-            num_embeddings=self.config.unit_vocabulary_size,
+            num_embeddings=self.config.target_vocab_info.size,
             embedding_dim=self.config.model_dim,
-            pad_idx=self.config.unit_pad_idx,
+            pad_idx=self.config.target_vocab_info.pad_idx,
             init_fn=init_scaled_embedding,
             device=self.device,
             dtype=self.dtype,
@@ -505,7 +505,7 @@ class UnitYNART2UBuilder:
         unit_pos_encoder = SinusoidalPositionEncoder(
             self.config.model_dim,
             self.config.unit_max_seq_len,
-            _legacy_pad_idx=self.config.unit_pad_idx,
+            _legacy_pad_idx=self.config.target_vocab_info.pad_idx,
             device=self.device,
         )
 
