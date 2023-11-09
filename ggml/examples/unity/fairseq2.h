@@ -210,6 +210,7 @@ struct SequenceGeneratorJob {
     std::int32_t unk_idx;
     std::int32_t bos_idx;
     std::int32_t eos_idx;
+    std::int32_t num_threads;
 };
 
 /// Represents a hypothesis produced by a sequence generator.

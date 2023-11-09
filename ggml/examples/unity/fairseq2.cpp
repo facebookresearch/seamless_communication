@@ -473,7 +473,7 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
 extern "C" ggml_tensor* WaveformToFbank_forward(
     fairseq2_model& model,
     const std::string &prefix,
-    ggml_tensor* waveform 
+    ggml_tensor* waveform
 ) {
     // Hardcoding: num_bins 80, sample rate 16k, always standardize
     ggml_context* ctx = model.ctx;
@@ -486,7 +486,7 @@ extern "C" ggml_tensor* WaveformToFbank_forward(
     knf::FbankOptions opts{};
     opts.frame_opts = frame_opts;
     opts.mel_opts = mel_opts;
-    
+
 
     std::vector<float_t> signal_frame{};
     std::int32_t num_frames = knf::NumFrames(/*num_samples=*/waveform->ne[0], frame_opts);
@@ -538,13 +538,13 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     struct ggml_tensor * Qcur = Linear_forward(model, prefix + ".q_proj", seqs);
     struct ggml_tensor * Kcur = Linear_forward(model, prefix + ".k_proj", seqs);
     struct ggml_tensor * Vcur = Linear_forward(model, prefix + ".v_proj", seqs);
-    
+
     // self_attn: rel_pos SDPA
     int32_t S = seqs->ne[1];
     int32_t H = 16; // TODO: Make this configurable
     int32_t n_ctx = 4096;
     int32_t K_h = seqs->ne[0] / H;
-    
+
     int32_t start_index = n_ctx - S;
     int32_t end_index = n_ctx + S - 1;
 
@@ -556,10 +556,10 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     for (int i = 0; i < num_indices; i++) {
         ((int32_t *)rows->data)[i] = start_index + i;
     }
-    
+
     // self_attn: load pos_enc weights & compute_r
-    // In fairseq2 pos_enc weights are calculated on the fly, since some more custom operators might be needed to enable this, 
-    // we store the results (fixed) in checkpoint as model.audio_enc_pos_enc_w and load directly. 
+    // In fairseq2 pos_enc weights are calculated on the fly, since some more custom operators might be needed to enable this,
+    // we store the results (fixed) in checkpoint as model.audio_enc_pos_enc_w and load directly.
     struct ggml_tensor * r = ggml_get_rows(ctx, model.tensors["speech_encoder.pos_enc"], rows);
     r = ggml_mul_mat(ctx, model.tensors[prefix + ".sdpa.r_proj.weight"], r);
     r = ggml_dup(ctx, ggml_permute(ctx,
@@ -567,55 +567,55 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
                             r,
                             ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S*2-1)),
                         0, 2, 1, 3));
-    
+
     struct ggml_tensor * u_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.u_bias"], K_h, 1, H);
     struct ggml_tensor * v_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.v_bias"], K_h, 1, H);
 
     // self_attn: Permute QKV
-    
+
     struct ggml_tensor * Q =
                 ggml_dup(ctx, ggml_permute(ctx,
                         ggml_cpy(ctx,
                             Qcur,
                             ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
                         0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    struct ggml_tensor * K = 
+    struct ggml_tensor * K =
                 ggml_dup(ctx, ggml_permute(ctx,
                         ggml_cpy(ctx,
                             Kcur,
                             ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
                         0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    struct ggml_tensor * V = 
+    struct ggml_tensor * V =
                 ggml_dup(ctx, ggml_permute(ctx,
                         ggml_cpy(ctx,
                             Vcur,
                             ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
                         1, 2, 0, 3)); // (H * K_h, S) -> (K_h, H, S) -> (H, S, K_h)
-    
-    
+
+
     struct ggml_tensor * q_with_u_bias = ggml_add(ctx, Q, u_bias); // (K_h, S, H)
     struct ggml_tensor * q_with_v_bias = ggml_add(ctx, Q, v_bias); // (K_h, S, H)
-    
+
     struct ggml_tensor * ac = ggml_mul_mat(ctx, K, q_with_u_bias);
     struct ggml_tensor * bd = ggml_mul_mat(ctx, r, q_with_v_bias);
-    
-    
+
+
     // self_attn: shift_bd. Logic follows https://github.com/facebookresearch/fairseq2/blob/main/src/fairseq2/nn/transformer/relative_attention.py#L161
     bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // H, S, 2S-1
-    
+
     struct ggml_tensor * pad = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, H, S, 1);
     pad->data = malloc(ggml_nbytes(pad));
 
     pad = ggml_set_f32(pad, 0.0);
     bd = ggml_concat(ctx, pad, bd); // bd[i][j][0] == 0, (H, S, 2S)
-    bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // (2S, S, H) 
+    bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // (2S, S, H)
     bd = ggml_dup(ctx, ggml_reshape_3d(ctx, bd, S, 2*S, H));  // (S, 2S, H)
     bd = ggml_remove_head_row(ctx, bd); // A custom operator introduced to reduce 1st row (in the 2nd dim)
 
     bd = ggml_reshape_3d(ctx, bd, 2*S-1, S, H);
 
-    bd = ggml_get_first_cols_by_rows(ctx, bd); // A custom operator introduced to get first #rows cols. 
-    
+    bd = ggml_get_first_cols_by_rows(ctx, bd); // A custom operator introduced to get first #rows cols.
+
 
     // self_attn: compute attn / weights
     struct ggml_tensor * attn_weights = ggml_add(ctx, ac, bd);
@@ -624,11 +624,11 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     ggml_set_f32(attn_scale, 1.0 / pow(K_h, 0.5));
     attn_weights = ggml_mul(ctx, ggml_repeat(ctx, attn_scale, attn_weights), attn_weights);
     attn_weights = ggml_soft_max(ctx, attn_weights);
-    
+
     struct ggml_tensor * attn = ggml_mul_mat(ctx, V, attn_weights); // K_h, S, H
     attn = ggml_dup(ctx, ggml_permute(ctx, attn, 0, 2, 1, 3));
-    struct ggml_tensor * attn_2d = ggml_reshape_2d(ctx, attn, K_h * H, S); 
-    
+    struct ggml_tensor * attn_2d = ggml_reshape_2d(ctx, attn, K_h * H, S);
+
     struct ggml_tensor * attn_out = ggml_mul_mat(ctx, model.tensors[prefix + ".output_proj.weight"], attn_2d);
     attn_out = ggml_add(ctx,
             ggml_repeat(ctx,
@@ -649,23 +649,23 @@ extern "C" ggml_tensor* ConvModule_forward(
         seqs = LayerNorm_forward(model, prefix + "_layer_norm", seqs);
         // conv: Use matmul for pointwise conv 1 - kernel_size=1, no padding case
         seqs = ggml_mul_mat(ctx, model.tensors[prefix + ".pointwise_conv1.weight"], seqs);
-        
+
         // conv: GLU
         seqs = ggml_glu(ctx, seqs);
         seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
-       
+
         // S x C -> (S+K-1) x C -> K x S x C -> S x C
         seqs = ggml_conv_1d(ctx, model.tensors[prefix + ".depthwise_conv.weight"], seqs, 1, 15, 1);
-        
+
         // conv: Custom implementation of batch norm
         seqs = ggml_batch_norm(ctx, seqs, model.tensors[prefix + ".batch_norm.weight"], model.tensors[prefix + ".batch_norm.bias"], model.tensors[prefix + ".batch_norm.running_mean"], model.tensors[prefix + ".batch_norm.running_var"], 1e-5);
-        
+
         // conv: SiLU actvation
         seqs = ggml_silu(ctx, seqs);
         seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
 
         // conv: Use matmul for pointwise conv 2 - kernel_size=1, no padding case
-        seqs = ggml_mul_mat(ctx, model.tensors[prefix + ".pointwise_conv2.weight"], seqs); 
+        seqs = ggml_mul_mat(ctx, model.tensors[prefix + ".pointwise_conv2.weight"], seqs);
 
         // conv: + residual
         seqs = ggml_add(ctx, seqs, residual);
@@ -709,9 +709,9 @@ extern "C" ggml_tensor* StandardConformerEncoder_forward(
     seqs = LayerNorm_forward(model, prefix + "_frontend.post_extract_layer_norm", seqs);
     seqs = Linear_forward(model, prefix + "_frontend.model_dim_proj", seqs);
     int layer_idx = 0;
-    
+
     std::string layer_name = prefix + ".inner.layers." + std::to_string(layer_idx);
-    
+
     while (has_layer(model, layer_name)) {
         seqs = StandardConformerEncoderLayer_forward(
             model, layer_name, seqs, padding_mask
@@ -742,7 +742,7 @@ extern "C" ggml_tensor* StandardConformerEncoder_forward(
         layer_name = prefix + ".adaptor_layers." + std::to_string(layer_idx);
     }
     seqs = LayerNorm_forward(model, prefix + ".layer_norm", seqs);
-    
+
     return seqs;
 }
 
@@ -756,7 +756,7 @@ extern "C" ggml_tensor* StandardConformerEncoderAdaptorLayer_forward(
     struct ggml_tensor * residual = seqs;
     residual = LayerNorm_forward(model, prefix + ".residual_layer_norm", residual);
     residual = ggml_dup(ctx, ggml_permute(ctx, residual, 1, 0, 2, 3));
-    residual = ggml_conv_1d_generic(ctx, model.tensors[prefix + ".residual_conv.weight"], residual, 8, 4, 1); 
+    residual = ggml_conv_1d_generic(ctx, model.tensors[prefix + ".residual_conv.weight"], residual, 8, 4, 1);
     residual = ggml_dup(ctx, ggml_permute(ctx, residual, 1, 0, 2, 3));
     residual = ggml_add(ctx, ggml_repeat(ctx, model.tensors[prefix + ".residual_conv.bias"], residual), residual);
     residual = ggml_glu(ctx, residual);
@@ -766,8 +766,8 @@ extern "C" ggml_tensor* StandardConformerEncoderAdaptorLayer_forward(
     seqs = ggml_conv_1d_generic(ctx, model.tensors[prefix + ".self_attn_conv.weight"], seqs, 8, 4, 1);
     seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
     seqs = ggml_add(ctx, ggml_repeat(ctx, model.tensors[prefix + ".self_attn_conv.bias"], seqs), seqs);
-    seqs = ggml_glu(ctx, seqs); 
-    
+    seqs = ggml_glu(ctx, seqs);
+
     seqs = MultiheadAttention_forward(
         model,
         prefix + ".self_attn",
@@ -1388,7 +1388,7 @@ extern "C" Hypothesis* generate_sequence(
             ggml_detach(new_scores);
             new_seqs->type = GGML_TYPE_I32;
         }
-        
+
         // new_seqs[:, step_nr + 1] = next_tokens
         // new_scores[:, step_nr + 1] = next_scores
         for (std::size_t i = 0; i < beam_size; ++i) {
