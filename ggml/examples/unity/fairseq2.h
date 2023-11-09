@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "ggml.h"
+#include "kaldi-native-fbank/csrc/feature-fbank.h"
 
 
 struct fairseq2_model {
@@ -27,6 +28,11 @@ extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_con
 extern "C" std::string* std_string_alloc(char* c_str);
 extern "C" void std_string_free(std::string* str);
 
+extern "C" ggml_tensor* WaveformToFbank_forward(
+    fairseq2_model& model,
+    const std::string &prefix,
+    ggml_tensor* waveform 
+);
 extern "C" ggml_tensor* ggml_slice(
     struct ggml_context* ctx,
     struct ggml_tensor* a,
@@ -64,6 +70,12 @@ extern "C" ggml_tensor* StandardFeedForwardNetwork_forward(
     ggml_tensor* seqs
 );
 
+extern "C" ggml_tensor* SiluFeedForwardNetwork_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs
+);
+
 extern "C" ggml_tensor* MultiheadAttention_forward(
     fairseq2_model& model,
     const std::string &prefix,
@@ -93,6 +105,45 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     ggml_tensor* padding_mask
 );
 
+extern "C" ggml_tensor* RelativePositionMHA_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs
+);
+
+extern "C" ggml_tensor* ConvModule_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs
+);
+
+extern "C" ggml_tensor* StandardConformerEncoderLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
+extern "C" ggml_tensor* StandardConformerEncoder_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
+extern "C" ggml_tensor* StandardConformerEncoderAdaptorLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
+extern "C" ggml_tensor* StandardConformerEncoderAdaptor_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
 // Specifies the Layer Normalization order.
 enum TransformerNormOrder {
     TRANSFORMER_NORM_ORDER_POST = 0,

@@ -60,7 +60,6 @@ from typing import Type
 from typing import Callable
 from typing import Tuple
 from typing import Dict
-from typing_extensions import Self
 from typing import Any
 from pathlib import Path
 from typing import List, Optional, Sequence, Union

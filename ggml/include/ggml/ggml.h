@@ -347,7 +347,7 @@ extern "C" {
         GGML_OP_NONE = 0,
 
         GGML_OP_DUP,
-        GGML_OP_ADD, //2
+        GGML_OP_ADD,
         GGML_OP_ADD1,
         GGML_OP_ACC,
         GGML_OP_SUB,
@@ -367,19 +367,21 @@ extern "C" {
         GGML_OP_GET_FIRST_COLS_BY_ROWS,
         GGML_OP_SILU_BACK,
         GGML_OP_NORM, // normalize
+        GGML_OP_BATCH_NORM, 
         GGML_OP_RMS_NORM,
         GGML_OP_RMS_NORM_BACK,
         GGML_OP_GROUP_NORM,
 
-        GGML_OP_MUL_MAT, //23
+        GGML_OP_MUL_MAT,
         GGML_OP_OUT_PROD,
+
         GGML_OP_SCALE,
         GGML_OP_SET,
         GGML_OP_CPY,
         GGML_OP_CONT,
-        GGML_OP_RESHAPE, //29
+        GGML_OP_RESHAPE,
         GGML_OP_VIEW,
-        GGML_OP_PERMUTE, //32
+        GGML_OP_PERMUTE,
         GGML_OP_TRANSPOSE,
         GGML_OP_GET_ROWS,
         GGML_OP_GET_ROWS_BACK,
@@ -393,10 +395,18 @@ extern "C" {
         GGML_OP_ALIBI,
         GGML_OP_CLAMP,
         GGML_OP_CONV_1D,
+        GGML_OP_CONV_1D_GENERIC,
         GGML_OP_CONV_2D,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
+
+        GGML_OP_CONV_1D_STAGE_0,  // internal
+        GGML_OP_CONV_1D_STAGE_1,  // internal
+        GGML_OP_CONV_1D_STAGE_2,  // internal
+
+        GGML_OP_CONV_1D_GENERIC_STAGE_0,
+        GGML_OP_CONV_1D_GENERIC_STAGE_1,  
 
         GGML_OP_UPSCALE, // nearest interpolate
 
@@ -438,6 +448,7 @@ extern "C" {
         GGML_UNARY_OP_GELU,
         GGML_UNARY_OP_GELU_QUICK,
         GGML_UNARY_OP_SILU,
+        GGML_UNARY_OP_GLU,
     };
 
     enum ggml_object_type {
@@ -937,6 +948,10 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    GGML_API struct ggml_tensor * ggml_glu(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
     // normalize along rows
     GGML_API struct ggml_tensor * ggml_norm(
             struct ggml_context * ctx,
@@ -947,6 +962,15 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             float                 eps);
+
+    GGML_API struct ggml_tensor * ggml_batch_norm(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * gamma,
+            struct ggml_tensor  * beta,
+            struct ggml_tensor  * running_mean,
+            struct ggml_tensor  * running_var,
+            float eps);
 
     GGML_API struct ggml_tensor * ggml_rms_norm(
             struct ggml_context * ctx,
@@ -1312,6 +1336,14 @@ extern "C" {
             float                 max);
 
     GGML_API struct ggml_tensor * ggml_conv_1d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
+
+    GGML_API struct ggml_tensor * ggml_conv_1d_generic(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,

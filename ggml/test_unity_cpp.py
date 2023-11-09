@@ -18,7 +18,9 @@ from typing import Iterator
 from ggml import NativeObj
 from ggml_convert import convert_model
 from seamless_communication.models.inference.translator import Translator, Modality
-
+from fairseq2.data.audio import WaveformToFbankConverter
+import torchaudio
+from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
@@ -253,6 +255,60 @@ def test_StandardTransformerEncoderLayer_forward(
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-2)
 
+def test_StandardConformerEncoderLayer_forward(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
+    pt_model = load_pt_model()
+    x = torch.load("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_conformer_block.pt")
+    padding_mask = torch.ones((1, x.shape[1]))
+    layer = pt_model.speech_encoder.inner.layers[0]
+    gx = ggml.from_numpy(ctx, x[0])
+    ggml.ggml_set_name(gx, b"x")
+    gpad = ggml.from_numpy(ctx, padding_mask[0])
+    ggml.ggml_set_name(gpad, b"padding_mask")
+    gy = ggml.forward(
+        "StandardConformerEncoderLayer",
+        g_model,
+        "speech_encoder.inner.layers.0",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+
+    y_exp, _ = layer(x, padding_mask)
+    y_exp = y_exp.numpy()  
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=2e-3)
+
+def test_StandardConformerEncoderAdaptorLayer_forward(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
+    pt_model = load_pt_model()
+    x = torch.load("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev/seqs_before_adaptor.pt")
+    layer = pt_model.speech_encoder.adaptor_layers[0]
+    gx = ggml.from_numpy(ctx, x[0])
+    ggml.ggml_set_name(gx, b"x")
+    gy = ggml.forward(
+        "StandardConformerEncoderAdaptorLayer",
+        g_model,
+        "speech_encoder.adaptor_layers.0",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+
+    y_exp, _ = layer(x, None)
+    y_exp = y_exp.numpy() 
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=2e-3)
+
 
 def test_StandardTransformerEncoder_forward(
     ctx: Ctx, g_model: c_void_p
@@ -283,7 +339,97 @@ def test_StandardTransformerEncoder_forward(
     y_exp = y_exp.numpy()
 
     assert y.shape == y_exp.shape
-    assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-2)
+    assert np.allclose(y_exp, y, atol=1e-4)
+
+def test_StandardConformerEncoder_forward(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
+    pt_model = load_pt_model()
+    wav, _ = torchaudio.load("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/test.wav")
+    gx = ggml.from_numpy(ctx, wav * 2**15) # Apply scale before sending into ggml!
+    ggml.ggml_set_name(gx, b"x")
+    gy = ggml.forward(
+        "StandardConformerEncoder",
+        g_model,
+        "speech_encoder",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    converter = WaveformToFbankConverter(
+        num_mel_bins=80,
+        waveform_scale=2**15,
+        channel_last=True,
+        standardize=True,
+    )
+    converter_input = {
+        "waveform": wav.transpose(0, 1),
+        "sample_rate": 16000.,
+        "format": -1,
+    }
+
+    y = ggml.to_numpy(gy)
+    speech_encoder_input = pt_model.speech_encoder_frontend(converter(converter_input)["fbank"].unsqueeze(0), None)[0]
+
+    y_exp, _ = pt_model.speech_encoder(speech_encoder_input, None)
+    y_exp = y_exp.numpy()  # remove batch dimension
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-2) # There are 10 elements in a 137*1024 tensor with error >1e-2
+
+    
+
+def test_WaveformToFbank_forward(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
+    pt_model = load_pt_model()
+    converter = WaveformToFbankConverter(
+        num_mel_bins=80,
+        waveform_scale=2**15,
+        channel_last=True,
+        standardize=True,
+    )
+    extractor = Wav2Vec2FbankFeatureExtractor(80, 2, 1)
+    wav, _ = torchaudio.load("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/test.wav")
+    gx = ggml.from_numpy(ctx, wav * 2**15) # Apply scale before sending into ggml!
+    ggml.ggml_set_name(gx, b"x")
+    
+    gy = ggml.forward(
+        "WaveformToFbank",
+        g_model,
+        "",
+        gx
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    y = ggml.to_numpy(gy)
+    converter_input = {
+        "waveform": wav.transpose(0, 1),
+        "sample_rate": 16000.,
+        "format": -1,
+    }
+    y_exp = extractor(converter(converter_input)["fbank"].unsqueeze(0), None)[0]
+    y_exp = y_exp.numpy() 
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=4e-3) # reduce? error is from standardization
+
+
+def test_causal_attention_mask(ctx: Ctx):
+    x = torch.zeros((5, 10))
+    generator = fairseq2.nn.transformer.CausalAttentionMaskGenerator()
+    mask_exp = generator(x)
+
+    gx = ggml.from_numpy(ctx, x)
+    gmask = ggml.causal_attention_mask(ctx, gx)
+    mask = ggml.to_numpy(gmask)
+
+    assert mask_exp.shape == (10, 10)
+    assert mask.shape == (10, 10)
+    assert np.allclose(mask, mask_exp)
 
 
 def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
@@ -443,3 +589,71 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
         # The score error is big, this may negatively impact the beam search.
         assert np.allclose(g_step_scores, exp["step_scores"], atol=0.1)
 
+def test_s2tt(ctx: Ctx, g_model: c_void_p):
+    src_audio_wav, _ = torchaudio.load("/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/test.wav")
+    # translator = load_translator()
+    # token_encoder = translator.text_tokenizer.create_encoder(
+    #     task="translation"
+    # )
+    # decoded_audio = {
+    #     "waveform": src_audio_wav.t(),
+    #     "sample_rate": 16000.,
+    #     "format": -1,
+    # }
+    # src = translator.collate(translator.convert_to_fbank(decoded_audio))["fbank"]
+
+    # text_out, _ = translator.get_prediction(
+    #     translator.model,
+    #     translator.text_tokenizer,
+    #     translator.unit_tokenizer,
+    #     src,
+    #     input_modality=Modality.SPEECH,
+    #     output_modality=Modality.TEXT,
+    #     tgt_lang="cmn",
+    # )
+
+    # tgt_text = str(text_out.sentences[0])
+    # assert tgt_text == "大家好 , 世界无主题。"
+    # tgt_tokens = text_out.generator_output.results[0][0].seq
+    # score = text_out.generator_output.results[0][0].score.item()
+
+    tgt_tokens = [     3, 256200,  16991, 249346, 249725,    146,  25220, 251069, 249211,
+        251148, 253935,      3]
+    score = -1.606838583946228
+    gx = ggml.from_numpy(ctx, src_audio_wav * 2**15) # Apply scale before sending into ggml!
+    ggml.ggml_set_name(gx, b"x")
+    gy = ggml.forward(
+        "StandardConformerEncoder",
+        g_model,
+        "speech_encoder",
+        gx,
+        None,  # TODO support padding mask
+    )
+    gf = ggml.ggml_build_forward(gy)
+    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+    encoder_out = gy
+
+    job = ggml.SequenceGeneratorJob()
+    job.opts.beam_size = 1
+    job.opts.min_seq_len = 1
+    job.opts.soft_max_seq_len_a = 1
+    job.opts.soft_max_seq_len_b = 200
+    job.opts.hard_max_seq_len = 20
+    job.opts.len_penalty = 1.0
+    job.opts.unk_penalty = 0.0
+    job.prefix_seq = ggml.from_numpy(ctx, np.array([3, 256200]).astype(np.int32))
+    job.opts.normalize_scores = True
+    job.pad_idx = 0
+    job.unk_idx = 1
+    job.bos_idx = 2
+    job.eos_idx = 3
+
+    result = ggml.ggml_tensor()
+    
+    g_score = ggml.generate_sequence(
+        g_model, job, encoder_out, None, ctypes.byref(result)
+    )
+    tokens = list(ggml.to_numpy(result))
+    assert tokens == tgt_tokens
+    assert g_score == pytest.approx(score)
