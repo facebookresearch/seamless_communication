@@ -4,11 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 from typing import List, Optional, Tuple, final
 
-from torch import Tensor
-from torch.nn import Dropout, Module, Parameter
-
+import torch
 from fairseq2.data import VocabularyInfo
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
@@ -17,17 +16,14 @@ from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.position_encoder import PositionEncoder
 from fairseq2.nn.transformer import create_standard_layer_norm
 from fairseq2.typing import DataType, Device, finaloverride
+from torch import Tensor
+from torch.nn import Dropout, Module, Parameter
 
-
+from seamless_communication.models.unity.char_tokenizer import CharTokenizer
 from seamless_communication.models.unity.length_regulator import (
     HardUpsampling,
     VarianceAdaptor,
 )
-from seamless_communication.models.unity.char_tokenizer import CharTokenizer
-
-import math
-import torch
-
 
 SPACE = "▁"
 

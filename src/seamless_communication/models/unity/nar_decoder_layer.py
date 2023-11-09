@@ -4,15 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, final, Tuple
-
-from torch import Tensor
-from torch.nn import Conv1d, Dropout, Module, ReLU
+from typing import Optional, Tuple, final
 
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.transformer import MultiheadAttention, create_standard_layer_norm
 from fairseq2.nn.padding import PaddingMask, apply_padding_mask
+from fairseq2.nn.transformer import MultiheadAttention, create_standard_layer_norm
 from fairseq2.typing import DataType, Device, finaloverride
+from torch import Tensor
+from torch.nn import Conv1d, Dropout, Module, ReLU
 
 
 @final

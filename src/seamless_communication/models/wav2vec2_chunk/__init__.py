@@ -5,11 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from seamless_communication.models.wav2vec2_chunk.builder import (
-    wav2vec2_chunk_archs as wav2vec2_chunk_archs,
-)
-from seamless_communication.models.wav2vec2_chunk.builder import (
     Wav2Vec2ChunkEncoderBuilder as Wav2Vec2ChunkEncoderBuilder,
 )
 from seamless_communication.models.wav2vec2_chunk.builder import (
     Wav2Vec2ChunkEncoderConfig as Wav2Vec2ChunkEncoderConfig,
+)
+from seamless_communication.models.wav2vec2_chunk.builder import (
+    wav2vec2_chunk_archs as wav2vec2_chunk_archs,
 )

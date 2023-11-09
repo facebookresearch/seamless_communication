@@ -5,9 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Optional, Union
 
-from fairseq2.data import VocabularyInfo
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
@@ -24,7 +23,6 @@ from fairseq2.nn.transformer import (
 )
 from fairseq2.typing import DataType, Device
 
-
 from seamless_communication.models.unity.adaptor_block import (
     UnitYConformerAdaptorLayer,
     UnitYEncoderAdaptor,
@@ -32,15 +30,15 @@ from seamless_communication.models.unity.adaptor_block import (
 )
 from seamless_communication.models.unity.model import UnitYModel
 from seamless_communication.models.unity.t2u_builder import (
-    UnitYT2UBuilder,
     UnitYNART2UBuilder,
+    UnitYT2UBuilder,
     UnitYT2UConfig,
     unity_t2u_archs,
 )
 from seamless_communication.models.wav2vec2_chunk import (
-    wav2vec2_chunk_archs,
     Wav2Vec2ChunkEncoderBuilder,
     Wav2Vec2ChunkEncoderConfig,
+    wav2vec2_chunk_archs,
 )
 
 

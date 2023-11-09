@@ -6,24 +6,17 @@
 
 from typing import Iterable, Optional, Tuple, final
 
-from torch import Tensor
-from torch.nn import Dropout
-
 from fairseq2.nn.module_list import ModuleList
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.padding import PaddingMask
-
-from fairseq2.nn.transformer import (
-    EncoderLayerOutputHook,
-    TransformerEncoder,
-    TransformerEncoderLayer,
-)
+from fairseq2.nn.transformer import TransformerEncoder, TransformerEncoderLayer
+from fairseq2.typing import finaloverride
+from torch import Tensor
+from torch.nn import Dropout
 
 from seamless_communication.models.wav2vec2_chunk.chunk_attention_mask import (
     ChunkAttentionMaskFactory,
 )
-
-from fairseq2.typing import finaloverride
 
 
 @final

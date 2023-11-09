@@ -1,0 +1,323 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+import logging
+from dataclasses import dataclass
+from enum import Enum, auto
+from pathlib import Path
+from typing import Callable, List, Optional, Tuple, Union, cast
+
+import torch
+import torch.nn as nn
+from fairseq2.assets.card import AssetCard
+from fairseq2.data import Collater, SequenceData
+from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
+from fairseq2.data.text import TextTokenizer
+from fairseq2.data.typing import StringLike
+from fairseq2.generation import SequenceGeneratorOptions, SequenceToTextOutput
+from fairseq2.memory import MemoryBlock
+from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.typing import DataType, Device
+from torch import Tensor
+
+from seamless_communication.inference.generator import (
+    SequenceToUnitOutput,
+    UnitYGenerator,
+)
+from seamless_communication.models.unity import (
+    UnitTokenizer,
+    UnitYModel,
+    UnitYNART2UModel,
+    UnitYT2UModel,
+    load_unity_model,
+    load_unity_text_tokenizer,
+    load_unity_unit_tokenizer,
+)
+from seamless_communication.models.vocoder import Vocoder, load_vocoder_model
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
+
+class Task(Enum):
+    S2ST = auto()
+    S2TT = auto()
+    T2ST = auto()
+    T2TT = auto()
+    ASR = auto()
+
+
+class Modality(Enum):
+    SPEECH = "speech"
+    TEXT = "text"
+
+
+@dataclass
+class BatchedSpeechOutput:
+    units: List[List[int]]
+    """The batched list of generated units."""
+
+    audio_wavs: List[Tensor]
+    """The batched list of audio waveforms."""
+
+    sample_rate: int = 16000
+    """Sample rate of the audio waveforms."""
+
+
+class Translator(nn.Module):
+    def __init__(
+        self,
+        model_name_or_card: Union[str, AssetCard],
+        vocoder_name_or_card: Union[str, AssetCard],
+        device: Device,
+        text_tokenizer: Optional[TextTokenizer] = None,
+        dtype: DataType = torch.float16,
+    ):
+        super().__init__()
+        # Load the model.
+        if device == torch.device("cpu"):
+            dtype = torch.float32
+        self.model = self.load_model_for_inference(
+            load_unity_model, model_name_or_card, device, dtype
+        )
+        assert isinstance(self.model, UnitYModel)
+
+        if text_tokenizer is None:
+            self.text_tokenizer: TextTokenizer = load_unity_text_tokenizer(
+                model_name_or_card
+            )
+        else:
+            self.text_tokenizer = text_tokenizer
+
+        self.unit_tokenizer: Optional[UnitTokenizer] = None
+        if self.model.t2u_model is not None:
+            self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
+
+        self.device = device
+        self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
+        self.convert_to_fbank = WaveformToFbankConverter(
+            num_mel_bins=80,
+            waveform_scale=2**15,
+            channel_last=True,
+            standardize=True,
+            device=device,
+            dtype=dtype,
+        )
+        self.collate = Collater(
+            pad_value=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
+        )
+        # Load the vocoder.
+        self.vocoder = self.load_model_for_inference(
+            load_vocoder_model, vocoder_name_or_card, device, torch.float32
+        )
+        assert isinstance(self.vocoder, Vocoder)
+
+    @staticmethod
+    def load_model_for_inference(
+        load_model_fn: Callable[..., nn.Module],
+        model_name_or_card: Union[str, AssetCard],
+        device: Device,
+        dtype: DataType,
+    ) -> nn.Module:
+        model = load_model_fn(model_name_or_card, device=device, dtype=dtype)
+        model.eval()
+        return model
+
+    @classmethod
+    def get_prediction(
+        cls,
+        model: UnitYModel,
+        text_tokenizer: TextTokenizer,
+        unit_tokenizer: Optional[UnitTokenizer],
+        src: SequenceData,
+        input_modality: Modality,
+        output_modality: Modality,
+        tgt_lang: str,
+        text_generation_opts: SequenceGeneratorOptions,
+        unit_generation_opts: Optional[SequenceGeneratorOptions],
+        unit_generation_ngram_filtering: bool = False,
+    ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
+        # We disregard unit generations opts for the NAR T2U decoder.
+        if output_modality != Modality.SPEECH or isinstance(
+            model.t2u_model, UnitYNART2UModel
+        ):
+            unit_generation_opts = None
+
+        generator = UnitYGenerator(
+            model,
+            text_tokenizer,
+            tgt_lang,
+            unit_tokenizer if output_modality == Modality.SPEECH else None,
+            text_opts=text_generation_opts,
+            unit_opts=unit_generation_opts,
+        )
+        seqs, padding_mask = get_seqs_and_padding_mask(src)
+        return generator(
+            seqs,
+            padding_mask,
+            input_modality.value,
+            output_modality.value,
+            ngram_filtering=unit_generation_ngram_filtering,
+        )
+
+    @staticmethod
+    def get_modalities_from_task_str(task_str: str) -> Tuple[Modality, Modality]:
+        try:
+            task = Task[task_str.upper()]
+        except KeyError:
+            raise ValueError(f"Unsupported task: {task_str}")
+
+        if task == Task.S2ST:
+            return Modality.SPEECH, Modality.SPEECH
+        # ASR is treated as S2TT with src_lang == tgt_lang
+        elif task == Task.S2TT or task == Task.ASR:
+            return Modality.SPEECH, Modality.TEXT
+        elif task == Task.T2TT:
+            return Modality.TEXT, Modality.TEXT
+        else:
+            return Modality.TEXT, Modality.SPEECH
+
+    @torch.inference_mode()
+    def predict(
+        self,
+        input: Union[str, Tensor, dict],
+        task_str: str,
+        tgt_lang: str,
+        src_lang: Optional[str] = None,
+        text_generation_opts: SequenceGeneratorOptions = SequenceGeneratorOptions(
+            beam_size=5, soft_max_seq_len=(1, 200)
+        ),
+        unit_generation_opts: Optional[
+            SequenceGeneratorOptions
+        ] = SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(25, 50)),
+        spkr: Optional[int] = -1,
+        sample_rate: int = 16000,
+        unit_generation_ngram_filtering: bool = False,
+    ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
+        """
+        The main method used to perform inference on all tasks.
+
+        :param input:
+            Either text or path to audio or audio Tensor.
+        :param task_str:
+            String representing the task.
+            Valid choices are "S2ST", "S2TT", "T2ST", "T2TT", "ASR"
+        :param tgt_lang:
+            Target language to decode into.
+        :param src_lang:
+            Source language of input, only required for T2ST, T2TT tasks.
+        :param text_generation_opts:
+            Text generation hyperparameters for incremental decoding.
+        :param unit_generation_opts:
+            Unit generation hyperparameters for incremental decoding.
+        :param spkr:
+            Speaker id for vocoder.
+        :param unit_generation_ngram_filtering:
+            If True, removes consecutive repeated ngrams
+            from the decoded unit output.
+
+        :returns:
+            - Batched list of Translated text.
+            - Translated BatchedSpeechOutput.
+        """
+        input_modality, output_modality = self.get_modalities_from_task_str(task_str)
+
+        if isinstance(input, dict):
+            assert "seqs" in input
+            assert "seq_lens" in input
+            src = cast(SequenceData, input)
+        elif input_modality == Modality.SPEECH:
+            audio = input
+            if isinstance(audio, str):
+                with Path(audio).open("rb") as fb:
+                    block = MemoryBlock(fb.read())
+                decoded_audio = self.decode_audio(block)
+            else:
+                assert (
+                    audio.dim() <= 2
+                ), "The audio tensor can't be more than 2 dimensions."
+                if audio.dim() == 1:
+                    audio = audio.unsqueeze(1)
+                elif audio.dim() == 2 and audio.size(0) < audio.size(1):
+                    logger.warning(
+                        "Transposing audio tensor from (bsz, seq_len) -> (seq_len, bsz)."
+                    )
+                    audio = audio.transpose(0, 1)
+
+                decoded_audio = {
+                    "waveform": audio,
+                    "sample_rate": sample_rate,
+                    "format": -1,
+                }
+            src = self.collate(self.convert_to_fbank(decoded_audio))["fbank"]
+        else:
+            if src_lang is None:
+                raise ValueError("src_lang must be specified for T2ST, T2TT tasks.")
+
+            text = input
+            assert isinstance(text, str)
+
+            self.token_encoder = self.text_tokenizer.create_encoder(
+                task="translation", lang=src_lang, mode="source", device=self.device
+            )
+            src = self.collate(self.token_encoder(text))
+
+        assert isinstance(self.model, UnitYModel)
+        text_output, unit_output = self.get_prediction(
+            self.model,
+            self.text_tokenizer,
+            self.unit_tokenizer,
+            src,
+            input_modality,
+            output_modality,
+            tgt_lang,
+            text_generation_opts,
+            unit_generation_opts,
+            unit_generation_ngram_filtering=unit_generation_ngram_filtering,
+        )
+
+        if output_modality == Modality.TEXT:
+            return text_output.sentences, None
+        else:
+            assert unit_output is not None
+
+            if isinstance(self.model.t2u_model, UnitYT2UModel):
+                # Remove the lang token for AR UnitY since the vocoder doesn't need it
+                # in the unit sequence. tgt_lang is fed as an argument to the vocoder.
+                units = unit_output.units[:, 1:]
+                duration_prediction = True
+            else:
+                units = unit_output.units
+                # Vocoder duration predictions not required since the NAR
+                # T2U model already predicts duration in the units.
+                duration_prediction = False
+
+            audio_wavs = []
+            speech_units = []
+            for i in range(len(unit_output.units)):
+                u = units[i].cpu().numpy().tolist()
+                index_of_first_one = next(
+                    (index for index, value in enumerate(u) if value == 1), len(u)
+                )
+                u = u[:index_of_first_one]
+                speech_units.append(u)
+                # TODO: Implement batched inference for vocoder.
+                translated_audio_wav = self.vocoder(
+                    u, tgt_lang, spkr, dur_prediction=duration_prediction
+                )
+                audio_wavs.append(translated_audio_wav)
+
+            return (
+                text_output.sentences,
+                BatchedSpeechOutput(
+                    units=speech_units,
+                    audio_wavs=audio_wavs,
+                    sample_rate=sample_rate,
+                ),
+            )

@@ -8,9 +8,8 @@ from contextlib import contextmanager
 from typing import Any, Generator, List, Union
 
 import torch
-from torch import Tensor
-
 from fairseq2.typing import Device
+from torch import Tensor
 
 # The default device that tests should use. Note that pytest can change it based
 # on the provided command line arguments.

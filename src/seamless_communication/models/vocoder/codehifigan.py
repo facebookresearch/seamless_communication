@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from seamless_communication.models.vocoder.hifigan import Generator
 from seamless_communication.models.unity import VariancePredictor
+from seamless_communication.models.vocoder.hifigan import Generator
 
 
 class CodeGenerator(Generator):

@@ -45,7 +45,7 @@ T2TT task:
 m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
 ```
 
-Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
+Please refer to the [inference README](src/seamless_communication/cli/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
 ## Running [Gradio](https://github.com/gradio-app/gradio) demo locally
 
@@ -86,10 +86,10 @@ We provide the extensive evaluation results of seamlessM4T-Large and SeamlessM4T
 To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out the [README here](docs/m4t/eval_README.md).
 
 ## Finetuning SeamlessM4T models
-Please check out the [README here](scripts/m4t/finetune/README.md).
+Please check out the [README here](src/seamless_communication/cli/m4t/finetune/README.md).
 
 ## Converting raw audio to units
-Please check out the [README here](scripts/m4t/audio_to_units/README.md).
+Please check out the [README here](src/seamless_communication/cli/m4t/audio_to_units/README.md).
 
 ## On-device models
 Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out the [README here](docs/m4t/on_device_README.md).

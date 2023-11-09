@@ -7,10 +7,14 @@
 from typing import Any, Dict, List, Mapping, Union, final
 
 import torch
-from fairseq2.assets import AssetStore, download_manager
+from fairseq2.assets import AssetStore, asset_store, download_manager
 from fairseq2.assets.card import AssetCard
 from fairseq2.models.nllb import NllbConfig
 from fairseq2.models.nllb.loader import NllbTokenizerLoader
+from fairseq2.models.utils.checkpoint_loader import upgrade_fairseq_checkpoint
+from fairseq2.models.utils.model_loader import ModelConfigLoader, ModelLoader
+from overrides import override as finaloverride
+
 from seamless_communication.models.unity.builder import (
     UnitYConfig,
     create_unity_model,
@@ -19,11 +23,6 @@ from seamless_communication.models.unity.builder import (
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
 from seamless_communication.models.unity.model import UnitYModel
 from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
-from fairseq2.models.utils.checkpoint_loader import upgrade_fairseq_checkpoint
-from fairseq2.models.utils.model_loader import ModelConfigLoader, ModelLoader
-from overrides import override as finaloverride
-
-from seamless_communication.assets import asset_store
 
 
 @final
@@ -71,8 +70,8 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         # Remnant of wav2vec2 pretraining, not needed for eval or fine-tuning.
         keys_to_delete.append(f"{encoder_key}.w2v_encoder.w2v_model.mask_emb")
 
-        keys_to_delete.append(f"decoder.char_upsampler.embed_positions._float_tensor")
-        keys_to_delete.append(f"decoder.char_upsampler.embed_tokens_char.weight")
+        keys_to_delete.append("decoder.char_upsampler.embed_positions._float_tensor")
+        keys_to_delete.append("decoder.char_upsampler.embed_tokens_char.weight")
 
         # Delete AlignmentEncoder keys for inference.
         alignment_encoder_keys = [

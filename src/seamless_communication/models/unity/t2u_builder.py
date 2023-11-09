@@ -6,9 +6,14 @@
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
-from fairseq2.assets import download_manager
+from fairseq2.assets import asset_store, download_manager
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import VocabularyInfo
+from fairseq2.models.nllb.loader import NllbTokenizerLoader
+from fairseq2.models.transformer import (
+    TransformerEmbeddingFrontend,
+    TransformerFrontend,
+)
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
@@ -30,25 +35,18 @@ from fairseq2.nn.transformer import (
     create_default_sdpa,
 )
 from fairseq2.typing import DataType, Device
-from fairseq2.models.transformer import (
-    TransformerEmbeddingFrontend,
-    TransformerFrontend,
-)
-from fairseq2.models.nllb.loader import NllbTokenizerLoader
 
-
-from seamless_communication.assets import asset_store
-from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
-from seamless_communication.models.unity.nar_decoder_layer import (
-    NARTransformerDecoderLayer,
-    Conv1dBlock,
-)
-from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
-from seamless_communication.models.unity.model import UnitYT2UModel, UnitYNART2UModel
 from seamless_communication.models.unity.length_regulator import (
-    VariancePredictor,
     VarianceAdaptor,
+    VariancePredictor,
+)
+from seamless_communication.models.unity.model import UnitYNART2UModel, UnitYT2UModel
+from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
+from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
+from seamless_communication.models.unity.nar_decoder_layer import (
+    Conv1dBlock,
+    NARTransformerDecoderLayer,
 )
 
 

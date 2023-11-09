@@ -8,9 +8,9 @@ from argparse import ArgumentTypeError
 from typing import cast
 
 import pytest
-import tests.common
-
 from fairseq2.typing import Device
+
+import tests.common
 
 
 def parse_device_arg(value: str) -> Device:

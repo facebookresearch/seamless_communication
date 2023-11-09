@@ -6,10 +6,10 @@
 
 from typing import Any, Mapping, final
 
+from fairseq2.assets import asset_store, download_manager
 from fairseq2.models.utils.model_loader import ModelLoader
 from overrides import override as finaloverride
 
-from seamless_communication.assets import asset_store, download_manager
 from seamless_communication.models.vocoder.builder import (
     VocoderConfig,
     create_vocoder_model,

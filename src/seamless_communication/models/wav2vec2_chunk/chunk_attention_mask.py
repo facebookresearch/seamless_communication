@@ -7,10 +7,9 @@
 from typing import Optional
 
 import torch
-from torch import Tensor
-
-from fairseq2.nn.utils.mask import to_float_mask
 from fairseq2.nn.transformer import AttentionMask, CustomAttentionMask
+from fairseq2.nn.utils.mask import to_float_mask
+from torch import Tensor
 
 
 class ChunkAttentionMaskFactory:

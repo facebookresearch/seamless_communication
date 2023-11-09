@@ -6,7 +6,12 @@
 
 from typing import Optional, Union, final
 
-from fairseq2.assets import AssetStore, AssetDownloadManager, download_manager
+from fairseq2.assets import (
+    AssetDownloadManager,
+    AssetStore,
+    asset_store,
+    download_manager,
+)
 from fairseq2.assets.card import AssetCard
 from fairseq2.data.text import (
     SentencePieceDecoder,
@@ -19,8 +24,6 @@ from fairseq2.data.text import (
 )
 from fairseq2.data.typing import PathLike
 from fairseq2.typing import Device, finaloverride
-
-from seamless_communication.assets import asset_store
 
 
 @final

@@ -4,16 +4,16 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Literal, Optional
 
 from fairseq2.models.conformer import ConformerConvolution
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.models.wav2vec2.builder import (
     Wav2Vec2EncoderBuilder,
     Wav2Vec2EncoderConfig,
 )
-from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.nn.transformer import SDPA, ShawRelativePositionSDPA
 from fairseq2.typing import DataType, Device
 

@@ -14,7 +14,6 @@ from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.projection import Linear
 from fairseq2.nn.transformer import (
     AttentionMask,
-    EncoderLayerOutputHook,
     FeedForwardNetwork,
     LayerNormFactory,
     MultiheadAttention,
