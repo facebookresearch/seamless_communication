@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, Callable, List, Optional, Tuple, Union, cast
 
 import torch
 import torch.nn as nn
@@ -35,7 +35,7 @@ from seamless_communication.models.unity import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.models.vocoder import Vocoder, load_vocoder_model
+from seamless_communication.models.vocoder import load_vocoder_model
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +78,7 @@ class Translator(nn.Module):
         device: Device,
         text_tokenizer: Optional[TextTokenizer] = None,
         dtype: DataType = torch.float16,
+        output_modality: Optional[Modality] = None,
     ):
         super().__init__()
         # Load the model.
@@ -112,11 +113,12 @@ class Translator(nn.Module):
         self.collate = Collater(
             pad_value=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
-        # Load the vocoder.
-        self.vocoder = self.load_model_for_inference(
-            load_vocoder_model, vocoder_name_or_card, device, torch.float32
-        )
-        assert isinstance(self.vocoder, Vocoder)
+        self.vocoder = None
+        if output_modality is None or output_modality == Modality.SPEECH:
+            # Load the vocoder.
+            self.vocoder = self.load_model_for_inference(
+                load_vocoder_model, vocoder_name_or_card, device, torch.float32
+            )
 
     @staticmethod
     def load_model_for_inference(
@@ -186,7 +188,7 @@ class Translator(nn.Module):
     @torch.inference_mode()
     def predict(
         self,
-        input: Union[str, Tensor, dict],
+        input: Union[str, Tensor, Dict[str, Any]],
         task_str: str,
         tgt_lang: str,
         src_lang: Optional[str] = None,
@@ -286,6 +288,7 @@ class Translator(nn.Module):
             return text_output.sentences, None
         else:
             assert unit_output is not None
+            assert self.vocoder is not None
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it

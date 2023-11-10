@@ -12,7 +12,7 @@ import subprocess
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torchaudio
@@ -28,7 +28,7 @@ from tqdm import tqdm
 from seamless_communication.cli.eval_utils.compute_metrics import (
     compute_quality_metrics,
 )
-from seamless_communication.cli.predict import (
+from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
@@ -222,7 +222,7 @@ def run_eval(
     translator: Translator,
     text_tokenizer: TextTokenizer,
     ctx: EvalContext,
-    whisper_model_name: Optional[str] = None,
+    whisper_model_name: str,
 ) -> None:
     pipeline = build_data_pipeline(ctx, text_tokenizer)
 
@@ -267,10 +267,7 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                (
-                    text_output,
-                    speech_output,
-                ) = translator.predict(
+                (text_output, speech_output,) = translator.predict(
                     src,
                     ctx.task,
                     ctx.target_lang,
@@ -287,10 +284,7 @@ def run_eval(
                     speech_output = None
 
             if valid_sequences is not None and not valid_sequences.all():
-                (
-                    text_output,
-                    speech_output,
-                ) = adjust_output_for_corrupted_inputs(
+                (text_output, speech_output,) = adjust_output_for_corrupted_inputs(
                     valid_sequences,
                     text_output,
                     speech_output,
@@ -323,7 +317,7 @@ def run_eval(
 
     compute_quality_metrics(
         output_manifest_tsv_path=model_outputs_tsv,
-        output_dir=output_path,
+        output_path=output_path,
         tgt_lang=ctx.target_lang,
         task=ctx.task,
         device=ctx.device,
@@ -331,7 +325,7 @@ def run_eval(
     )
 
 
-def main(optional_args: Optional[Dict] = None):
+def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     parser = argparse.ArgumentParser(
         description="M4T evaluation for tasks supported by Translator."
     )
@@ -398,6 +392,7 @@ def main(optional_args: Optional[Dict] = None):
         device,
         text_tokenizer=text_tokenizer,
         dtype=dtype,
+        output_modality=output_modality,
     )
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)

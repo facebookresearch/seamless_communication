@@ -22,7 +22,7 @@ from fairseq2.optim.lr_scheduler import MyleLR
 from fairseq2.typing import Device
 from torch.optim import Adam
 
-from seamless_communication.cli.finetune import dataloader, dist_utils
+from seamless_communication.cli.m4t.finetune import dataloader, dist_utils
 from seamless_communication.models.unity import UnitYModel
 
 logger = logging.getLogger(__name__)
