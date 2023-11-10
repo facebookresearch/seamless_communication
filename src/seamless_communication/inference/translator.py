@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, Callable, List, Optional, Tuple, Union, cast
+from typing import Callable, List, Optional, Tuple, Union, cast
 
 import torch
 import torch.nn as nn
@@ -144,6 +144,7 @@ class Translator(nn.Module):
         text_generation_opts: SequenceGeneratorOptions,
         unit_generation_opts: Optional[SequenceGeneratorOptions],
         unit_generation_ngram_filtering: bool = False,
+        gcmvn_fbank: Optional[SequenceData] = None,
     ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -160,12 +161,18 @@ class Translator(nn.Module):
             unit_opts=unit_generation_opts,
         )
         seqs, padding_mask = get_seqs_and_padding_mask(src)
+        if gcmvn_fbank is not None:
+            gcmvn_seqs = gcmvn_fbank["seqs"]
+        else:
+            gcmvn_seqs = None
+
         return generator(
             seqs,
             padding_mask,
             input_modality.value,
             output_modality.value,
             ngram_filtering=unit_generation_ngram_filtering,
+            gcmvn_seqs=gcmvn_seqs,
         )
 
     @staticmethod
@@ -188,7 +195,7 @@ class Translator(nn.Module):
     @torch.inference_mode()
     def predict(
         self,
-        input: Union[str, Tensor, Dict[str, Any]],
+        input: Union[str, Tensor, SequenceData],
         task_str: str,
         tgt_lang: str,
         src_lang: Optional[str] = None,
@@ -201,6 +208,7 @@ class Translator(nn.Module):
         spkr: Optional[int] = -1,
         sample_rate: int = 16000,
         unit_generation_ngram_filtering: bool = False,
+        gcmvn_fbank: Optional[SequenceData] = None,
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -231,8 +239,6 @@ class Translator(nn.Module):
         input_modality, output_modality = self.get_modalities_from_task_str(task_str)
 
         if isinstance(input, dict):
-            assert "seqs" in input
-            assert "seq_lens" in input
             src = cast(SequenceData, input)
         elif input_modality == Modality.SPEECH:
             audio = input
@@ -282,6 +288,7 @@ class Translator(nn.Module):
             text_generation_opts,
             unit_generation_opts,
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
+            gcmvn_fbank=gcmvn_fbank,
         )
 
         if output_modality == Modality.TEXT:

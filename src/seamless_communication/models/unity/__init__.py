@@ -20,6 +20,7 @@ from seamless_communication.models.unity.char_tokenizer import (
 from seamless_communication.models.unity.char_tokenizer import (
     load_unity_char_tokenizer as load_unity_char_tokenizer,
 )
+from seamless_communication.models.unity.film import FiLM
 from seamless_communication.models.unity.length_regulator import (
     HardUpsampling as HardUpsampling,
 )

@@ -66,9 +66,10 @@ class NARTransformerDecoder(Module):
         self,
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
+        film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         for layer in self.layers.drop_iter():
-            seqs, padding_mask = layer(seqs, padding_mask)
+            seqs, padding_mask = layer(seqs, padding_mask, film_cond_emb=film_cond_emb)
 
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)

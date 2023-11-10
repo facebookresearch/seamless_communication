@@ -19,6 +19,7 @@ from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
 
+from seamless_communication.models.pretssel.ecapa_tdnn import ECAPA_TDNN
 from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 
@@ -42,6 +43,7 @@ class UnitYModel(EncoderDecoderModel):
     text_decoder: TransformerDecoder
     final_proj: Projection
     t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None]
+    prosody_encoder_model: Optional[ECAPA_TDNN]
 
     def __init__(
         self,
@@ -54,6 +56,7 @@ class UnitYModel(EncoderDecoderModel):
         final_proj: Projection,
         t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None],
         target_vocab_info: VocabularyInfo,
+        prosody_encoder_model: Optional[ECAPA_TDNN] = None,
         input_modality: str = "speech",
     ) -> None:
         model_dim = speech_encoder.model_dim
@@ -93,6 +96,10 @@ class UnitYModel(EncoderDecoderModel):
             self.register_module("t2u_model", None)
 
         self.target_vocab_info = target_vocab_info
+        if prosody_encoder_model is not None:
+            self.prosody_encoder_model = prosody_encoder_model
+        else:
+            self.register_module("prosody_encoder_model", None)
 
     @finaloverride
     def encode(
@@ -304,6 +311,7 @@ class UnitYNART2UModel(Module):
     decoder: NARTransformerDecoder
     final_proj: Projection
     target_vocab_info: VocabularyInfo
+    prosody_proj: Optional[Projection]
 
     def __init__(
         self,
@@ -312,6 +320,7 @@ class UnitYNART2UModel(Module):
         decoder: NARTransformerDecoder,
         final_proj: Projection,
         target_vocab_info: VocabularyInfo,
+        prosody_proj: Optional[Projection] = None,
     ) -> None:
         super().__init__()
 
@@ -339,20 +348,27 @@ class UnitYNART2UModel(Module):
 
         self.target_vocab_info = target_vocab_info
 
+        self.prosody_proj = prosody_proj
+
     def forward(
         self,
         text_decoder_output: Tensor,
         text_decoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[SequenceModelOutput, Optional[PaddingMask]]:
         encoder_output, encoder_padding_mask = self.encode(
             text_decoder_output, text_decoder_padding_mask
         )
 
+        if self.prosody_proj is not None and film_cond_emb is not None:
+            encoder_output = encoder_output + self.prosody_proj(film_cond_emb)
+
         decoder_output, decoder_padding_mask = self.decode(
             encoder_output,
             encoder_padding_mask,
             text_seqs,
+            film_cond_emb,
         )
 
         return self.project(decoder_output), decoder_padding_mask
@@ -372,14 +388,15 @@ class UnitYNART2UModel(Module):
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         # encoder_output: (N, S, M)
         # text_seqs: (N, S)
         seqs, padding_mask = self.decoder_frontend(
-            encoder_output, encoder_padding_mask, text_seqs
+            encoder_output, encoder_padding_mask, text_seqs, film_cond_emb
         )
 
-        return self.decoder(seqs, padding_mask)  # type: ignore[no-any-return]
+        return self.decoder(seqs, padding_mask, film_cond_emb=film_cond_emb)  # type: ignore[no-any-return]
 
     def project(self, decoder_output: Tensor) -> SequenceModelOutput:
         logits = self.final_proj(decoder_output)

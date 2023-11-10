@@ -14,15 +14,23 @@ from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.models.wav2vec2 import Wav2Vec2EncoderBuilder, Wav2Vec2EncoderConfig
 from fairseq2.nn.projection import TiedProjection
 from fairseq2.nn.transformer import (
+    FeedForwardNetwork,
     MultiheadAttention,
     StandardFeedForwardNetwork,
     StandardMultiheadAttention,
     TransformerEncoder,
     TransformerEncoderLayer,
+    TransformerNormOrder,
     create_default_sdpa,
 )
-from fairseq2.typing import DataType, Device
+from fairseq2.typing import DataType, Device, override
+from torch.nn import GELU, ReLU
 
+from seamless_communication.models.pretssel import (
+    EcapaTDNNBuilder,
+    EcapaTDNNConfig,
+    ecapa_tdnn_archs,
+)
 from seamless_communication.models.unity.adaptor_block import (
     UnitYConformerAdaptorLayer,
     UnitYEncoderAdaptor,
@@ -59,11 +67,18 @@ class UnitYConfig:
     t2u_config: Optional[UnitYT2UConfig]
     """The configuration of the UnitY T2U sub-model."""
 
+    prosody_encoder_config: Optional[EcapaTDNNConfig]
+    """The configuration of the expressive prosody encoder."""
+
     use_text_encoder: bool
     """If ``True``, uses an aligned MT encoder for the MT task."""
 
     use_conformer_adaptor: bool
     """If ``True``, uses a Conformer-based adaptor block."""
+
+    use_gelu: bool
+    """If ``True``, uses GELU activation function in feed-forward networks of
+    adaptor blocks and decoder layers."""
 
     num_adaptor_layers: int
     """The number of Transformer encoder layers in the adaptor block."""
@@ -103,8 +118,10 @@ def _base() -> UnitYConfig:
         w2v2_encoder_config=w2vbert_config.w2v2_config.encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
+        prosody_encoder_config=None,
         use_text_encoder=True,
         use_conformer_adaptor=False,
+        use_gelu=False,
         num_adaptor_layers=1,
         adaptor_kernel_size=8,
         adaptor_stride=8,
@@ -128,8 +145,10 @@ def _medium() -> UnitYConfig:
         w2v2_encoder_config=w2vbert_config.w2v2_config.encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
+        prosody_encoder_config=None,
         use_text_encoder=True,
         use_conformer_adaptor=False,
+        use_gelu=False,
         num_adaptor_layers=1,
         adaptor_kernel_size=8,
         adaptor_stride=8,
@@ -155,8 +174,43 @@ def _base_v2() -> UnitYConfig:
         w2v2_encoder_config=w2v2_chunk_encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
+        prosody_encoder_config=None,
         use_text_encoder=True,
         use_conformer_adaptor=False,
+        use_gelu=False,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+    )
+
+
+@unity_arch("expressivity_v2")
+def _expressivity_v2() -> UnitYConfig:
+    w2v2_chunk_encoder_config = wav2vec2_chunk_archs.get_config("600m")
+
+    mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
+
+    mt_model_config.vocab_info.size = 256102  # NLLB-100
+
+    mt_model_config.vocab_info.pad_idx = 1
+
+    mt_model_config.max_seq_len = 4000
+
+    t2u_config = unity_t2u_archs.get_config("expressivity_nar")
+
+    prosody_encoder_config = ecapa_tdnn_archs.get_config("base")
+
+    return UnitYConfig(
+        model_dim=1024,
+        w2v2_encoder_config=w2v2_chunk_encoder_config,
+        mt_model_config=mt_model_config,
+        t2u_config=t2u_config,
+        prosody_encoder_config=prosody_encoder_config,
+        use_text_encoder=False,
+        use_conformer_adaptor=False,
+        use_gelu=True,
         num_adaptor_layers=1,
         adaptor_kernel_size=8,
         adaptor_stride=8,
@@ -176,6 +230,7 @@ class UnitYBuilder:
     w2v2_encoder_builder: Wav2Vec2EncoderBuilder
     mt_model_builder: NllbBuilder
     t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None]
+    prosody_encoder_builder: Optional[EcapaTDNNBuilder]
     device: Optional[Device]
     dtype: Optional[DataType]
 
@@ -185,6 +240,7 @@ class UnitYBuilder:
         w2v2_encoder_builder: Wav2Vec2EncoderBuilder,
         mt_model_builder: NllbBuilder,
         t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None],
+        prosody_encoder_builder: Optional[EcapaTDNNBuilder],
         *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -223,6 +279,7 @@ class UnitYBuilder:
         self.w2v2_encoder_builder = w2v2_encoder_builder
         self.mt_model_builder = mt_model_builder
         self.t2u_builder = t2u_builder
+        self.prosody_encoder_builder = prosody_encoder_builder
 
         self.device, self.dtype = device, dtype
 
@@ -251,6 +308,11 @@ class UnitYBuilder:
         else:
             t2u_model = self.t2u_builder.build_model()
 
+        if self.prosody_encoder_builder is None:
+            prosody_encoder_model = None
+        else:
+            prosody_encoder_model = self.prosody_encoder_builder.build_model()
+
         return UnitYModel(
             speech_encoder_frontend,
             speech_encoder,
@@ -261,6 +323,7 @@ class UnitYBuilder:
             final_proj,
             t2u_model,
             self.config.mt_model_config.vocab_info,
+            prosody_encoder_model,
         )
 
     def build_speech_encoder(self) -> TransformerEncoder:
@@ -292,11 +355,10 @@ class UnitYBuilder:
             self.w2v2_encoder_builder.config.num_encoder_attn_heads
         )
 
-        # Unlike wav2vec2, we use ReLU (i.e. standard FFN activation function)
-        # instead of GELU.
         ffn = StandardFeedForwardNetwork(
             self.config.model_dim,
             self.w2v2_encoder_builder.config.ffn_inner_dim,
+            inner_activation=GELU() if self.config.use_gelu else ReLU(),
             bias=True,
             device=self.device,
             dtype=self.dtype,
@@ -365,6 +427,20 @@ class UnitYBuilder:
         )
 
 
+class NllbWithGELUBuilder(NllbBuilder):
+    @override
+    def build_ffn(self) -> FeedForwardNetwork:
+        return StandardFeedForwardNetwork(
+            self.config.model_dim,
+            self.config.ffn_inner_dim,
+            bias=True,
+            inner_activation=GELU(),
+            norm_order=TransformerNormOrder.PRE,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+
 def create_unity_model(
     config: UnitYConfig,
     device: Optional[Device] = None,
@@ -397,12 +473,28 @@ def create_unity_model(
     else:
         t2u_builder = UnitYNART2UBuilder(config.t2u_config, device=device, dtype=dtype)
 
-    mt_model_builder = NllbBuilder(config.mt_model_config, device=device, dtype=dtype)
+    if config.prosody_encoder_config is None:
+        prosody_encoder_builder = None
+    else:
+        prosody_encoder_builder = EcapaTDNNBuilder(
+            config.prosody_encoder_config, device=device, dtype=dtype
+        )
+
+    if config.use_gelu:
+        mt_model_builder: NllbBuilder = NllbWithGELUBuilder(
+            config.mt_model_config, device=device, dtype=dtype
+        )
+    else:
+        mt_model_builder = NllbBuilder(
+            config.mt_model_config, device=device, dtype=dtype
+        )
+
     unity_builder = UnitYBuilder(
         config,
         w2v2_encoder_builder,
         mt_model_builder,
         t2u_builder,
+        prosody_encoder_builder,
         device=device,
         dtype=dtype,
     )

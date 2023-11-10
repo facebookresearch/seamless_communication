@@ -12,7 +12,7 @@ per-file-ignores = [
 profile = "black"
 
 [tool.mypy]
-disable_error_code = "type-abstract"
+disable_error_code = "type-abstract,typeddict-unknown-key"
 disallow_untyped_calls = false
 disallow_untyped_decorators = false
 ignore_missing_imports = true

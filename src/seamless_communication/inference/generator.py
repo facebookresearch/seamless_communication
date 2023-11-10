@@ -153,6 +153,7 @@ class UnitYGenerator:
         input_modality: str = "speech",
         output_modality: str = "speech",
         ngram_filtering: bool = False,
+        gcmvn_seqs: Optional[Tensor] = None,
     ) -> Tuple[SequenceToTextOutput, Optional["SequenceToUnitOutput"]]:
         """
         :param source_seqs:
@@ -215,6 +216,12 @@ class UnitYGenerator:
         assert self.unit_decoder is not None
 
         unit_gen_output = None
+        prosody_encoder_out = None
+        if self.model.prosody_encoder_model is not None:
+            prosody_encoder_out = self.model.prosody_encoder_model(
+                gcmvn_seqs, source_padding_mask
+            ).unsqueeze(1)
+
         if isinstance(self.model.t2u_model, UnitYT2UModel):
             assert self.unit_generator is not None
             t2u_encoder_output, t2u_encoder_padding_mask = self.model.t2u_model.encode(
@@ -231,6 +238,7 @@ class UnitYGenerator:
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
+                film_cond_emb=prosody_encoder_out,
             )
             # (B, S_unit, V_unit)
             unit_seqs = unit_decoder_output.logits.argmax(dim=2)
@@ -243,8 +251,8 @@ class UnitYGenerator:
         units = self.unit_decoder(unit_seqs)
 
         if ngram_filtering:
-            units = remove_consecutive_repeated_ngrams(units.cpu().numpy().tolist())
-            units = torch.tensor(units)
+            arr = remove_consecutive_repeated_ngrams(units.cpu().numpy().tolist())
+            units = torch.tensor(arr)
 
         unit_output = SequenceToUnitOutput(units, unit_gen_output)
 

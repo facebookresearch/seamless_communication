@@ -14,6 +14,8 @@ from fairseq2.typing import DataType, Device
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU, Sequential
 
+from seamless_communication.models.unity.film import FiLM
+
 
 class HardUpsampling(Module):
     """Upsamples sequences in a deterministic way as governed by durations."""
@@ -46,6 +48,7 @@ class VariancePredictor(Module):
     conv2: Sequential
     ln2: LayerNorm
     proj: Linear
+    film: Optional[FiLM]
 
     def __init__(
         self,
@@ -54,6 +57,8 @@ class VariancePredictor(Module):
         var_pred_kernel_size: int,
         var_pred_dropout: float,
         bias: bool = True,
+        use_film: bool = False,
+        film_cond_dim: int = 512,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ):
@@ -99,7 +104,19 @@ class VariancePredictor(Module):
             var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype
         )
 
-    def forward(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
+        if use_film:
+            self.film = FiLM(
+                film_cond_dim, var_pred_hidden_dim, device=device, dtype=dtype
+            )
+        else:
+            self.register_module("film", None)
+
+    def forward(
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[PaddingMask],
+        film_cond_emb: Optional[Tensor] = None,
+    ) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
         seqs = apply_padding_mask(seqs, padding_mask)
 
@@ -130,6 +147,12 @@ class VariancePredictor(Module):
         seqs = self.ln2(seqs)
 
         seqs = self.dropout_module(seqs)
+
+        seqs = apply_padding_mask(seqs, padding_mask)
+
+        if self.film is not None and film_cond_emb is not None:
+            seqs = self.film(seqs, film_cond_emb)
+            seqs = apply_padding_mask(seqs, padding_mask)
 
         # (N, S, H) -> (N, S, 1) -> (N, S)
         seqs = self.proj(seqs).squeeze(dim=2)
@@ -174,8 +197,9 @@ class VarianceAdaptor(Module):
         padding_mask: Optional[PaddingMask],
         duration_factor: float = 1.0,
         min_duration: int = 0,
+        film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, PaddingMask]:
-        log_durations = self.duration_predictor(seqs, padding_mask)
+        log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
 
         durations = torch.clamp(
             torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),

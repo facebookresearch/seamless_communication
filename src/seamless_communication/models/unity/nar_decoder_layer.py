@@ -13,6 +13,8 @@ from fairseq2.typing import DataType, Device, finaloverride
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU
 
+from seamless_communication.models.unity.film import FiLM
+
 
 @final
 class Conv1dBlock(Module):
@@ -111,6 +113,7 @@ class NARTransformerDecoderLayer(Module):
     conv1d: Conv1dBlock
     conv1d_dropout: Optional[Dropout]
     conv1d_layer_norm: LayerNorm
+    film: Optional[FiLM]
 
     def __init__(
         self,
@@ -118,6 +121,8 @@ class NARTransformerDecoderLayer(Module):
         conv1d: Conv1dBlock,
         dropout_p: float = 0.1,
         conv1d_dropout_p: float = 0.1,
+        use_film: bool = False,
+        film_cond_dim: int = 512,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -130,6 +135,10 @@ class NARTransformerDecoderLayer(Module):
             The dropout probability on the outputs of the self attention layer.
         :param conv1d_dropout_p:
             The dropout probability on the outputs of the conv1d block.
+        :param use_film:
+            Whether to condition on a fixed-size vector through FiLM.
+        :param film_cond_dim:
+            The dim of fixed-size vector conditioned on during model forward.
         """
         super().__init__()
 
@@ -159,15 +168,25 @@ class NARTransformerDecoderLayer(Module):
             self.model_dim, device=device, dtype=dtype
         )
 
+        if use_film:
+            self.film = FiLM(film_cond_dim, self.model_dim, device=device, dtype=dtype)
+        else:
+            self.register_module("film", None)
+
     @finaloverride
     def forward(
         self,
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
+        film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs = self._forward_self_attn(seqs, padding_mask)
 
         seqs = self._forward_conv1d(seqs, padding_mask)
+
+        if self.film is not None and film_cond_emb is not None:
+            seqs = self.film(seqs, film_cond_emb)
+            seqs = apply_padding_mask(seqs, padding_mask)
 
         return seqs, padding_mask
 

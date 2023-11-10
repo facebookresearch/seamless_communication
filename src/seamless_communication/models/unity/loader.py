@@ -47,10 +47,16 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
 
         keys_to_delete = []
 
+        # ExpressiveUnitY model (from multi_arch codebase)
+        if config.prosody_encoder_config is not None:
+            encoder_key = "s2t_model.encoder"
+            decoder_key = "s2t_model.decoder"
+            t2u_decoder_key = "t2s_model.decoder"
         # X2T/S2T + T2U model.
-        if config.t2u_config is not None:
+        elif config.t2u_config is not None:
             encoder_key = "encoder"
             decoder_key = "target_letter_decoder"
+            t2u_decoder_key = "decoder"
         # X2T model.
         elif config.use_text_encoder:
             encoder_key = "speech_encoder"
@@ -70,12 +76,18 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         # Remnant of wav2vec2 pretraining, not needed for eval or fine-tuning.
         keys_to_delete.append(f"{encoder_key}.w2v_encoder.w2v_model.mask_emb")
 
-        keys_to_delete.append("decoder.char_upsampler.embed_positions._float_tensor")
-        keys_to_delete.append("decoder.char_upsampler.embed_tokens_char.weight")
+        keys_to_delete.append(
+            f"{t2u_decoder_key}.char_upsampler.embed_positions._float_tensor"
+        )
+        keys_to_delete.append(
+            f"{t2u_decoder_key}.char_upsampler.embed_tokens_char.weight"
+        )
 
         # Delete AlignmentEncoder keys for inference.
         alignment_encoder_keys = [
-            key for key in state_dict if key.startswith("decoder.alignment_encoder.")
+            key
+            for key in state_dict
+            if key.startswith(f"{t2u_decoder_key}.alignment_encoder.")
         ]
         keys_to_delete.extend(alignment_encoder_keys)
 
@@ -86,6 +98,17 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
                 "decoder_target_letter_decoder.proj.bias",
             ]
         )
+
+        if config.prosody_encoder_config is not None:
+            keys_to_delete.extend(
+                [
+                    f"{t2u_decoder_key}.embed_positions._float_tensor",
+                    "t2s_model.global_proj_dec.weight",
+                    "t2s_model.global_proj_dec.bias",
+                    "t2s_model.decoder_target_letter_nllb_spm_decoder.encoder.proj.weight",
+                    "t2s_model.decoder_target_letter_nllb_spm_decoder.encoder.proj.bias",
+                ]
+            )
 
         for key in keys_to_delete:
             if key in state_dict:
@@ -157,10 +180,19 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
 
     @staticmethod
     def _fairseq_key_map(config: UnitYConfig) -> Dict[str, str]:
+        # ExpressiveUnitY model (from multi_arch codebase)
+        if config.prosody_encoder_config is not None:
+            encoder_key = "s2t_model.encoder"
+            decoder_key = "s2t_model.decoder"
+            t2u_encoder_key = "t2s_model.encoder"
+            t2u_decoder_key = "t2s_model.decoder"
+            ecapa_tdnn_key = "global_prosody"
         # X2T/S2T + T2U model.
-        if config.t2u_config is not None:
+        elif config.t2u_config is not None:
             encoder_key = "encoder"
             decoder_key = "target_letter_decoder"
+            t2u_encoder_key = "synthesizer_encoder"
+            t2u_decoder_key = "decoder"
         # X2T model.
         elif config.use_text_encoder:
             encoder_key = "speech_encoder"
@@ -231,8 +263,8 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         # fairseq was accidentally run with a pre-LN encoder, and ended up with
         # a redundant `LayerNorm` right after the Conformer blocks. We mitigate
         # that issue here by moving that `LayerNorm` to the adaptor block.
+        # fmt: off
         if config.w2v2_encoder_config.use_conformer:
-            # fmt: off
             key_map.update(
                 {
                     fr"^{encoder_key}\.w2v_encoder\.w2v_model\.encoder\.layer_norm\.": r"speech_encoder.inner_layer_norm."
@@ -244,7 +276,7 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
                     rf"^{encoder_key}\.w2v_encoder\.w2v_model\.encoder\.layer_norm\.": r"speech_encoder.inner.layer_norm."
                 }
             )
-            # fmt: on
+        # fmt: on
 
         if config.use_conformer_adaptor:
             key_map.update(
@@ -303,44 +335,56 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
                 # fmt: on
             }
         )
+        # ExpressiveUnitY model (from multi_arch codebase)
+        if config.prosody_encoder_config is not None:
+            key_map.update(
+                {
+                    # fmt: off
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.film\.":              r"t2u_model.decoder.layers.\1.film.",
+                    fr"^{ecapa_tdnn_key}\.":                                       r"prosody_encoder_model.",
+                    r"^t2s_model\.global_proj_enc\.":                             r"t2u_model.prosody_proj.",
+                    # fmt: on
+                }
+            )
+
         # X2T/S2T + T2U model.
         if config.t2u_config is not None:
             key_map.update(
                 {
                     # fmt: off
                     # T2U Encoder
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.self_attn\.out_proj\.":     r"t2u_model.encoder.layers.\1.self_attn.output_proj.",
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.self_attn\.":               r"t2u_model.encoder.layers.\1.self_attn.",
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.self_attn_layer_norm\.":    r"t2u_model.encoder.layers.\1.self_attn_layer_norm.",
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.fc1\.":                     r"t2u_model.encoder.layers.\1.ffn.inner_proj.",
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.fc2\.":                     r"t2u_model.encoder.layers.\1.ffn.output_proj.",
-                    r"^synthesizer_encoder\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.encoder.layers.\1.ffn_layer_norm.",
-                    r"^synthesizer_encoder\.layer_norm\.":                                r"t2u_model.encoder.layer_norm.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.self_attn\.out_proj\.":     r"t2u_model.encoder.layers.\1.self_attn.output_proj.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.self_attn\.":               r"t2u_model.encoder.layers.\1.self_attn.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.self_attn_layer_norm\.":    r"t2u_model.encoder.layers.\1.self_attn_layer_norm.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.fc1\.":                     r"t2u_model.encoder.layers.\1.ffn.inner_proj.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.fc2\.":                     r"t2u_model.encoder.layers.\1.ffn.output_proj.",
+                    fr"^{t2u_encoder_key}\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.encoder.layers.\1.ffn_layer_norm.",
+                    fr"^{t2u_encoder_key}\.layer_norm\.":                                r"t2u_model.encoder.layer_norm.",
 
                     # T2U Decoder frontend
-                    r"^decoder\.embed_tokens_text\.":                           r"t2u_model.decoder_frontend.embed_char.",
-                    r"^decoder\.embed_tokens_unit\.":                           r"t2u_model.decoder_frontend.embed.",
-                    r"^decoder\.embed_tokens\.":                                r"t2u_model.decoder_frontend.embed.",
-                    r"^decoder\.var_adaptor\.duration_predictor\.":             r"t2u_model.decoder_frontend.variance_adaptor.duration_predictor.",
-                    r"^decoder\.dec_pos_emb_alpha":                             r"t2u_model.decoder_frontend.pos_emb_alpha",
-                    r"^decoder\.char_upsampler\.pos_emb_alpha":                 r"t2u_model.decoder_frontend.pos_emb_alpha_char",
+                    fr"^{t2u_decoder_key}\.embed_tokens_text\.":                           r"t2u_model.decoder_frontend.embed_char.",
+                    fr"^{t2u_decoder_key}\.embed_tokens_unit\.":                           r"t2u_model.decoder_frontend.embed.",
+                    fr"^{t2u_decoder_key}\.embed_tokens\.":                                r"t2u_model.decoder_frontend.embed.",
+                    fr"^{t2u_decoder_key}\.var_adaptor\.duration_predictor\.":             r"t2u_model.decoder_frontend.variance_adaptor.duration_predictor.",
+                    fr"^{t2u_decoder_key}\.dec_pos_emb_alpha":                             r"t2u_model.decoder_frontend.pos_emb_alpha",
+                    fr"^{t2u_decoder_key}\.char_upsampler\.pos_emb_alpha":                 r"t2u_model.decoder_frontend.pos_emb_alpha_char",
 
                     # T2U Decoder
-                    r"^decoder\.layers\.([0-9]+)\.self_attn\.out_proj\.":     r"t2u_model.decoder.layers.\1.self_attn.output_proj.",
-                    r"^decoder\.layers\.([0-9]+)\.self_attn\.":               r"t2u_model.decoder.layers.\1.self_attn.",
-                    r"^decoder\.layers\.([0-9]+)\.self_attn_layer_norm\.":    r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
-                    r"^decoder\.layers\.([0-9]+)\.layer_norm\.":              r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
-                    r"^decoder\.layers\.([0-9]+)\.encoder_attn\.out_proj\.":  r"t2u_model.decoder.layers.\1.encoder_decoder_attn.output_proj.",
-                    r"^decoder\.layers\.([0-9]+)\.encoder_attn\.":            r"t2u_model.decoder.layers.\1.encoder_decoder_attn.",
-                    r"^decoder\.layers\.([0-9]+)\.encoder_attn_layer_norm\.": r"t2u_model.decoder.layers.\1.encoder_decoder_attn_layer_norm.",
-                    r"^decoder\.layers\.([0-9]+)\.fc1\.":                     r"t2u_model.decoder.layers.\1.ffn.inner_proj.",
-                    r"^decoder\.layers\.([0-9]+)\.fc2\.":                     r"t2u_model.decoder.layers.\1.ffn.output_proj.",
-                    r"^decoder\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.decoder.layers.\1.ffn_layer_norm.",
-                    r"^decoder\.layers\.([0-9]+)\.ffn\.ffn\.0\.":             r"t2u_model.decoder.layers.\1.conv1d.conv1.",
-                    r"^decoder\.layers\.([0-9]+)\.ffn\.ffn\.2\.":             r"t2u_model.decoder.layers.\1.conv1d.conv2.",
-                    r"^decoder\.layers\.([0-9]+)\.ffn\.layer_norm\.":         r"t2u_model.decoder.layers.\1.conv1d_layer_norm.",
-                    r"^decoder\.layer_norm\.":                                r"t2u_model.decoder.layer_norm.",
-                    r"^decoder\.output_projection\.":                         r"t2u_model.final_proj.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.self_attn\.out_proj\.":     r"t2u_model.decoder.layers.\1.self_attn.output_proj.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.self_attn\.":               r"t2u_model.decoder.layers.\1.self_attn.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.self_attn_layer_norm\.":    r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.layer_norm\.":              r"t2u_model.decoder.layers.\1.self_attn_layer_norm.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.encoder_attn\.out_proj\.":  r"t2u_model.decoder.layers.\1.encoder_decoder_attn.output_proj.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.encoder_attn\.":            r"t2u_model.decoder.layers.\1.encoder_decoder_attn.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.encoder_attn_layer_norm\.": r"t2u_model.decoder.layers.\1.encoder_decoder_attn_layer_norm.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.fc1\.":                     r"t2u_model.decoder.layers.\1.ffn.inner_proj.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.fc2\.":                     r"t2u_model.decoder.layers.\1.ffn.output_proj.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.final_layer_norm\.":        r"t2u_model.decoder.layers.\1.ffn_layer_norm.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.ffn\.ffn\.0\.":             r"t2u_model.decoder.layers.\1.conv1d.conv1.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.ffn\.ffn\.2\.":             r"t2u_model.decoder.layers.\1.conv1d.conv2.",
+                    fr"^{t2u_decoder_key}\.layers\.([0-9]+)\.ffn\.layer_norm\.":         r"t2u_model.decoder.layers.\1.conv1d_layer_norm.",
+                    fr"^{t2u_decoder_key}\.layer_norm\.":                                r"t2u_model.decoder.layer_norm.",
+                    fr"^{t2u_decoder_key}\.output_projection\.":                         r"t2u_model.final_proj.",
                     # fmt: on
                 }
             )
