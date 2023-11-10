@@ -73,6 +73,9 @@ class UnitYConfig:
     use_text_encoder: bool
     """If ``True``, uses an aligned MT encoder for the MT task."""
 
+    use_text_decoder: bool
+    """If ``False``, skips loading a text decoder, to be used with a Monotonic decoder."""
+
     use_conformer_adaptor: bool
     """If ``True``, uses a Conformer-based adaptor block."""
 
@@ -120,6 +123,7 @@ def _base() -> UnitYConfig:
         t2u_config=t2u_config,
         prosody_encoder_config=None,
         use_text_encoder=True,
+        use_text_decoder=True,
         use_conformer_adaptor=False,
         use_gelu=False,
         num_adaptor_layers=1,
@@ -147,6 +151,7 @@ def _medium() -> UnitYConfig:
         t2u_config=t2u_config,
         prosody_encoder_config=None,
         use_text_encoder=True,
+        use_text_decoder=True,
         use_conformer_adaptor=False,
         use_gelu=False,
         num_adaptor_layers=1,
@@ -176,6 +181,7 @@ def _base_v2() -> UnitYConfig:
         t2u_config=t2u_config,
         prosody_encoder_config=None,
         use_text_encoder=True,
+        use_text_decoder=True,
         use_conformer_adaptor=False,
         use_gelu=False,
         num_adaptor_layers=1,
@@ -209,6 +215,7 @@ def _expressivity_v2() -> UnitYConfig:
         t2u_config=t2u_config,
         prosody_encoder_config=prosody_encoder_config,
         use_text_encoder=False,
+        use_text_decoder=True,
         use_conformer_adaptor=False,
         use_gelu=True,
         num_adaptor_layers=1,
@@ -290,16 +297,23 @@ class UnitYBuilder:
         speech_encoder_frontend = self.w2v2_encoder_builder.build_frontend()
         speech_encoder = self.build_speech_encoder()
 
-        text_decoder_frontend = self.mt_model_builder.build_frontend(text_embed)
-        text_decoder = self.mt_model_builder.build_decoder()
-
         if self.config.use_text_encoder:
-            # We use shared embedding as in NLLB.
-            text_encoder_frontend = text_decoder_frontend
+            text_encoder_frontend = self.mt_model_builder.build_frontend(text_embed)
             text_encoder = self.mt_model_builder.build_encoder()
         else:
             text_encoder_frontend = None
             text_encoder = None
+
+        if self.config.use_text_decoder:
+            if text_encoder_frontend is not None:
+                # We use shared embedding as in NLLB.
+                text_decoder_frontend = text_encoder_frontend
+            else:
+                text_decoder_frontend = self.mt_model_builder.build_frontend(text_embed)
+            text_decoder = self.mt_model_builder.build_decoder()
+        else:
+            text_decoder_frontend = None
+            text_decoder = None
 
         final_proj = TiedProjection(text_embed.weight, bias=None)
 
