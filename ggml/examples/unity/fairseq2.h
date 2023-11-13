@@ -6,6 +6,12 @@
 #include "ggml.h"
 #include "kaldi-native-fbank/csrc/feature-fbank.h"
 
+struct KeyValueTensor {
+    ggml_tensor* full_k;
+    ggml_tensor* full_v;
+    int step_nr;
+    // ggml_tensor* key_padding_mask;
+};
 
 struct fairseq2_model {
     // Context containing all tensors memory
@@ -20,6 +26,9 @@ struct fairseq2_model {
     // Hashmap containing layers hyper-parameters.
     // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
     std::unordered_map<std::string, std::int64_t> layer_config;
+
+    // KV cache for attention layers
+    mutable std::unordered_map<std::string, KeyValueTensor> kv_cache;
 
     // an inference context, not managed by this object
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
@@ -91,7 +100,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_tensor* queries,  // (slen, d_in)
     ggml_tensor* keys,  // (klen, d_in)
     ggml_tensor* values,  // (klen, d_out)
-    ggml_tensor* _ // (klen, slen)  TODO: do we need to pass mask here ?
+    ggml_tensor* attn_mask // (klen, slen)
 );
 
 
