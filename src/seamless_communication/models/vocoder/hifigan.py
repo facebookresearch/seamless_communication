@@ -128,6 +128,7 @@ class Generator(torch.nn.Module):
         resblock_kernel_sizes: List[int],
         resblock_dilation_sizes: List[List[int]],
         model_in_dim: Optional[int],
+        add_ups_out_pad: bool = False,
     ):
         super(Generator, self).__init__()
         self.num_kernels = len(resblock_kernel_sizes)
@@ -144,6 +145,7 @@ class Generator(torch.nn.Module):
 
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
+            out_pad = u % 2 if add_ups_out_pad else 0
             self.ups.append(
                 weight_norm(
                     ConvTranspose1d(
@@ -151,7 +153,8 @@ class Generator(torch.nn.Module):
                         upsample_initial_channel // (2 ** (i + 1)),
                         k,
                         u,
-                        padding=(k - u) // 2,
+                        padding=(k - u) // 2 + out_pad,
+                        output_padding=out_pad,
                     )
                 )
             )

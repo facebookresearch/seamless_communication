@@ -11,6 +11,7 @@ from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.typing import DataType, Device
 
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
+from seamless_communication.models.vocoder.melhifigan import MelGenerator
 from seamless_communication.models.vocoder.vocoder import Vocoder
 
 
@@ -135,3 +136,63 @@ def create_vocoder_model(
     """
 
     return VocoderBuilder(config, device=device, dtype=dtype).build_model()
+
+
+mel_vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_mel_hifigan")
+mel_vocoder_arch = mel_vocoder_archs.marker
+
+
+@mel_vocoder_arch("base_mel")
+def _base_mel_vocoder() -> VocoderConfig:
+    return VocoderConfig(
+        upsample_rates=[5, 4, 4, 2],
+        upsample_kernel_sizes=[10, 8, 8, 4],
+        upsample_initial_channel=512,
+        resblock_kernel_sizes=[3, 7, 11],
+        resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        model_in_dim=80,
+        num_embeddings=0,
+        embedding_dim=0,
+        dur_predictor_params={},
+        lang_embedding_dim=0,
+        num_langs=0,
+        spkr_embedding_dim=0,
+        num_spkrs=0,
+        lang_spkr_idx_map={},
+    )
+
+
+class MelVocoderBuilder:
+    config: VocoderConfig
+    device: Optional[Device]
+    dtype: Optional[DataType]
+
+    def __init__(
+        self,
+        config: VocoderConfig,
+        *,
+        device: Optional[Device] = None,
+        dtype: Optional[DataType] = None,
+    ) -> None:
+        self.config = config
+        self.device, self.dtype = device, dtype
+
+    def build_model(self) -> MelGenerator:
+        generator = MelGenerator(
+            self.config.upsample_rates,
+            self.config.upsample_kernel_sizes,
+            self.config.upsample_initial_channel,
+            self.config.resblock_kernel_sizes,
+            self.config.resblock_dilation_sizes,
+            self.config.model_in_dim,
+        )
+        generator.to(dtype=self.dtype, device=self.device)
+        return generator
+
+
+def create_mel_vocoder_model(
+    config: VocoderConfig,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> MelGenerator:
+    return MelVocoderBuilder(config, device=device, dtype=dtype).build_model()

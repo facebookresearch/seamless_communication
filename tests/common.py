@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from contextlib import contextmanager
-from typing import Any, Generator, List, Union
+from typing import Any, Generator, List, Optional, Union
 
 import torch
 from fairseq2.typing import Device
@@ -16,12 +16,17 @@ from torch import Tensor
 device = Device("cpu")
 
 
-def assert_close(a: Tensor, b: Union[Tensor, List[Any]]) -> None:
+def assert_close(
+    a: Tensor,
+    b: Union[Tensor, List[Any]],
+    rtol: Optional[float] = None,
+    atol: Optional[float] = None,
+) -> None:
     """Assert that ``a`` and ``b`` are element-wise equal within a tolerance."""
     if not isinstance(b, Tensor):
         b = torch.tensor(b, device=device, dtype=a.dtype)
 
-    torch.testing.assert_close(a, b)  # type: ignore[attr-defined]
+    torch.testing.assert_close(a, b, rtol=rtol, atol=atol)  # type: ignore[attr-defined]
 
 
 def assert_equal(a: Tensor, b: Union[Tensor, List[Any]]) -> None:

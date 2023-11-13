@@ -5,6 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 from seamless_communication.models.vocoder.builder import (
+    MelVocoderBuilder as MelVocoderBuilder,
+)
+from seamless_communication.models.vocoder.builder import (
     VocoderBuilder as VocoderBuilder,
 )
 from seamless_communication.models.vocoder.builder import VocoderConfig as VocoderConfig
@@ -12,8 +15,17 @@ from seamless_communication.models.vocoder.codehifigan import (
     CodeGenerator as CodeGenerator,
 )
 from seamless_communication.models.vocoder.hifigan import Generator as Generator
+from seamless_communication.models.vocoder.loader import (
+    MelVocoderLoader as MelVocoderLoader,
+)
 from seamless_communication.models.vocoder.loader import VocoderLoader as VocoderLoader
 from seamless_communication.models.vocoder.loader import (
+    load_mel_vocoder_model as load_mel_vocoder_model,
+)
+from seamless_communication.models.vocoder.loader import (
     load_vocoder_model as load_vocoder_model,
+)
+from seamless_communication.models.vocoder.melhifigan import (
+    MelGenerator as MelGenerator,
 )
 from seamless_communication.models.vocoder.vocoder import Vocoder as Vocoder
