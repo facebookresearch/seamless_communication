@@ -9,8 +9,8 @@
 struct KeyValueTensor {
     ggml_tensor* full_k;
     ggml_tensor* full_v;
+    ggml_tensor* self_attn_mask;
     int step_nr;
-    // ggml_tensor* key_padding_mask;
 };
 
 struct fairseq2_model {

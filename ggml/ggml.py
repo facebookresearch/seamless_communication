@@ -453,4 +453,8 @@ def _testing_return_hypothesis_ptr(ctx: ggml_context_p) -> Ptr[Hypothesis]:
 
 @c_fn(lib)
 def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: str) -> int:
+    return -1
+
+@c_fn(lib)
+def fairseq2_kv_cache_alloc(model: ctypes.c_void_p, beam_size: int, max_seq_len: int) -> None:
     pass

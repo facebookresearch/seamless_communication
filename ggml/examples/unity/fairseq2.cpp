@@ -8,6 +8,11 @@
 #include <iostream>
 #include <fnmatch.h>
 
+void ggml_detach(ggml_tensor* a) {
+    a->op = GGML_OP_NONE;
+    std::fill(a->src, a->src + GGML_MAX_SRC, nullptr);
+}
+
 /// allocate the fairseq2 model and hyperparameters
 extern "C" fairseq2_model* fairseq2_model_alloc() {
     // pre-allocate some memory to write hyperparameters and tensors pointers
@@ -16,11 +21,14 @@ extern "C" fairseq2_model* fairseq2_model_alloc() {
     return model;
 }
 
-void fairseq2_kv_cache_alloc(const fairseq2_model& model, std::size_t beam_size, std::size_t max_seq_len) {
+extern "C" void fairseq2_kv_cache_alloc(const fairseq2_model& model, int beam_size, int max_seq_len) {
     // Note: we only allocate the cache for the decoder attention.
     // For encoder attention since we compute it all at once,
     // the allocation is delayed to the first forward pass, to not over allocate.
     auto layer_glob_c = "*decoder.*attn.k_proj.weight";
+    ggml_tensor* self_attn_mask = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, max_seq_len, max_seq_len);
+    self_attn_mask = ggml_diag_mask_inf(model.ctx, self_attn_mask, 0);
+
     for (auto named_tensor : model.tensors) {
         const std::string& name = named_tensor.first;
         if (::fnmatch(layer_glob_c, name.c_str(), 0) == FNM_NOMATCH)
@@ -31,6 +39,7 @@ void fairseq2_kv_cache_alloc(const fairseq2_model& model, std::size_t beam_size,
         model.kv_cache[name.substr(0, name.size() - 14)] = KeyValueTensor {
             ggml_new_tensor_3d(model.ctx, k_proj->type, model_dim, max_seq_len, beam_size),
             ggml_new_tensor_3d(model.ctx, k_proj->type, model_dim, max_seq_len, beam_size),
+            self_attn_mask,
             0,
         };
     }
@@ -43,21 +52,67 @@ bool has_kv_cache(const fairseq2_model& model) {
 // copy k and v to kv cache
 // kv.full_k[step_nr] = k;
 // kv.full_v[step_nr] = v;
-void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, ggml_tensor** k, ggml_tensor** v) {
+void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, ggml_tensor** k, ggml_tensor** v, ggml_tensor** self_attn_mask) {
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
 
     ggml_tensor* full_k = kv.full_k;
     ggml_tensor* full_v = kv.full_v;
 
+    // (N, S_kv, K_proj)
+    GGML_ASSERT((*k)->ne[1] == 1);  // TODO I think we could handle adding a full prefix sequence
     ggml_tensor* updated_k = ggml_set_2d_inplace(model.ctx, full_k, *k, full_k->nb[2], full_k->nb[1] * step_nr);
     ggml_tensor* updated_v = ggml_set_2d_inplace(model.ctx, full_v, *v, full_v->nb[2], full_v->nb[1] * step_nr);
 
     *k = ggml_slice(model.ctx, updated_k, 1, 0, step_nr + 1);
     *v = ggml_slice(model.ctx, updated_v, 1, 0, step_nr + 1);
+
+    // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
+    // we return the Sq slice of the (Sq, Sk) attention mask
+    *self_attn_mask = ggml_slice(
+        model.ctx,
+        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr + 1),
+        1,
+        step_nr,
+        step_nr + 1
+    );
+
     kv.step_nr = step_nr + 1;
 }
 
+// variant of ggml_get_rows that allows for a with more than 2 dims.
+ggml_tensor* ggml_get_rows2(ggml_context* ctx, ggml_tensor* a, ggml_tensor* b) {
+    int flattened = 0;
+    GGML_ASSERT(a->n_dims <= 3);
+    if (a->n_dims == 3) {
+        flattened = a->ne[0];
+        a = ggml_flatten_1d(ctx, a, 0);
+    }
+    a = ggml_get_rows(ctx, a, b);
+    if (flattened) {
+        a = ggml_unflatten_1d(ctx, a, 0, flattened);
+    }
+    return a;
+}
+
+
+void _reorder_kv_cache(ggml_context* ctx, ggml_cgraph* gf, KeyValueTensor& kv, ggml_tensor* new_order) {
+    ggml_detach(kv.full_k);
+    kv.full_k = ggml_get_rows2(ctx, kv.full_k, new_order);
+    ggml_build_forward_expand(gf, kv.full_k);
+
+    ggml_detach(kv.full_v);
+    kv.full_v = ggml_get_rows2(ctx, kv.full_v, new_order);
+    ggml_build_forward_expand(gf, kv.full_v);
+}
+
+
+void reorder_kv_cache(const fairseq2_model& model, ggml_cgraph* gf, ggml_tensor* new_order) {
+    ggml_context* ctx = model.ctx;
+    for (auto& named_kv : model.kv_cache) {
+        _reorder_kv_cache(ctx, gf, named_kv.second, new_order);
+    }
+}
 
 
 inline double model_layer_config_d(const fairseq2_model& model, std::string name) {
@@ -281,18 +336,18 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
                 ggml_set_name(k, "k");
                 v = Linear_forward(model, prefix + ".v_proj", values);
                 ggml_set_name(v, "v");
-                model.kv_cache[prefix] = KeyValueTensor{k, v, 1};
+                model.kv_cache[prefix] = KeyValueTensor{k, v, nullptr, 1};
             } else {
                 k = kv_cache.full_k;
                 v = kv_cache.full_v;
             }
-        } else {
+        } else { // self attention
             // (1, K) -> (N, 1, K_proj)
             k = Linear_forward(model, prefix + ".k_proj", keys);
             // (1, V) -> (N, 1, V_proj)
             v = Linear_forward(model, prefix + ".v_proj", values);
 
-            append_to_prev_kv(model, prefix, &k, &v);
+            append_to_prev_kv(model, prefix, &k, &v, &attn_mask);
         }
     }
     k = _reshape_num_head(ctx, k, head_dim);  // (B * H, Sk, H_dim)
@@ -315,7 +370,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     ggml_set_name(qk, "qk_scaled");
 
     // TODO: Should we replace this by ggml_diag_mask_inf ?
-    if (attn_mask) qk = ggml_add(ctx, qk, attn_mask);
+    if (attn_mask) qk = ggml_add_inplace(ctx, qk, attn_mask);
     // TODO: upgrade qk to float32 if needed
     ggml_tensor* attn_weights = ggml_soft_max(ctx, qk);  // (B * H, S, Sk)
     ggml_set_name(attn_weights, "attn_weights");
@@ -992,7 +1047,7 @@ ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int6
     return y;
 }
 
-void _bootstrap_seqs_and_scores(
+extern "C" void _bootstrap_seqs_and_scores(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* full_seqs,
@@ -1075,14 +1130,6 @@ int topk(
     std::partial_sort(cand, cand + K, cand + ggml_nelements(lprobs), comp);
 
     return K;
-}
-
-
-void ggml_detach(ggml_tensor* a) {
-    a->op = GGML_OP_NONE;
-    for (int i = 0; i < GGML_MAX_SRC; ++i) {
-        a->src[i] = nullptr;
-    }
 }
 
 
@@ -1303,14 +1350,14 @@ extern "C" Hypothesis* generate_sequence(
             new_seqs->type = GGML_TYPE_F32;
             new_seqs = ggml_get_rows(ctx, seqs, beam_indices);
             new_scores = ggml_get_rows(ctx, scores, beam_indices);
-            gf = ggml_build_forward(new_seqs);
-            ggml_graph_compute_with_ctx(ctx, &gf, 1);
-            ggml_detach(new_seqs);
-            new_seqs->type = GGML_TYPE_I32;
+            ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
+            ggml_build_forward_expand(&gf_reorder, new_scores);
+            reorder_kv_cache(model, &gf_reorder, beam_indices);
 
-            gf = ggml_build_forward(new_scores);
-            ggml_graph_compute_with_ctx(ctx, &gf, 1);
+            ggml_graph_compute_with_ctx(ctx, &gf_reorder, 1);
+            ggml_detach(new_seqs);
             ggml_detach(new_scores);
+            new_seqs->type = GGML_TYPE_I32;
         }
         
         // new_seqs[:, step_nr + 1] = next_tokens

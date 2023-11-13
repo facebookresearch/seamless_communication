@@ -32,9 +32,11 @@ def _py_type_to_ctype(t: type):
         raise ValueError(
             f"Type parsing of '{t}' isn't supported, you need to provide a real type annotation."
         )
-    if t.__module__ == "ctypes":
-        return t
+    if t is None:
+        return None
     if isinstance(t, type):
+        if t.__module__ == "ctypes":
+            return t
         if issubclass(t, ctypes.Structure):
             return t
         if issubclass(t, ctypes._Pointer):
@@ -47,8 +49,6 @@ def _py_type_to_ctype(t: type):
         return ctypes.c_bool
     if t is str:
         return ctypes.c_char_p
-    if t is None:
-        return None
 
     if getattr(t, "__origin__", None) is Ptr:
         pointee = _py_type_to_ctype(t.__args__[0])
