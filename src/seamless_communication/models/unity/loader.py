@@ -36,7 +36,7 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
         state_dict = checkpoint["model"]
 
         # Check if we have a fairseq2 checkpoint.
-        if "decoder_frontend.embed.weight" in state_dict:
+        if "speech_encoder.inner.layers.0.self_attn_layer_norm.weight" in state_dict:
             return checkpoint
 
         key_map = self._fairseq_key_map(config)
