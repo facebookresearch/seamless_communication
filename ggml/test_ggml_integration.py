@@ -287,6 +287,7 @@ def test_numpy_mul_mat(ctx: Ctx) -> None:
     y = ggml.to_numpy(gy)
     assert np.allclose(y_exp, y)
 
+
 @pytest.mark.parametrize("ndim", [2, 3, 4])
 def test_flatten(ctx: Ctx, ndim: int) -> None:
     shape = [11, 7, 5, 3][:ndim]  # Prime numbers to avoid surprises
@@ -364,3 +365,29 @@ def test_can_return_hypothesis_ptr(ctx: Ctx) -> None:
 
     assert ggml.to_numpy(hyp1.seq).tolist() == [421]
     assert hyp1.score == pytest.approx(4.21)
+
+
+@pytest.mark.parametrize("inplace", ["", "inplace"])
+def test_set_2d(ctx: Ctx, inplace: bool):
+    a = torch.empty((5, 3, 2))
+    torch.nn.init.uniform_(a, -1, 1)
+    b = torch.empty((3, 2))
+    torch.nn.init.uniform_(b, -1, 1)
+    a_original = a.clone()
+
+    # make a copy of `a` before we modify it
+    ga = ggml.from_numpy(ctx, a.clone().numpy())
+    gb = ggml.from_numpy(ctx, b.numpy())
+    a[3, ...] = b
+
+    set_2d = ggml.ggml_set_2d_inplace if inplace else ggml.ggml_set_2d
+    ga_updated = set_2d(ctx, ga, gb, ggml.nb(ga)[1], ggml.nb(ga)[2] * 3)
+    ggml.build_and_compute(ctx, ga_updated)
+
+    a_updated = ggml.to_numpy(ga if inplace else ga_updated)
+    assert np.allclose(a.numpy(), a_updated)
+
+    if not inplace:
+        # When not using set_2d_inplace, the original tensor is unmodified.
+        assert np.allclose(ggml.to_numpy(ga), a_original.numpy())
+        assert ga.contents.data != ga_updated.contents.data

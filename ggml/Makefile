@@ -6,7 +6,7 @@ build/src/libggml.so: examples/unity/*.h examples/unity/*.cpp
 	cd build; make -j4 ggml
 	find build/ -iname '*.so'
 
-build/bin/unity: examples/unity/*.h examples/unity/*.cpp
+build/bin/unity: examples/unity/*.h examples/unity/*.cpp src/*
 	mkdir -p build
 	cd build; cmake ..
 	cd build; make -j4 unity
