@@ -73,23 +73,30 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             keys_to_delete.append("text_encoder.version")
             keys_to_delete.append("text_encoder.embed_positions._float_tensor")
 
+        if not config.use_text_decoder:
+            text_decoder_keys = [
+                key for key in state_dict if key.startswith(decoder_key)
+            ]
+            keys_to_delete.extend(text_decoder_keys)
+
         # Remnant of wav2vec2 pretraining, not needed for eval or fine-tuning.
         keys_to_delete.append(f"{encoder_key}.w2v_encoder.w2v_model.mask_emb")
 
-        keys_to_delete.append(
-            f"{t2u_decoder_key}.char_upsampler.embed_positions._float_tensor"
-        )
-        keys_to_delete.append(
-            f"{t2u_decoder_key}.char_upsampler.embed_tokens_char.weight"
-        )
+        if config.prosody_encoder_config is not None or config.t2u_config is not None:
+            keys_to_delete.append(
+                f"{t2u_decoder_key}.char_upsampler.embed_positions._float_tensor"
+            )
+            keys_to_delete.append(
+                f"{t2u_decoder_key}.char_upsampler.embed_tokens_char.weight"
+            )
 
-        # Delete AlignmentEncoder keys for inference.
-        alignment_encoder_keys = [
-            key
-            for key in state_dict
-            if key.startswith(f"{t2u_decoder_key}.alignment_encoder.")
-        ]
-        keys_to_delete.extend(alignment_encoder_keys)
+            # Delete AlignmentEncoder keys for inference.
+            alignment_encoder_keys = [
+                key
+                for key in state_dict
+                if key.startswith(f"{t2u_decoder_key}.alignment_encoder.")
+            ]
+            keys_to_delete.extend(alignment_encoder_keys)
 
         # Delete character-level projection for inference.
         keys_to_delete.extend(
@@ -114,23 +121,31 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             if key in state_dict:
                 del state_dict[key]
 
-        embeds = state_dict["final_proj.weight"]
+        if config.use_text_decoder:
+            embeds = state_dict["final_proj.weight"]
 
-        # fairseq had a bug that accidentally introduced a dummy token in the
-        # embedding table of NLLB-100. We just discard it.
-        if (
-            isinstance(config.mt_model_config, NllbConfig) and embeds.size(0) == 256103
-        ):  # means NLLB-100
-            embeds = embeds[:-1]
+            # fairseq had a bug that accidentally introduced a dummy token in the
+            # embedding table of NLLB-100. We just discard it.
+            if (
+                isinstance(config.mt_model_config, NllbConfig)
+                and embeds.size(0) == 256103
+            ):  # means NLLB-100
+                embeds = embeds[:-1]
 
-            state_dict["final_proj.weight"] = embeds
+                state_dict["final_proj.weight"] = embeds
 
-        # fairseq checkpoints have duplicate embedding weights. Ensure that we
-        # use a single embedding table in fairseq2.
-        state_dict["text_decoder_frontend.embed.weight"] = embeds
+            # fairseq checkpoints have duplicate embedding weights. Ensure that we
+            # use a single embedding table in fairseq2.
+            state_dict["text_decoder_frontend.embed.weight"] = embeds
 
-        if config.use_text_encoder:
-            state_dict["text_encoder_frontend.embed.weight"] = embeds
+            if config.use_text_encoder:
+                state_dict["text_encoder_frontend.embed.weight"] = embeds
+
+            # The embedding positions of the control symbols in fairseq's dict do
+            # not match the SentencePiece model of the tokenizer.
+            with torch.inference_mode():
+                # (BOS, PAD, EOS, UNK) -> (PAD, UNK, BOS, EOS)
+                embeds[[0, 1, 2, 3]] = embeds[[1, 3, 0, 2]]
 
         char_embeds = state_dict.get(
             "t2u_model.decoder_frontend.embed_char.weight", None
@@ -139,12 +154,6 @@ class UnitYLoader(ModelLoader[UnitYModel, UnitYConfig]):
             index_mapping = self._get_char_index_mapping(config)
             vocab_size = len(index_mapping)
             char_embeds[torch.arange(vocab_size)] = char_embeds[index_mapping]
-
-        # The embedding positions of the control symbols in fairseq's dict do
-        # not match the SentencePiece model of the tokenizer.
-        with torch.inference_mode():
-            # (BOS, PAD, EOS, UNK) -> (PAD, UNK, BOS, EOS)
-            embeds[[0, 1, 2, 3]] = embeds[[1, 3, 0, 2]]
 
         if config.t2u_config is not None:
             # fairseq checkpoints have duplicate embedding weights. Ensure that we

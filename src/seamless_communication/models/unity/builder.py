@@ -292,30 +292,34 @@ class UnitYBuilder:
 
     def build_model(self) -> UnitYModel:
         """Build a model."""
-        text_embed = self.mt_model_builder.build_embedding()
-
         speech_encoder_frontend = self.w2v2_encoder_builder.build_frontend()
         speech_encoder = self.build_speech_encoder()
 
         if self.config.use_text_encoder:
+            text_embed = self.mt_model_builder.build_embedding()
             text_encoder_frontend = self.mt_model_builder.build_frontend(text_embed)
             text_encoder = self.mt_model_builder.build_encoder()
         else:
+            text_embed = None
             text_encoder_frontend = None
             text_encoder = None
 
         if self.config.use_text_decoder:
+            if text_embed is None:
+                text_embed = self.mt_model_builder.build_embedding()
+
             if text_encoder_frontend is not None:
                 # We use shared embedding as in NLLB.
                 text_decoder_frontend = text_encoder_frontend
             else:
                 text_decoder_frontend = self.mt_model_builder.build_frontend(text_embed)
+
             text_decoder = self.mt_model_builder.build_decoder()
+            final_proj = TiedProjection(text_embed.weight, bias=None)
         else:
             text_decoder_frontend = None
             text_decoder = None
-
-        final_proj = TiedProjection(text_embed.weight, bias=None)
+            final_proj = None
 
         if self.t2u_builder is None:
             t2u_model = None

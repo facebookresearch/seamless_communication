@@ -41,7 +41,7 @@ class UnitYModel(EncoderDecoderModel):
     text_encoder: Optional[TransformerEncoder]
     text_decoder_frontend: Optional[TransformerFrontend]
     text_decoder: Optional[TransformerDecoder]
-    final_proj: Projection
+    final_proj: Optional[Projection]
     t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None]
     prosody_encoder_model: Optional[ECAPA_TDNN]
 
@@ -53,7 +53,7 @@ class UnitYModel(EncoderDecoderModel):
         text_encoder: Optional[TransformerEncoder],
         text_decoder_frontend: Optional[TransformerFrontend],
         text_decoder: Optional[TransformerDecoder],
-        final_proj: Projection,
+        final_proj: Optional[Projection],
         t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None],
         target_vocab_info: VocabularyInfo,
         prosody_encoder_model: Optional[ECAPA_TDNN] = None,
@@ -93,6 +93,7 @@ class UnitYModel(EncoderDecoderModel):
 
             self.text_decoder_frontend = text_decoder_frontend
             self.text_decoder = text_decoder
+            self.final_proj = final_proj
         else:
             if text_decoder_frontend is not None:
                 raise ValueError(
@@ -101,8 +102,7 @@ class UnitYModel(EncoderDecoderModel):
 
             self.register_module("text_decoder_frontend", None)
             self.register_module("text_decoder", None)
-
-        self.final_proj = final_proj
+            self.register_module("final_proj", None)
 
         if t2u_model is not None:
             self.t2u_model = t2u_model
@@ -183,6 +183,11 @@ class UnitYModel(EncoderDecoderModel):
     def project(
         self, decoder_output: Tensor, decoder_padding_mask: Optional[PaddingMask]
     ) -> SequenceModelOutput:
+        if self.final_proj is None:
+            raise ValueError(
+                "`project()` requires a final_proj layer, but the current UnitY model does not have one."
+            )
+
         logits = self.final_proj(decoder_output)
 
         return SequenceModelOutput(logits, self.target_vocab_info)
