@@ -160,13 +160,6 @@ def test_FeedForwardNetwork_forward(ctx: Ctx, g_model: c_void_p) -> None:
     assert np.allclose(y_exp, y, atol=1e-5)
 
 
-def _name(tensor: ggml.ggml_tensor_p) -> bytes:
-    try:
-        return tensor.contents.name  # type: ignore[no-any-return]
-    except ValueError:
-        return b"???"
-
-
 @pytest.mark.parametrize("lengths", [(11, 21), (21, 13)])
 def test_MultiheadAttention_forward(
     ctx: Ctx, g_model: c_void_p, lengths: Tuple[int, int]
@@ -205,27 +198,21 @@ def test_MultiheadAttention_forward(
     q_exp = self_attn.q_proj(xq).numpy()
 
     y = ggml.to_numpy(gy)
-    nodes = {}
-
-    for i in range(gf.n_nodes):
-        name = _name(gf.nodes[i])
-        children = [_name(gf.nodes[i].contents.src[j]) for j in range(2)]
-        print(name, f"op({gf.nodes[i].contents.op})", children)
-        nodes[name] = ggml.to_numpy(gf.nodes[i])
+    nodes = ggml.nodes(gf)
 
     attn_weights_hook = fairseq2.nn.transformer.StoreAttentionWeights([])
     self_attn.register_attn_weight_hook(attn_weights_hook)
 
     y_exp = self_attn(xq, None, xk, xk).numpy()
 
-    q = nodes[b"q"]
+    q = ggml.to_numpy(nodes[b"q"])
     assert q.shape == q_exp.shape
     assert np.allclose(q_exp, q, atol=1e-5)
 
     # with flash_attn we don't have attn_weights
     naive_attn = b"attn_weights" in nodes
     if naive_attn:
-        attn_weights = nodes[b"attn_weights"]
+        attn_weights = ggml.to_numpy(nodes[b"attn_weights"])
         [attn_weights_exp] = attn_weights_hook._storage
         attn_weights_exp = attn_weights_exp.numpy()
         assert attn_weights_exp.shape == attn_weights.shape
@@ -242,9 +229,11 @@ def test_MultiheadAttention_forward(
     assert np.allclose(y_exp, y, atol=1e-2 if naive_attn else 1e-4)
 
 
-def test_MultiheadAttention_forward_with_state_bag(ctx: Ctx, g_model: c_void_p) -> None:
+def test_MultiheadAttention_forward_self_attn_with_cache(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
     pt_model = load_pt_model()
-    self_attn = pt_model.text_encoder.layers[0].self_attn
+    attn = pt_model.text_decoder.layers[0].self_attn
 
     x = torch.empty((2, 21, 1024))
     torch.random.manual_seed(0)
@@ -255,17 +244,65 @@ def test_MultiheadAttention_forward_with_state_bag(ctx: Ctx, g_model: c_void_p) 
     ggml.fairseq2_kv_cache_alloc(g_model, 2, 21)
     # Incremental decoding
     for t in range(3):
-        xq, xk = x[:, t : t + 1], x[:, t : t + 1]
-        y_exp = self_attn(xq, None, xk, xk, state_bag=state_bag).numpy()
+        xq = x[:, t : t + 1]
+        y_exp = attn(xq, None, xq, xq, state_bag=state_bag).numpy()
         assert y_exp.shape == (2, 1, 1024)
 
         gxq = ggml.from_numpy(ctx, xq.contiguous())
-        gxk = ggml.from_numpy(ctx, xk.contiguous())
-        ggml.ggml_set_name(gxk, b"xk")
+        ggml.ggml_set_name(gxq, b"xq")
         gy = ggml.forward(
             "MultiheadAttention",
             g_model,
-            "text_encoder.layers.0.self_attn",
+            "text_decoder.layers.0.self_attn",
+            gxq,
+            gxq,
+            gxq,
+            None,  # type: ignore
+        )
+        gf = ggml.ggml_build_forward(gy)
+        ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+
+        nodes = ggml.nodes(gf)
+        state = state_bag.get_state(
+            attn, fairseq2.nn.transformer.MultiheadAttentionState
+        )
+        assert state is not None
+        assert np.allclose(
+            state.prev_k.numpy(),
+            ggml.to_numpy(nodes[b"text_decoder.layers.0.self_attn.k_cache (step=%d)" % t]),
+            atol=1e-3,
+        )
+
+        y = ggml.to_numpy(gy)
+        assert np.allclose(y, y_exp, atol=1e-2)
+
+
+def test_MultiheadAttention_forward_cross_attn_with_cache(
+    ctx: Ctx, g_model: c_void_p
+) -> None:
+    pt_model = load_pt_model()
+    attn = pt_model.text_decoder.layers[0].encoder_decoder_attn
+
+    x = torch.empty((2, 21, 1024))
+    torch.random.manual_seed(0)
+    torch.nn.init.uniform_(x, -1, 1)
+
+    state_bag = fairseq2.nn.IncrementalStateBag()
+
+    ggml.fairseq2_kv_cache_alloc(g_model, 2, 21)
+    # Incremental decoding, the keys come from the encoder, and don't change during decoding
+    xk = x[:, :11]
+    gxk = ggml.from_numpy(ctx, xk.contiguous(), name=b"xk")
+
+    for t in range(3):
+        xq = x[:, t : t + 1]
+
+        gxq = ggml.from_numpy(ctx, xq.contiguous())
+        ggml.ggml_set_name(gxq, b"xq")
+        gy = ggml.forward(
+            "MultiheadAttention",
+            g_model,
+            "text_decoder.layers.0.encoder_decoder_attn",
             gxq,
             gxk,
             gxk,
@@ -273,8 +310,24 @@ def test_MultiheadAttention_forward_with_state_bag(ctx: Ctx, g_model: c_void_p) 
         )
         gf = ggml.ggml_build_forward(gy)
         ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
         y = ggml.to_numpy(gy)
+        nodes = ggml.nodes(gf)
+        leaves = ggml.leafs(gf)
+
+        if t > 0:
+            # the cache only appear in the graph during the second call
+            state = state_bag.get_state(
+                attn, fairseq2.nn.transformer.MultiheadAttentionState
+            )
+            assert state is not None
+            assert np.allclose(
+                state.prev_k.numpy(),
+                ggml.to_numpy(nodes[b"text_decoder.layers.0.encoder_decoder_attn.k_cache"]),
+                atol=1e-3,
+            )
+
+        y_exp = attn(xq, None, xk, xk, state_bag=state_bag).numpy()
+        assert y_exp.shape == (2, 1, 1024)
         assert np.allclose(y, y_exp, atol=1e-2)
 
 
@@ -337,6 +390,7 @@ def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> N
     y_exp = y_exp.numpy()
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=2e-3)
+
 
 def test_StandardConformerEncoderAdaptorLayer_forward(
     ctx: Ctx, g_model: c_void_p

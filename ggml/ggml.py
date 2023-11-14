@@ -7,6 +7,7 @@ import numpy as np
 import ctypes
 import torch
 import functools
+import logging
 from pathlib import Path
 from typing import Dict
 from typing import Callable
@@ -129,10 +130,14 @@ def _strided_to_numpy(tensor_p: ggml_tensor_p) -> np.ndarray:
     # TODO make this work for transposed array
     n = 1
     total_elements = 1
-    for d in range(n_dim - 1):
-        n = num_bytes[d + 1] // type_size // n
-        full_shape.append(n)
-        total_elements *= n
+    try:
+        for d in range(n_dim - 1):
+            n = num_bytes[d + 1] // type_size // n
+            full_shape.append(n)
+            total_elements *= n
+    except ZeroDivisionError:
+        logging.warning("Can't convert permuted GGML tensor back to numpy")
+        return None
     # We don't need to guess for the first dimension, since this doesn't impact striding.
     full_shape.append(t_shape[0])
     total_elements *= t_shape[0]
@@ -193,7 +198,7 @@ def _compute_nbytes(
 
 
 def from_numpy(
-    ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"]
+    ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"], name: bytes = b""
 ) -> ggml_tensor_p:
     if type(array).__name__ == "Tensor":
         array = array.numpy()
@@ -212,6 +217,8 @@ def from_numpy(
 
     # prevent the underlying numpy array to be freed
     setattr(tensor_p, "__data", array)
+    if name:
+        ggml_set_name(tensor_p, name)
     return tensor_p
 
 
@@ -223,6 +230,22 @@ def ggml_can_mul_mat(t0: ggml_tensor_p, t1: ggml_tensor_p) -> bool:
         and (t1.contents.ne[2] % t0.contents.ne[2] == 0)
         and (t1.contents.ne[3] % t0.contents.ne[3] == 0)
     )
+
+
+def nodes(gf: ggml_cgraph) -> Dict[bytes, ggml_tensor_p]:
+    res = {}
+    for i in range(gf.n_nodes):
+        name = gf.nodes[i].contents.name
+        res[name] = gf.nodes[i]
+    return res
+
+
+def leafs(gf: ggml_cgraph) -> Dict[bytes, ggml_tensor_p]:
+    res = {}
+    for i in range(gf.n_leafs):
+        name = gf.leafs[i].contents.name
+        res[name] = gf.leafs[i]
+    return res
 
 
 class NativeObj:
@@ -455,6 +478,9 @@ def _testing_return_hypothesis_ptr(ctx: ggml_context_p) -> Ptr[Hypothesis]:
 def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: str) -> int:
     return -1
 
+
 @c_fn(lib)
-def fairseq2_kv_cache_alloc(model: ctypes.c_void_p, beam_size: int, max_seq_len: int) -> None:
+def fairseq2_kv_cache_alloc(
+    model: ctypes.c_void_p, beam_size: int, max_seq_len: int
+) -> None:
     pass
