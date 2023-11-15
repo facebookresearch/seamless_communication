@@ -73,6 +73,15 @@ class FTError:
             self.word_count_r += 1
 
     def get_time_delta_abs(self):
+        """Get average absolute time delta including MAX_TIME_DELTA penalty for missed words"""
+        return (
+            abs(self.time_delta_l)
+            + self.time_delta_r
+            + self.missing_word_count * MAX_TIME_DELTA
+        ) / ((self.word_count_l + self.word_count_r + self.missing_word_count) or 1)
+
+    def get_time_delta_abs_skip_missing(self):
+        """Get average absolute time delta without penalizing missed words"""
         return (abs(self.time_delta_l) + self.time_delta_r) / (
             (self.word_count_l + self.word_count_r) or 1
         )
