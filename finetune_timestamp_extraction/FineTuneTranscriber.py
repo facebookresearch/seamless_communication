@@ -179,7 +179,6 @@ class FTTranscription:
         elif matrix[i][j - 1] > matrix[i - 1][j]:
             return self.get_lcs(matrix, words, i, j - 1)
         else:
-            print(f"No match (j): {self.words[i - 1].text}, {words[j - 1].text}")
             return self.get_lcs(matrix, words, i - 1, j)
 
     def compare(self, words: List[FTWord]) -> FTError:
