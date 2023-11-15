@@ -9,7 +9,7 @@ Transcriber time stamp extraction fine tuning module
 """
 
 from math import isclose
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict
 
 from seamless_communication.models.inference.transcriber import TranscriptionToken
 
@@ -95,8 +95,10 @@ class FTError:
 class FTTranscription:
     words: List[FTWord]
 
-    def __init__(self, words: List[FTWord]) -> None:
+    def __init__(self, words: List[FTWord], lang: str = "", path: str = "") -> None:
         self.words = self.separate_words(words)
+        self.lang = lang
+        self.path = path
 
     @staticmethod
     def separate_words(words: List[FTWord]) -> List[FTWord]:
@@ -182,5 +184,39 @@ class FTTranscription:
 
 
 class FineTuneTranscriber:
-    def __init__(self) -> None:
-        raise NotImplementedError
+    def __init__(self, transcriptions: List[Dict]) -> None:
+        """
+        Input: list of transcriptions
+        [
+            {
+                "audio_path": "/path/to/audio.file",
+                "text": "transcription",
+                "language": "eng",
+                "words": [
+                    {
+                        "text": "transcription",
+                        "start": 0.1,
+                        "end": 0.3,
+                        "confidence": 0.9
+                    },
+                ]
+            },
+        ]
+        """
+        self.transcriptions = list()
+        for transcription in transcriptions:
+            self.transcriptions.append(
+                FTTranscription(
+                    [
+                        FTWord(
+                            text=word["text"],
+                            prob=word["confidence"],
+                            ini_time=word["start"],
+                            end_time=word["end"],
+                        )
+                        for word in transcription["words"]
+                    ],
+                    lang=transcription["lang"],
+                    path=transcription["audio_path"],
+                )
+            )
