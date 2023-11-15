@@ -8,6 +8,8 @@ import ctypes
 import torch
 import functools
 import logging
+import dataclasses
+from typing import NamedTuple
 from pathlib import Path
 from typing import Dict
 from typing import Callable
@@ -199,7 +201,7 @@ def _compute_nbytes(
 
 def from_numpy(
     ctx: ggml_context_p, array: Union[np.ndarray, "torch.Tensor"], name: bytes = b""
-) -> ggml_tensor_p:
+) -> Ptr[ggml_tensor]:
     if type(array).__name__ == "Tensor":
         array = array.numpy()
     # Create an empty tensor so we don't allocate memory for the data pointer
@@ -219,7 +221,7 @@ def from_numpy(
     setattr(tensor_p, "__data", array)
     if name:
         ggml_set_name(tensor_p, name)
-    return tensor_p
+    return tensor_p  # type: ignore
 
 
 def ggml_can_mul_mat(t0: ggml_tensor_p, t1: ggml_tensor_p) -> bool:
@@ -425,18 +427,20 @@ def ggml_unflatten_1d(
 
 
 @c_struct
+@dataclasses.dataclass
 class SequenceGeneratorOptions:
     beam_size: int
-    min_seq_len: int
-    soft_max_seq_len_a: float
-    soft_max_seq_len_b: int
-    hard_max_seq_len: int
-    len_penalty: float
-    unk_penalty: float
-    normalize_scores: bool
+    min_seq_len: int = 5
+    soft_max_seq_len_a: float = 1.0
+    soft_max_seq_len_b: int = 200
+    hard_max_seq_len: int = 1024
+    len_penalty: float = 1.0
+    unk_penalty: float = 0.0
+    normalize_scores: bool = True
 
 
 @c_struct
+@dataclasses.dataclass
 class SequenceGeneratorJob:
     opts: SequenceGeneratorOptions
     prefix_seq: Ptr[ggml_tensor]
@@ -444,6 +448,7 @@ class SequenceGeneratorJob:
     unk_idx: int
     bos_idx: int
     eos_idx: int
+    num_threads: int = 1
 
 
 @c_struct

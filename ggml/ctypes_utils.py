@@ -2,32 +2,44 @@ import inspect
 import ctypes
 import types
 import functools
+import dataclasses
+from typing import Callable
+from typing import Any
+from typing import Optional
+from typing import Type
 from typing import TypeVar
 from typing import Generic
 
 T = TypeVar("T")
 
 
-class Ptr(Generic[T]):
+class Ptr(Generic[T], ctypes._Pointer):  # type: ignore
     contents: T
 
-    def __new__(cls):
-        breakpoint()
-        return ctypes.pointer()
+    def __new__(cls, x: T) -> "Ptr[T]":
+        return ctypes.pointer(x)  # type: ignore
 
 
-def c_struct(cls):
+NULLPTR: Ptr[Any] = None  # type: ignore[assignment]
+
+def c_struct(cls: Type[T]) -> Type[T]:
     struct = types.new_class(cls.__name__, bases=(ctypes.Structure,))
     struct.__module__ = cls.__module__
-    struct._fields_ = [
+    struct._fields_ = [  # type: ignore
         (k, _py_type_to_ctype(v)) for k, v in cls.__annotations__.items()
     ]
 
+    def nice_init(self: T, *args: Any, **kwargs: Any) -> None:
+        dc = cls(*args, **kwargs)
+        for k, _ in self._fields_:  # type: ignore
+            setattr(self, k, getattr(dc, k))
+
+    setattr(struct, "__init__", nice_init)
     return struct
 
 
 @functools.lru_cache(256)
-def _py_type_to_ctype(t: type):
+def _py_type_to_ctype(t: type) -> type:
     if isinstance(t, str):
         raise ValueError(
             f"Type parsing of '{t}' isn't supported, you need to provide a real type annotation."
@@ -51,13 +63,15 @@ def _py_type_to_ctype(t: type):
         return ctypes.c_char_p
 
     if getattr(t, "__origin__", None) is Ptr:
-        pointee = _py_type_to_ctype(t.__args__[0])
+        pointee = _py_type_to_ctype(t.__args__[0])  # type: ignore
         return ctypes.POINTER(pointee)
 
     return ctypes.c_void_p
 
 
-def _c_fn(module, fn):
+F = TypeVar("F", bound=Callable[..., Any])
+
+def _c_fn(module: Any, fn: F) -> F:
     c_fn = getattr(module, fn.__name__)
     annotations = fn.__annotations__
     if "return" not in annotations:
@@ -69,12 +83,12 @@ def _c_fn(module, fn):
     c_fn.restype = _py_type_to_ctype(fn.__annotations__["return"])
 
     @functools.wraps(fn)
-    def actual_fn(*args, **kwargs):
+    def actual_fn(*args, **kwargs):  # type: ignore
         raw_res = c_fn(*args, **kwargs)
         return raw_res
 
-    return actual_fn
+    return actual_fn  # type: ignore
 
 
-def c_fn(module):
+def c_fn(module: Any) -> Callable[[F], F]:
     return functools.partial(_c_fn, module)

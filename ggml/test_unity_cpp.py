@@ -21,6 +21,7 @@ from ggml_convert import convert_model, read_layer_config
 from seamless_communication.models.inference.translator import Translator, Modality
 from fairseq2.data.audio import WaveformToFbankConverter
 import torchaudio
+from ctypes_utils import NULLPTR
 from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 
 Ctx = ggml.ggml_context_p
@@ -30,6 +31,8 @@ CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024 * 5, mem_buffer=N
 
 FAIRSEQ2_CPP = Path(__file__).parent / "examples/unity/fairseq2.cpp"
 UNITY_FLASH_ATTN = "\n# define UNITY_FLASH_ATTN 0\n" not in FAIRSEQ2_CPP.read_text()
+
+DATA = Path(__file__).parent
 
 
 @pytest.fixture(name="ctx")
@@ -188,7 +191,7 @@ def test_MultiheadAttention_forward(
         gxq,
         gxk,
         gxk,
-        None,  # TODO: tests with causal attention masks
+        NULLPTR,  # TODO: tests with causal attention masks
     )
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
@@ -453,9 +456,7 @@ def test_StandardTransformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None
 
 def test_StandardConformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
     pt_model = load_pt_model()
-    wav, _ = torchaudio.load(
-        "/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/test.wav"
-    )
+    wav, _ = torchaudio.load(DATA / "test.wav")
     gx = ggml.from_numpy(ctx, wav * 2**15)  # Apply scale before sending into ggml!
     ggml.ggml_set_name(gx, b"x")
     gy = ggml.forward(
@@ -613,11 +614,11 @@ def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-3)
 
 
-def test_t2tt(ctx: Ctx, g_model: c_void_p):
+def test_t2tt(ctx: Ctx, g_model: c_void_p) -> None:
     src_lang = "eng"
     src_text = "We are all in a yellow submarine."
     tgt_lang = "fra"
-    sample_file = Path(__file__).parent / "sample_input.npz"
+    sample_file = DATA / "sample_input.npz"
     beam_size = 2
 
     if not sample_file.exists():
@@ -663,21 +664,24 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
     prefix_seq = np.array(text_out["hypotheses"][0]["seq"][:2]).astype(np.int32)
     max_seq_len = max(len(h["seq"]) for h in text_out["hypotheses"])
 
-    job = ggml.SequenceGeneratorJob()
-    job.opts.beam_size = beam_size
-    job.opts.min_seq_len = 1
-    job.opts.soft_max_seq_len_a = 1
-    job.opts.soft_max_seq_len_b = 200
-    job.opts.hard_max_seq_len = int(max_seq_len * 1.5)
-    job.opts.len_penalty = 1.0
-    job.opts.unk_penalty = 0.0
-    job.opts.normalize_scores = True
-
-    job.prefix_seq = ggml.from_numpy(ctx, prefix_seq)
-    job.pad_idx = 0
-    job.unk_idx = 1
-    job.bos_idx = 2
-    job.eos_idx = 3
+    opts = ggml.SequenceGeneratorOptions(
+        beam_size=beam_size,
+        min_seq_len=1,
+        soft_max_seq_len_a=1,
+        soft_max_seq_len_b=200,
+        hard_max_seq_len=int(max_seq_len * 1.5),
+        len_penalty=1.0,
+        unk_penalty=0.0,
+        normalize_scores=True,
+    )
+    job = ggml.SequenceGeneratorJob(
+        opts=opts,
+        prefix_seq=ggml.from_numpy(ctx, prefix_seq),
+        pad_idx=0,
+        unk_idx=1,
+        bos_idx=2,
+        eos_idx=3,
+    )
 
     result_ptr = ggml.generate_sequence(
         g_model, job, encoder_out, encoder_padding_mask, ctx
@@ -695,9 +699,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p):
 
 
 def test_s2tt(ctx: Ctx, g_model: c_void_p):
-    src_audio_wav, _ = torchaudio.load(
-        "/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/test.wav"
-    )
+    src_audio_wav, _ = torchaudio.load(DATA / "test.wav")
     # translator = load_translator()
     # token_encoder = translator.text_tokenizer.create_encoder(
     #     task="translation"
@@ -738,6 +740,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
         253935,
         3,
     ]  # "大家好 , 世界无主题。"
+    score = -1.606838583946228
     gx = ggml.from_numpy(
         ctx, src_audio_wav * 2**15
     )  # Apply scale before sending into ggml!
@@ -754,21 +757,20 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
 
     encoder_out = gy
 
-    job = ggml.SequenceGeneratorJob()
-    job.opts.beam_size = 5
-    job.opts.min_seq_len = 1
-    job.opts.soft_max_seq_len_a = 1
-    job.opts.soft_max_seq_len_b = 200
-    job.opts.hard_max_seq_len = 1000
-    job.opts.len_penalty = 1.0
-    job.opts.unk_penalty = 0.0
-    job.prefix_seq = ggml.from_numpy(ctx, np.array([3, 256200]).astype(np.int32))
-    job.opts.normalize_scores = True
-    job.pad_idx = 0
-    job.unk_idx = 1
-    job.bos_idx = 2
-    job.eos_idx = 3
-
-    result_ptr = ggml.generate_sequence(g_model, job, encoder_out, None, ctx)
+    opts = ggml.SequenceGeneratorOptions(
+        beam_size=5,
+        soft_max_seq_len_a=1,
+        soft_max_seq_len_b=200,
+        hard_max_seq_len=1000,
+    )
+    job = ggml.SequenceGeneratorJob(
+        opts=opts,
+        prefix_seq=ggml.from_numpy(ctx, np.array([3, 256200]).astype(np.int32)),
+        pad_idx=0,
+        unk_idx=1,
+        bos_idx=2,
+        eos_idx=3,
+    )
+    result_ptr = ggml.generate_sequence(g_model, job, encoder_out, NULLPTR, ctx)
     g_tokens = list(ggml.to_numpy(result_ptr[0].seq))
     assert g_tokens == tgt_tokens
