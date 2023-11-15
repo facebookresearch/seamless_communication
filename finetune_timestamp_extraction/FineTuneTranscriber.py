@@ -249,7 +249,7 @@ class FineTuneTranscriber:
         results = {}
 
         for idx, transcription in enumerate(self.transcriptions):
-            print(f"Processing [{idx:3}/{len(self.transcriptions)}]")
+            print(f"Processing [{idx+1:3}/{len(self.transcriptions)}]")
 
             new_transcription = self.model.transcribe(
                 transcription.path, transcription.lang
