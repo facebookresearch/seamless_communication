@@ -17,7 +17,7 @@ from seamless_communication.models.inference.transcriber import (
     Transcriber,
 )
 
-PUNCTUATION_MARKS = "¿?¡!.,:;"
+PUNCTUATION_MARKS = '¿?¡!.,:;"«»'
 MAX_TIME_DELTA = 5
 
 
