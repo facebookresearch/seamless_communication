@@ -267,10 +267,7 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                (
-                    text_output,
-                    speech_output,
-                ) = translator.predict(
+                (text_output, speech_output,) = translator.predict(
                     src,
                     ctx.task,
                     ctx.target_lang,
@@ -287,10 +284,7 @@ def run_eval(
                     speech_output = None
 
             if valid_sequences is not None and not valid_sequences.all():
-                (
-                    text_output,
-                    speech_output,
-                ) = adjust_output_for_corrupted_inputs(
+                (text_output, speech_output,) = adjust_output_for_corrupted_inputs(
                     valid_sequences,
                     text_output,
                     speech_output,
@@ -398,6 +392,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         device,
         text_tokenizer=text_tokenizer,
         dtype=dtype,
+        input_modality=input_modality,
         output_modality=output_modality,
     )
 
