@@ -82,15 +82,6 @@ class Transcriber(nn.Module):
         decoder_layers: int = 3,
         embed_dim: int = 512,
         depthwise_conv_kernel_size: int = 31,
-        beam_size: int = 1,
-        min_seq_len: int = 1,
-        soft_max_seq_len: Optional[Tuple[int, int]] = (1, 200),
-        hard_max_seq_len: int = 1024,
-        len_penalty: float = 1,
-        unk_penalty: float = 0,
-        normalize_scores: bool = True,
-        search: Optional[BeamSearch] = None,
-        logits_processor: Optional[LogitsProcessor] = None,
     ):
         super().__init__()
         self.device = device
@@ -117,17 +108,6 @@ class Transcriber(nn.Module):
         self.enc_dec_attn_collector = EncDecAttentionsCollect()
         self.s2t.decoder.layers[-1].encoder_decoder_attn.register_attn_weight_hook(
             self.enc_dec_attn_collector
-        )
-        self.gen_opts = SequenceGeneratorOptions(
-            beam_size=beam_size,
-            min_seq_len=min_seq_len,
-            soft_max_seq_len=soft_max_seq_len,
-            hard_max_seq_len=hard_max_seq_len,
-            len_penalty=len_penalty,
-            unk_penalty=unk_penalty,
-            normalize_scores=normalize_scores,
-            search=search,
-            logits_processor=logits_processor,
         )
 
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
@@ -229,7 +209,11 @@ class Transcriber(nn.Module):
         return word_stats
 
     def run_inference(
-        self, fbanks: torch.Tensor, src_lang: str, length_seconds: float
+        self,
+        fbanks: torch.Tensor,
+        src_lang: str,
+        length_seconds: float,
+        gen_opts: SequenceGeneratorOptions,
     ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
@@ -239,7 +223,7 @@ class Transcriber(nn.Module):
             decoder=self.s2t,
             vocab_info=self.decoder_vocab_info,
             prefix_seq=torch.LongTensor(prefix, device=self.device),
-            opts=self.gen_opts,
+            opts=gen_opts,
         )
 
         encoder_output, encoder_padding_mask = self.s2t.encode(
@@ -267,6 +251,15 @@ class Transcriber(nn.Module):
         audio: Union[str, Tensor],
         src_lang: str,
         sample_rate: int = 16000,
+        beam_size: int = 1,
+        min_seq_len: int = 1,
+        soft_max_seq_len: Optional[Tuple[int, int]] = (1, 200),
+        hard_max_seq_len: int = 1024,
+        len_penalty: float = 1,
+        unk_penalty: float = 0,
+        normalize_scores: bool = True,
+        search: Optional[BeamSearch] = None,
+        logits_processor: Optional[LogitsProcessor] = None,
     ) -> Transcription:
         """
         The main method used to perform transcription.
@@ -277,6 +270,8 @@ class Transcriber(nn.Module):
             Source language of audio.
         :param sample_rate:
             Sample rate of the audio Tensor.
+        :params ...:
+            Sequence generator options.
 
         :returns:
             - List of Tokens with timestamps.
@@ -298,4 +293,16 @@ class Transcriber(nn.Module):
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
         )
 
-        return self.run_inference(src, src_lang, length_seconds)
+        gen_opts = SequenceGeneratorOptions(
+            beam_size=beam_size,
+            min_seq_len=min_seq_len,
+            soft_max_seq_len=soft_max_seq_len,
+            hard_max_seq_len=hard_max_seq_len,
+            len_penalty=len_penalty,
+            unk_penalty=unk_penalty,
+            normalize_scores=normalize_scores,
+            search=search,
+            logits_processor=logits_processor,
+        )
+
+        return self.run_inference(src, src_lang, length_seconds, gen_opts)
