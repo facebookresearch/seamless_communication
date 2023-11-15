@@ -66,6 +66,7 @@ class FTError:
     time_delta_l: float = 0
     word_count_r: int = 0
     word_count_l: int = 0
+    word_count_no_delta: int = 0
     missing_word_count: int = -1
 
     def add_time_delta(self, time_delta: float) -> None:
@@ -82,12 +83,20 @@ class FTError:
             abs(self.time_delta_l)
             + self.time_delta_r
             + self.missing_word_count * MAX_TIME_DELTA
-        ) / ((self.word_count_l + self.word_count_r + self.missing_word_count) or 1)
+        ) / (
+            (
+                self.word_count_l
+                + self.word_count_r
+                + self.word_count_no_delta
+                + self.missing_word_count
+            )
+            or 1
+        )
 
     def get_time_delta_abs_skip_missing(self):
         """Get average absolute time delta without penalizing missed words"""
         return (abs(self.time_delta_l) + self.time_delta_r) / (
-            (self.word_count_l + self.word_count_r) or 1
+            (self.word_count_l + self.word_count_r + self.word_count_no_delta) or 1
         )
 
     def get_time_delta_l(self):
@@ -191,6 +200,8 @@ class FTTranscription:
             t = w1.ini_time - w2.ini_time
             if not isclose(t, 0):
                 err.add_time_delta(t)
+            else:
+                err.word_count_no_delta += 1
         err.missing_word_count = len(self.words) - len(lcs)
         return err
 
