@@ -73,7 +73,7 @@ class FTError:
             self.word_count_r += 1
 
     def get_time_delta_abs(self):
-        return (abs(self.time_delta_l) * self.time_delta_r) / (
+        return (abs(self.time_delta_l) + self.time_delta_r) / (
             (self.word_count_l + self.word_count_r) or 1
         )
 
