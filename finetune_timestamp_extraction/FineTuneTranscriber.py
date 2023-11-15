@@ -9,9 +9,13 @@ Transcriber time stamp extraction fine tuning module
 """
 
 from math import isclose
+from statistics import mean
 from typing import Union, List, Tuple, Dict
 
-from seamless_communication.models.inference.transcriber import TranscriptionToken
+from seamless_communication.models.inference.transcriber import (
+    TranscriptionToken,
+    Transcriber,
+)
 
 PUNCTUATION_MARKS = "¿?¡!.,:;"
 MAX_TIME_DELTA = 5
@@ -193,7 +197,7 @@ class FTTranscription:
 
 
 class FineTuneTranscriber:
-    def __init__(self, transcriptions: List[Dict]) -> None:
+    def __init__(self, model: Transcriber, transcriptions: List[Dict]) -> None:
         """
         Input: list of transcriptions
         [
@@ -212,7 +216,8 @@ class FineTuneTranscriber:
             },
         ]
         """
-        self.transcriptions = []
+        self.model: Transcriber = model
+        self.transcriptions: List[FTTranscription] = []
         for transcription in transcriptions:
             self.transcriptions.append(
                 FTTranscription(
@@ -229,3 +234,25 @@ class FineTuneTranscriber:
                     path=transcription["audio_path"],
                 )
             )
+
+    def compare(self):
+        results = {}
+
+        for transcription in self.transcriptions:
+            new_transcription = self.model.transcribe(
+                transcription.path, transcription.lang
+            )
+            new_words = [FTWord(token=token) for token in new_transcription.tokens]
+            err = transcription.compare(new_words)
+
+            if transcription.lang not in results:
+                results[transcription.lang] = []
+            results[transcription.lang].append(err.get_time_delta_abs())
+
+        results["average"] = {}
+        for lang, deltas in results.items():
+            if lang == "average":
+                continue
+            results["average"][lang] = mean(deltas)
+
+        return results
