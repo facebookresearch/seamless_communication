@@ -212,7 +212,7 @@ class FineTuneTranscriber:
             },
         ]
         """
-        self.transcriptions = list()
+        self.transcriptions = []
         for transcription in transcriptions:
             self.transcriptions.append(
                 FTTranscription(
