@@ -203,10 +203,10 @@ class FineTuneTranscriber:
                 "language": "eng",
                 "words": [
                     {
-                        "text": "transcription",
+                        "word": "transcription",
                         "start": 0.1,
                         "end": 0.3,
-                        "confidence": 0.9
+                        "probability": 0.9
                     },
                 ]
             },
@@ -218,8 +218,8 @@ class FineTuneTranscriber:
                 FTTranscription(
                     [
                         FTWord(
-                            text=word["text"],
-                            prob=word["confidence"],
+                            text=word["word"],
+                            prob=word["probability"],
                             ini_time=word["start"],
                             end_time=word["end"],
                         )
