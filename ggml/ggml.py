@@ -9,6 +9,8 @@ import torch
 import functools
 import logging
 import dataclasses
+import contextlib
+from typing import Iterator
 from typing import NamedTuple
 from pathlib import Path
 from typing import Dict
@@ -489,3 +491,19 @@ def fairseq2_kv_cache_alloc(
     model: ctypes.c_void_p, beam_size: int, max_seq_len: int
 ) -> None:
     pass
+
+
+@c_fn(lib)
+def fairseq2_kv_cache_reset(model: ctypes.c_void_p) -> None:
+    pass
+
+
+@contextlib.contextmanager
+def model_kv_cache_alloc(
+    model: ctypes.c_void_p, beam_size: int, max_seq_len: int
+) -> Iterator[None]:
+    fairseq2_kv_cache_alloc(model, beam_size, max_seq_len)
+    try:
+        yield
+    finally:
+        fairseq2_kv_cache_reset(model)

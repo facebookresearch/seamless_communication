@@ -57,6 +57,12 @@ extern "C" void fairseq2_kv_cache_alloc(const fairseq2_model& model, int beam_si
     }
 }
 
+extern "C" void fairseq2_kv_cache_reset(const fairseq2_model& model) {
+    // TODO: use a dedicated allocator, so that kv_cache.clear actually frees the memory
+    model.kv_cache.clear();
+}
+
+
 bool has_kv_cache(const fairseq2_model& model) {
     return model.kv_cache.size() > 0;
 }
@@ -814,6 +820,31 @@ struct ggml_tensor * ggml_slice(
     return result;
 }
 
+struct ggml_tensor * ggml_select(
+    struct ggml_context * ctx,
+    struct ggml_tensor  * a,
+    int axis,
+    int64_t index
+) {
+    int64_t ne[GGML_MAX_DIMS];
+    std::copy(a->ne, a->ne + GGML_MAX_DIMS, ne);
+
+    if (axis < 0) axis = a->n_dims + axis;
+    if (index < 0) index = ne[axis] + index;
+    GGML_ASSERT(0 <= index);
+    GGML_ASSERT(index < ne[axis]);
+
+    std::copy(a->ne + axis + 1, a->ne + GGML_MAX_DIMS, ne + axis);
+
+    size_t offset = a->nb[axis] * index;
+    size_t* nb = a->nb;
+    GGML_ASSERT(GGML_MAX_DIMS == 4);
+    ggml_tensor* result = ggml_view_3d(ctx, a, ne[0], ne[1], ne[2], nb[1], nb[2], offset);
+    ggml_format_name(result, "%s [(%d)%ld]", a->name, axis, index);
+    result->n_dims = a->n_dims - 1;
+    return result;
+}
+
 
 extern "C" ggml_tensor* PositionalEmbedding_forward(
     fairseq2_model& model,
@@ -823,7 +854,12 @@ extern "C" ggml_tensor* PositionalEmbedding_forward(
     // This only work with the simple pos encoders
     int seq_len = embeds->ne[1];
     ggml_tensor* full_pos_embeds = model.tensors[prefix];
-    ggml_tensor* pos_embeds = ggml_slice(model.ctx, full_pos_embeds, /*axis*/1, 0, seq_len);
+
+    int start_step = 0;
+    if (has_kv_cache(model)) {
+        start_step = model.kv_cache[prefix].step_nr++;
+    }
+    ggml_tensor* pos_embeds = ggml_slice(model.ctx, full_pos_embeds, /*axis*/1, start_step, seq_len + start_step);
     return ggml_add(model.ctx, embeds, pos_embeds);
 }
 
@@ -831,7 +867,6 @@ extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
     fairseq2_model& model,
     const std::string& prefix,
     ggml_tensor* seqs
-    // TODO: state_bag
 ) {
     GGML_ASSERT(seqs->n_dims < GGML_MAX_DIMS);
     ggml_context* ctx = model.ctx;
@@ -1264,8 +1299,8 @@ extern "C" Hypothesis* generate_sequence(
 
     // TODO: memory management, there should be a per-step ggml_context for intermediary results
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
-        ggml_tensor* decoder_input = ggml_slice(ctx, seqs, 0, step_nr, step_nr + 1);
-        decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", decoder_input);
+        ggml_tensor* prev_token = ggml_slice(ctx, seqs, 0, step_nr, step_nr + 1);
+        ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
             "text_decoder",
@@ -1408,6 +1443,7 @@ end_of_beam_search:
         [](Hypothesis a, Hypothesis b) { return a.score > b.score; }
     );
 
+    fairseq2_kv_cache_reset(model);
     return finished_searches_begin;
 }
 
