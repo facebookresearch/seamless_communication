@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import torch
+from fairseq2.data import SequenceData
 from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     Seq2SeqGenerator,
@@ -16,7 +17,11 @@ from fairseq2.generation import (
     SequenceToTextGenerator,
     SequenceToTextOutput,
 )
-from fairseq2.nn.padding import PaddingMask, apply_padding_mask
+from fairseq2.nn.padding import (
+    PaddingMask,
+    apply_padding_mask,
+    get_seqs_and_padding_mask,
+)
 from fairseq2.nn.utils.module import infer_device
 from torch import Tensor
 
@@ -154,7 +159,7 @@ class UnitYGenerator:
         output_modality: str = "speech",
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
-        gcmvn_fbank: Optional[Tensor] = None,
+        prosody_encoder_input: Optional[SequenceData] = None,
     ) -> Tuple[SequenceToTextOutput, Optional["SequenceToUnitOutput"]]:
         """
         :param source_seqs:
@@ -219,8 +224,13 @@ class UnitYGenerator:
         unit_gen_output = None
         prosody_encoder_out = None
         if self.model.prosody_encoder_model is not None:
+            assert prosody_encoder_input is not None
+            prosody_input_seqs, prosody_padding_mask = get_seqs_and_padding_mask(
+                prosody_encoder_input
+            )
             prosody_encoder_out = self.model.prosody_encoder_model(
-                gcmvn_fbank, source_padding_mask
+                prosody_input_seqs,
+                prosody_padding_mask,
             ).unsqueeze(1)
 
         if isinstance(self.model.t2u_model, UnitYT2UModel):

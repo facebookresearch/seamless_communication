@@ -77,8 +77,7 @@ class PretsselGenerator(nn.Module):
         self,
         units: List[List[int]],
         tgt_lang: str,
-        padding_mask: Optional[PaddingMask],
-        gcmvn_fbank: Tensor,
+        prosody_encoder_input: SequenceData,
         sample_rate: int = 16000,
     ) -> BatchedSpeechOutput:
         list_units, durations = [], []
@@ -106,12 +105,15 @@ class PretsselGenerator(nn.Module):
         durations = self.duration_collate(durations)["seqs"]
 
         units_tensor, unit_padding_mask = get_seqs_and_padding_mask(speech_units)
+        prosody_input_seqs, prosody_padding_mask = get_seqs_and_padding_mask(
+            prosody_encoder_input
+        )
 
         mel_output = self.pretssel_model(
             units_tensor,
             unit_padding_mask,
-            gcmvn_fbank,
-            padding_mask,
+            prosody_input_seqs,
+            prosody_padding_mask,
             tgt_lang=tgt_lang,
             durations=durations,
         )

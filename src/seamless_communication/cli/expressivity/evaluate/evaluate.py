@@ -41,8 +41,8 @@ from seamless_communication.cli.m4t.predict import (
 from seamless_communication.inference import BatchedSpeechOutput, Modality, Translator
 from seamless_communication.inference.pretssel_generator import PretsselGenerator
 from seamless_communication.models.unity import (
-    load_unity_text_tokenizer,
     load_gcmvn_stats,
+    load_unity_text_tokenizer,
 )
 
 logging.basicConfig(
@@ -232,9 +232,7 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                gcmvn_fbank, padding_mask = get_seqs_and_padding_mask(
-                    example["audio"]["data"]["gcmvn_fbank"]
-                )
+                prosody_encoder_input = example["audio"]["data"]["gcmvn_fbank"]
                 text_output, unit_output = translator.predict(
                     src,
                     ctx.task,
@@ -244,15 +242,14 @@ def run_eval(
                     unit_generation_opts=ctx.unit_generation_opts,
                     unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     duration_factor=ctx.duration_factor,
-                    gcmvn_fbank=gcmvn_fbank,
+                    prosody_encoder_input=prosody_encoder_input,
                 )
 
                 assert unit_output is not None
                 speech_output = pretssel_generator.predict(
                     unit_output.units,
                     tgt_lang=ctx.target_lang,
-                    padding_mask=padding_mask,
-                    gcmvn_fbank=gcmvn_fbank,
+                    prosody_encoder_input=prosody_encoder_input,
                 )
 
             else:
