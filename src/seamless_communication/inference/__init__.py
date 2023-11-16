@@ -5,9 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from seamless_communication.inference.generator import UnitYGenerator as UnitYGenerator
-from seamless_communication.inference.ngram_repeat_block_processor import (
-    NGramRepeatBlockProcessor as NGramRepeatBlockProcessor,
-)
 from seamless_communication.inference.translator import (
     BatchedSpeechOutput as BatchedSpeechOutput,
 )

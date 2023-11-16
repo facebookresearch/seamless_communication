@@ -10,9 +10,9 @@ from typing import Tuple
 
 import torch
 import torchaudio
-from fairseq2.generation import SequenceGeneratorOptions
+from fairseq2.generation import NGramRepeatBlockProcessor, SequenceGeneratorOptions
 
-from seamless_communication.inference import NGramRepeatBlockProcessor, Translator
+from seamless_communication.inference import Translator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -150,7 +150,7 @@ def set_generation_opts(
     )
     if args.text_generation_ngram_blocking:
         text_generation_opts.step_processor = NGramRepeatBlockProcessor(
-            no_repeat_ngram_size=args.no_repeat_ngram_size
+            ngram_size=args.no_repeat_ngram_size
         )
 
     unit_generation_opts = SequenceGeneratorOptions(
@@ -162,7 +162,7 @@ def set_generation_opts(
     )
     if args.unit_generation_ngram_blocking:
         unit_generation_opts.step_processor = NGramRepeatBlockProcessor(
-            no_repeat_ngram_size=args.no_repeat_ngram_size
+            ngram_size=args.no_repeat_ngram_size
         )
     return text_generation_opts, unit_generation_opts
 
