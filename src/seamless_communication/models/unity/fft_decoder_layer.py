@@ -102,7 +102,7 @@ class Conv1dBlock(Module):
 
 
 @final
-class NARTransformerDecoderLayer(Module):
+class FeedForwardTransformerLayer(Module):
     """Represents the FFT Block as described in
     :cite:t:`https://arxiv.org/pdf/1905.09263.pdf`."""
 

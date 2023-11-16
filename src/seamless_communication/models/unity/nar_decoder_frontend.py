@@ -302,6 +302,7 @@ class NARDecoderFrontend(Module):
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         assert text_seqs is not None
@@ -323,6 +324,7 @@ class NARDecoderFrontend(Module):
         seqs, padding_mask = self.variance_adaptor(
             seqs,
             encoder_padding_mask,
+            duration_factor=duration_factor,
             min_duration=1,
             film_cond_emb=film_cond_emb,
         )

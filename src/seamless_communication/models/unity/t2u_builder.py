@@ -38,17 +38,17 @@ from fairseq2.typing import DataType, Device
 from torch.nn import GELU, ReLU
 
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
+from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
+from seamless_communication.models.unity.fft_decoder_layer import (
+    Conv1dBlock,
+    FeedForwardTransformerLayer,
+)
 from seamless_communication.models.unity.length_regulator import (
     VarianceAdaptor,
     VariancePredictor,
 )
 from seamless_communication.models.unity.model import UnitYNART2UModel, UnitYT2UModel
-from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
-from seamless_communication.models.unity.nar_decoder_layer import (
-    Conv1dBlock,
-    NARTransformerDecoderLayer,
-)
 
 
 @dataclass
@@ -252,7 +252,7 @@ def _expressivity_nar() -> UnitYT2UConfig:
     nar_decoder_config = NARDecoderConfig(
         model_name_or_card="seamless_expressivity",
         char_vocabulary_size=10904,
-        char_max_seq_len=4000,
+        char_max_seq_len=10000,
         conv1d_kernel_size=7,
         conv1d_inner_dim=1024,
         conv1d_dropout_p=0.1,
@@ -262,7 +262,7 @@ def _expressivity_nar() -> UnitYT2UConfig:
 
     return UnitYT2UConfig(
         model_dim=1024,
-        unit_max_seq_len=4000,
+        unit_max_seq_len=10000,
         target_vocab_info=VocabularyInfo(
             size=10005, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
         ),
@@ -631,21 +631,21 @@ class UnitYNART2UBuilder:
             dtype=self.dtype,
         )
 
-    def build_decoder(self) -> NARTransformerDecoder:
+    def build_decoder(self) -> FeedForwardTransformer:
         """Build a Transformer decoder."""
 
         num_layers = self.config.num_decoder_layers
 
         layers = [self.build_decoder_layer() for _ in range(num_layers)]
 
-        return NARTransformerDecoder(
+        return FeedForwardTransformer(
             layers,
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
         )
 
-    def build_decoder_layer(self) -> NARTransformerDecoderLayer:
+    def build_decoder_layer(self) -> FeedForwardTransformerLayer:
         """Build a Transformer decoder layer."""
 
         assert self.config.nar_decoder_config is not None
@@ -661,7 +661,7 @@ class UnitYNART2UBuilder:
             dtype=self.dtype,
         )
 
-        return NARTransformerDecoderLayer(
+        return FeedForwardTransformerLayer(
             self_attn,
             conv1d,
             dropout_p=self.config.dropout_p,

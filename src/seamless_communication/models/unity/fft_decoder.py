@@ -14,14 +14,14 @@ from fairseq2.typing import DataType, Device, finaloverride
 from torch import Tensor
 from torch.nn import Module
 
-from seamless_communication.models.unity.nar_decoder_layer import (
-    NARTransformerDecoderLayer,
+from seamless_communication.models.unity.fft_decoder_layer import (
+    FeedForwardTransformerLayer,
 )
 
 
 @final
-class NARTransformerDecoder(Module):
-    """Represents a non-autoregressive Transformer decoder."""
+class FeedForwardTransformer(Module):
+    """Represents a Feedforward Transformer decoder."""
 
     model_dim: int
     layer_norm: Optional[LayerNorm]
@@ -29,7 +29,7 @@ class NARTransformerDecoder(Module):
 
     def __init__(
         self,
-        layers: Iterable[NARTransformerDecoderLayer],
+        layers: Iterable[FeedForwardTransformerLayer],
         *,
         norm_order: TransformerNormOrder = TransformerNormOrder.POST,
         device: Optional[Device] = None,

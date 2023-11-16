@@ -14,3 +14,6 @@ from seamless_communication.models.pretssel.ecapa_tdnn_builder import (
 from seamless_communication.models.pretssel.ecapa_tdnn_builder import (
     ecapa_tdnn_archs as ecapa_tdnn_archs,
 )
+from seamless_communication.models.pretssel.loader import (
+    load_pretssel_model as load_pretssel_model,
+)

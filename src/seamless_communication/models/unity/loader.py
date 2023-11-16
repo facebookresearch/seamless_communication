@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Mapping, Union, final
+from typing import Any, Dict, List, Mapping, Tuple, Union, final
 
 import torch
 from fairseq2.assets import AssetStore, asset_store, download_manager
@@ -445,3 +445,34 @@ class UnitYUnitTokenizerLoader:
 
 
 load_unity_unit_tokenizer = UnitYUnitTokenizerLoader(asset_store)
+
+
+class GcmvnStatsLoader:
+    """Loads GCMVN stats (mean & std) for ProsodyUnitY & PretsselModel"""
+
+    def __init__(self, asset_store: AssetStore) -> None:
+        """
+        :param asset_store:
+            The asset store to retrieve the model information.
+        """
+        self.asset_store = asset_store
+
+    def __call__(
+        self, model_name_or_card: Union[str, AssetCard]
+    ) -> Tuple[List[float], List[float]]:
+        """
+        :param model_name_or_card:
+            The name of the model or an already loaded AssetCard
+        """
+
+        if isinstance(model_name_or_card, AssetCard):
+            card = model_name_or_card
+        else:
+            card = self.asset_store.retrieve_card(model_name_or_card)
+
+        gcmvn_stats: Dict[str, List[float]] = card.field("gcmvn_stats").as_(dict)
+
+        return gcmvn_stats["mean"], gcmvn_stats["std"]
+
+
+load_gcmvn_stats = GcmvnStatsLoader(asset_store)

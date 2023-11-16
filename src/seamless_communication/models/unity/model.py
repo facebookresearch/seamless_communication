@@ -20,7 +20,7 @@ from torch import Tensor
 from torch.nn import Module
 
 from seamless_communication.models.pretssel.ecapa_tdnn import ECAPA_TDNN
-from seamless_communication.models.unity.nar_decoder import NARTransformerDecoder
+from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
 
 
@@ -334,7 +334,7 @@ class UnitYNART2UModel(Module):
     model_dim: int
     encoder: Optional[TransformerEncoder]
     decoder_frontend: NARDecoderFrontend
-    decoder: NARTransformerDecoder
+    decoder: FeedForwardTransformer
     final_proj: Projection
     target_vocab_info: VocabularyInfo
     prosody_proj: Optional[Projection]
@@ -343,7 +343,7 @@ class UnitYNART2UModel(Module):
         self,
         encoder: Optional[TransformerEncoder],
         decoder_frontend: NARDecoderFrontend,
-        decoder: NARTransformerDecoder,
+        decoder: FeedForwardTransformer,
         final_proj: Projection,
         target_vocab_info: VocabularyInfo,
         prosody_proj: Optional[Projection] = None,
@@ -381,6 +381,7 @@ class UnitYNART2UModel(Module):
         text_decoder_output: Tensor,
         text_decoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[SequenceModelOutput, Optional[PaddingMask]]:
         encoder_output, encoder_padding_mask = self.encode(
@@ -394,6 +395,7 @@ class UnitYNART2UModel(Module):
             encoder_output,
             encoder_padding_mask,
             text_seqs,
+            duration_factor,
             film_cond_emb,
         )
 
@@ -414,12 +416,17 @@ class UnitYNART2UModel(Module):
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         # encoder_output: (N, S, M)
         # text_seqs: (N, S)
         seqs, padding_mask = self.decoder_frontend(
-            encoder_output, encoder_padding_mask, text_seqs, film_cond_emb
+            encoder_output,
+            encoder_padding_mask,
+            text_seqs,
+            duration_factor,
+            film_cond_emb,
         )
 
         return self.decoder(seqs, padding_mask, film_cond_emb=film_cond_emb)  # type: ignore[no-any-return]

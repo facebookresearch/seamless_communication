@@ -20,7 +20,7 @@ from fairseq2.data.text import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.generation import SequenceGeneratorOptions, SequenceToTextOutput
 from fairseq2.memory import MemoryBlock
-from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.nn.padding import get_seqs_and_padding_mask, PaddingMask
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 
@@ -77,7 +77,7 @@ class Translator(nn.Module):
     def __init__(
         self,
         model_name_or_card: Union[str, AssetCard],
-        vocoder_name_or_card: Union[str, AssetCard],
+        vocoder_name_or_card: Union[str, AssetCard, None],
         device: Device,
         text_tokenizer: Optional[TextTokenizer] = None,
         dtype: DataType = torch.float16,
@@ -136,8 +136,9 @@ class Translator(nn.Module):
             pad_value=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
         self.vocoder = None
-        if output_modality is None or output_modality == Modality.SPEECH:
-            # Load the vocoder.
+        if vocoder_name_or_card is not None and (
+            output_modality is None or output_modality == Modality.SPEECH
+        ):
             self.vocoder = self.load_model_for_inference(
                 load_vocoder_model, vocoder_name_or_card, device, torch.float32
             )
@@ -159,14 +160,16 @@ class Translator(nn.Module):
         model: UnitYModel,
         text_tokenizer: TextTokenizer,
         unit_tokenizer: Optional[UnitTokenizer],
-        src: SequenceData,
+        seqs: Tensor,
+        padding_mask: Optional[PaddingMask],
         input_modality: Modality,
         output_modality: Modality,
         tgt_lang: str,
         text_generation_opts: SequenceGeneratorOptions,
         unit_generation_opts: Optional[SequenceGeneratorOptions],
         unit_generation_ngram_filtering: bool = False,
-        gcmvn_fbank: Optional[SequenceData] = None,
+        duration_factor: float = 1.0,
+        gcmvn_fbank: Optional[Tensor] = None,
     ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
@@ -182,11 +185,6 @@ class Translator(nn.Module):
             text_opts=text_generation_opts,
             unit_opts=unit_generation_opts,
         )
-        seqs, padding_mask = get_seqs_and_padding_mask(src)
-        if gcmvn_fbank is not None:
-            gcmvn_seqs = gcmvn_fbank["seqs"]
-        else:
-            gcmvn_seqs = None
 
         return generator(
             seqs,
@@ -194,7 +192,8 @@ class Translator(nn.Module):
             input_modality.value,
             output_modality.value,
             ngram_filtering=unit_generation_ngram_filtering,
-            gcmvn_seqs=gcmvn_seqs,
+            duration_factor=duration_factor,
+            gcmvn_fbank=gcmvn_fbank,
         )
 
     @staticmethod
@@ -230,7 +229,8 @@ class Translator(nn.Module):
         spkr: Optional[int] = -1,
         sample_rate: int = 16000,
         unit_generation_ngram_filtering: bool = False,
-        gcmvn_fbank: Optional[SequenceData] = None,
+        duration_factor: float = 1.0,
+        gcmvn_fbank: Optional[Tensor] = None,
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -299,17 +299,22 @@ class Translator(nn.Module):
             src = self.collate(self.token_encoder(text))
 
         assert isinstance(self.model, UnitYModel)
+
+        seqs, padding_mask = get_seqs_and_padding_mask(src)
+
         text_output, unit_output = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
-            src,
+            seqs,
+            padding_mask,
             input_modality,
             output_modality,
             tgt_lang,
             text_generation_opts,
             unit_generation_opts,
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
+            duration_factor=duration_factor,
             gcmvn_fbank=gcmvn_fbank,
         )
 
@@ -317,7 +322,6 @@ class Translator(nn.Module):
             return text_output.sentences, None
         else:
             assert unit_output is not None
-            assert self.vocoder is not None
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it
@@ -339,11 +343,12 @@ class Translator(nn.Module):
                 )
                 u = u[:index_of_first_one]
                 speech_units.append(u)
-                # TODO: Implement batched inference for vocoder.
-                translated_audio_wav = self.vocoder(
-                    u, tgt_lang, spkr, dur_prediction=duration_prediction
-                )
-                audio_wavs.append(translated_audio_wav)
+                if self.vocoder is not None:
+                    # TODO: Implement batched inference for vocoder.
+                    translated_audio_wav = self.vocoder(
+                        u, tgt_lang, spkr, dur_prediction=duration_prediction
+                    )
+                    audio_wavs.append(translated_audio_wav)
 
             return (
                 text_output.sentences,

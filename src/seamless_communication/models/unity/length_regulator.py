@@ -3,11 +3,12 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask, apply_padding_mask
+from fairseq2.nn.padding import PaddingMask, apply_padding_mask, to_padding_mask
 from fairseq2.nn.projection import Linear
 from fairseq2.nn.transformer import create_standard_layer_norm
 from fairseq2.typing import DataType, Device
@@ -36,6 +37,63 @@ class HardUpsampling(Module):
             )
 
         return upsampled_seqs, upsampled_seq_lens
+
+
+class GaussianUpsampling(Module):
+    """Gaussian upsampling with fixed temperature as in:
+    https://arxiv.org/abs/2010.04301
+    """
+
+    def __init__(self, delta: float = 0.1):
+        super().__init__()
+        self.delta = delta
+
+    def forward(
+        self,
+        x: Tensor,
+        durations: Tensor,
+        padding_mask: Optional[PaddingMask] = None,
+    ) -> Tuple[Tensor, Tensor]:
+        """Upsample hidden states according to durations.
+        Args:
+            x (Tensor): Batched hidden state to be expanded (B, T_text, C).
+            durations (Tensor): Batched token duration (B, T_text).
+            padding_mask (Tensor): Mask tensor (B, T_text).
+        Returns:
+            Tensor: Expanded hidden state (B, T_feat, C).
+            Tensor: Output lengths (B,).
+        """
+        out_lens = durations.sum(dim=1)
+        y_mask = to_padding_mask(out_lens, max(out_lens))
+
+        B = durations.size(0)
+        if durations.sum() == 0:
+            # NOTE(kan-bayashi): This case must not be happened in teacher forcing.
+            #   It will be happened in inference with a bad duration predictor.
+            #   So we do not need to care the padded sequence case here.
+            durations[durations.sum(dim=1).eq(0)] = 1
+
+        if y_mask is None:
+            T_feat = durations.sum().int()
+        else:
+            T_feat = y_mask.size(-1)
+
+        t = torch.arange(0, T_feat).unsqueeze(0).repeat(B, 1).to(x)
+        if y_mask is not None:
+            t = t * y_mask.float()
+
+        c = durations.cumsum(dim=-1) - durations / 2
+        energy = -1 * self.delta * (t.unsqueeze(-1) - c.unsqueeze(1)) ** 2
+
+        if padding_mask is not None:
+            energy = energy.masked_fill(
+                ~padding_mask.materialize().unsqueeze(1).repeat(1, T_feat, 1),
+                -float("inf"),
+            )
+
+        p_attn = F.softmax(energy, dim=2).to(x)  # (B, T_feat, T_text)
+        x = torch.matmul(p_attn, x)
+        return x, out_lens
 
 
 class VariancePredictor(Module):
@@ -70,7 +128,7 @@ class VariancePredictor(Module):
                 var_pred_hidden_dim,
                 var_pred_kernel_size,
                 stride=1,
-                padding=(var_pred_kernel_size - 1) // 2,
+                padding="same",
                 bias=bias,
                 device=device,
                 dtype=dtype,
@@ -90,7 +148,7 @@ class VariancePredictor(Module):
                 var_pred_hidden_dim,
                 var_pred_kernel_size,
                 stride=1,
-                padding=1,
+                padding="same",
                 bias=bias,
                 device=device,
                 dtype=dtype,
@@ -114,7 +172,7 @@ class VariancePredictor(Module):
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask: Optional[PaddingMask] = None,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
@@ -164,53 +222,103 @@ class VarianceAdaptor(Module):
     """Represent the Variance adaptor as described in
     :cite:t:`https://arxiv.org/pdf/2006.04558.pdf`"""
 
-    duration_predictor: VariancePredictor
+    duration_predictor: Optional[VariancePredictor]
     pitch_predictor: Optional[VariancePredictor]
+    vuv_predictor: Optional[VariancePredictor]
     energy_predictor: Optional[VariancePredictor]
-    hard_upsampling: HardUpsampling
+    length_regulator: Union[HardUpsampling, GaussianUpsampling]
 
     def __init__(
         self,
-        duration_predictor: VariancePredictor,
+        duration_predictor: Optional[VariancePredictor] = None,
         pitch_predictor: Optional[VariancePredictor] = None,
+        embed_pitch: Optional[Conv1d] = None,
+        vuv_predictor: Optional[VariancePredictor] = None,
         energy_predictor: Optional[VariancePredictor] = None,
+        embed_energy: Optional[Conv1d] = None,
+        add_variance_parallel: bool = True,
+        upsampling_type: Literal["gaussian", "hard"] = "hard",
+        use_film: bool = False,
+        film_cond_dim: Optional[int] = None,
     ):
         super().__init__()
 
-        self.duration_predictor = duration_predictor
+        if duration_predictor:
+            self.duration_predictor = duration_predictor
+        else:
+            self.register_module("duration_predictor", None)
 
         if pitch_predictor:
             self.pitch_predictor = pitch_predictor
+            self.embed_pitch = embed_pitch
         else:
             self.register_module("pitch_predictor", None)
+            self.register_module("embed_pitch", None)
+
+        if vuv_predictor:
+            self.vuv_predictor = vuv_predictor
+        else:
+            self.register_module("vuv_predictor", None)
 
         if energy_predictor:
             self.energy_predictor = energy_predictor
+            self.embed_energy = embed_energy
         else:
             self.register_module("energy_predictor", None)
+            self.register_module("embed_energy", None)
 
-        self.hard_upsampling = HardUpsampling()
+        self.add_variance_parallel = add_variance_parallel
+
+        if upsampling_type == "gaussian":
+            self.length_regulator = GaussianUpsampling()
+        else:
+            self.length_regulator = HardUpsampling()
 
     def forward(
         self,
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
+        durations: Optional[Tensor] = None,
         duration_factor: float = 1.0,
         min_duration: int = 0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, PaddingMask]:
-        log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
 
-        durations = torch.clamp(
-            torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
-            min=min_duration,
-        )
+        if self.duration_predictor is not None:
+            log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
+            durations = torch.clamp(
+                torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
+                min=min_duration,
+            )
+            # We need to apply the padding_mask again since we clamp by min_duration.
+            durations = apply_padding_mask(durations, padding_mask, pad_value=0)
 
-        # We need to apply the padding_mask again since we clamp by min_duration.
-        durations = apply_padding_mask(durations, padding_mask, pad_value=0)
+        assert durations is not None
 
-        # TODO: Implement pitch, energy predictors.
-        # TODO: Implement GaussianUpsampling.
-        seqs, seq_lens = self.hard_upsampling(seqs, durations)
+        if self.pitch_predictor is not None:
+            pitch_out = self.pitch_predictor(seqs, padding_mask, film_cond_emb)
+            if self.vuv_predictor is not None:
+                vuv_out = self.vuv_predictor(seqs, padding_mask, film_cond_emb)
+                pitch_out = pitch_out * (torch.sigmoid(vuv_out) >= 0.5)
+
+            assert self.embed_pitch is not None
+            pitch_embed = self.embed_pitch(pitch_out.unsqueeze(1)).transpose(1, 2)
+            if not self.add_variance_parallel:
+                seqs = seqs + pitch_embed
+
+        if self.energy_predictor is not None:
+            energy_out = self.energy_predictor(seqs, padding_mask, film_cond_emb)
+
+            assert self.embed_energy is not None
+            energy_embed = self.embed_energy(energy_out.unsqueeze(1)).transpose(1, 2)
+            if self.add_variance_parallel:
+                seqs = seqs + pitch_embed + energy_embed
+            else:
+                seqs = seqs + energy_embed
+
+        if isinstance(self.length_regulator, GaussianUpsampling):
+            seqs, seq_lens = self.length_regulator(seqs, durations, padding_mask)
+        else:
+            seqs, seq_lens = self.length_regulator(seqs, durations)
 
         return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1))

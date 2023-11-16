@@ -153,7 +153,8 @@ class UnitYGenerator:
         input_modality: str = "speech",
         output_modality: str = "speech",
         ngram_filtering: bool = False,
-        gcmvn_seqs: Optional[Tensor] = None,
+        duration_factor: float = 1.0,
+        gcmvn_fbank: Optional[Tensor] = None,
     ) -> Tuple[SequenceToTextOutput, Optional["SequenceToUnitOutput"]]:
         """
         :param source_seqs:
@@ -219,7 +220,7 @@ class UnitYGenerator:
         prosody_encoder_out = None
         if self.model.prosody_encoder_model is not None:
             prosody_encoder_out = self.model.prosody_encoder_model(
-                gcmvn_seqs, source_padding_mask
+                gcmvn_fbank, source_padding_mask
             ).unsqueeze(1)
 
         if isinstance(self.model.t2u_model, UnitYT2UModel):
@@ -238,6 +239,7 @@ class UnitYGenerator:
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
+                duration_factor=duration_factor,
                 film_cond_emb=prosody_encoder_out,
             )
             # (B, S_unit, V_unit)

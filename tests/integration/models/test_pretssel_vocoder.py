@@ -19,7 +19,7 @@ def test_pretssel_vocoder() -> None:
     sample_rate = 16_000
 
     vocoder = load_mel_vocoder_model(
-        "vocoder_pretssel", device=device, dtype=torch.float32
+        "vocoder_mel", device=device, dtype=torch.float32
     )
 
     url = "https://keithito.com/LJ-Speech-Dataset/LJ037-0171.wav"

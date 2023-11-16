@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-name: vocoder_pretssel
+name: vocoder_mel
 model_type: vocoder_mel_hifigan
 model_arch: base_mel
 checkpoint: "file://large_experiments/seamless/ust/changhan/checkpoints/fairseq2/pretssel_hifigan.pt"
