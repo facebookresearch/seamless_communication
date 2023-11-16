@@ -72,7 +72,10 @@ def _py_type_to_ctype(t: type) -> type:
 F = TypeVar("F", bound=Callable[..., Any])
 
 def _c_fn(module: Any, fn: F) -> F:
-    c_fn = getattr(module, fn.__name__)
+    if callable(module):
+        c_fn = module
+    else:
+        c_fn = getattr(module, fn.__name__)
     annotations = fn.__annotations__
     if "return" not in annotations:
         raise ValueError("@c_fn decorator requires type annotations on the decorated function.")

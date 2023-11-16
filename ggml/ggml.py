@@ -486,24 +486,24 @@ def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: str) -> int:
     return -1
 
 
-@c_fn(lib)
-def fairseq2_kv_cache_alloc(
+@c_fn(lib.fairseq2_kv_cache_alloc)
+def _fairseq2_kv_cache_alloc(
     model: ctypes.c_void_p, beam_size: int, max_seq_len: int
 ) -> None:
     pass
 
 
-@c_fn(lib)
-def fairseq2_kv_cache_reset(model: ctypes.c_void_p) -> None:
+@c_fn(lib.fairseq2_kv_cache_reset)
+def _fairseq2_kv_cache_reset(model: ctypes.c_void_p) -> None:
     pass
 
 
 @contextlib.contextmanager
-def model_kv_cache_alloc(
+def fairseq2_kv_cache_alloc(
     model: ctypes.c_void_p, beam_size: int, max_seq_len: int
 ) -> Iterator[None]:
-    fairseq2_kv_cache_alloc(model, beam_size, max_seq_len)
+    _fairseq2_kv_cache_alloc(model, beam_size, max_seq_len)
     try:
         yield
     finally:
-        fairseq2_kv_cache_reset(model)
+        _fairseq2_kv_cache_reset(model)
