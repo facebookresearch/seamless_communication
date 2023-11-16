@@ -119,6 +119,7 @@ class FTTranscription:
 
     def __init__(self, words: List[FTWord], lang: str = "", path: str = "") -> None:
         self.words = self.separate_words(words)
+        self.words.append(FTWord())  # empty so the last word always matches
         self.lang = lang
         self.path = path
 
@@ -255,6 +256,7 @@ class FineTuneTranscriber:
                 transcription.path, transcription.lang
             )
             new_words = [FTWord(token=token) for token in new_transcription.tokens]
+            new_words.append(FTWord())  # empty so the last word always matches
             err = transcription.compare(new_words)
 
             if transcription.lang not in results:
