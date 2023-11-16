@@ -1207,7 +1207,6 @@ void _finalize_hypothesis(
 
 
 /// Generates a translation for a single sequence
-// TODO: add IncrementalStateBag support to avoid a O(N^3) generation.
 // TODO: clean ups
 // * replace manual tensor tweaking with ggml_set_*d (a ggml_set_slice could be useful)
 extern "C" Hypothesis* generate_sequence(
