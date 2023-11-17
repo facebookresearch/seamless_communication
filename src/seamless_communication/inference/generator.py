@@ -92,6 +92,13 @@ class UnitYGenerator:
 
         self.model = model
 
+        if model.text_decoder is None:
+            raise ValueError(
+                "`UnitYGenerator` requires a text decoder, but the current UnitY model does not have one."
+            )
+        assert model.text_decoder_frontend is not None
+        assert model.final_proj is not None
+
         s2t_model = UnitYX2TModel(
             encoder_frontend=model.speech_encoder_frontend,
             encoder=model.speech_encoder,
