@@ -38,6 +38,10 @@ from seamless_communication.models.unity import (
     unity_archs,
 )
 from seamless_communication.models.vocoder import load_vocoder_model
+from seamless_communication.toxicity import (
+    load_bad_word_checker,
+)
+from seamless_communication.toxicity.mintox import mintox_pipeline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -79,6 +83,7 @@ class Translator(nn.Module):
         vocoder_name_or_card: Union[str, AssetCard, None],
         device: Device,
         text_tokenizer: Optional[TextTokenizer] = None,
+        apply_mintox: bool = False,
         dtype: DataType = torch.float16,
         input_modality: Optional[Modality] = None,
         output_modality: Optional[Modality] = None,
@@ -120,6 +125,13 @@ class Translator(nn.Module):
         self.unit_tokenizer: Optional[UnitTokenizer] = None
         if self.model.t2u_model is not None:
             self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
+
+        if apply_mintox:
+            self.bad_word_checker = load_bad_word_checker("mintox")
+        else:
+            self.bad_word_checker = None
+
+        self.apply_mintox = apply_mintox
 
         self.device = device
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
@@ -259,6 +271,9 @@ class Translator(nn.Module):
         """
         input_modality, output_modality = self.get_modalities_from_task_str(task_str)
 
+        if self.apply_mintox and src_lang is None:
+            raise ValueError("`src_lang` must be specified when `apply_mintox` is `True`.")
+
         if isinstance(input, dict):
             src = cast(SequenceData, input)
         elif input_modality == Modality.SPEECH:
@@ -316,6 +331,42 @@ class Translator(nn.Module):
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
         )
+
+        if self.apply_mintox and task_str != Task.ASR.name:
+            if input_modality == Modality.SPEECH:
+                asr_text, _, = self.predict(
+                    input=input,
+                    task_str=Task.ASR.name,
+                    tgt_lang=tgt_lang,
+                    src_lang=src_lang,
+                    text_generation_opts=text_generation_opts,
+                    unit_generation_opts=unit_generation_opts,
+                    spkr=spkr,
+                    sample_rate=sample_rate,
+                    unit_generation_ngram_filtering=unit_generation_ngram_filtering,
+                )
+                src_texts = [asr_text]
+            else:
+                src_texts = [input]
+
+            text_output, unit_output = mintox_pipeline(
+                model=self.model,
+                text_tokenizer=self.text_tokenizer,
+                unit_tokenizer=self.unit_tokenizer,
+                device=self.device,
+                src_lang=src_lang,
+                tgt_lang=tgt_lang,
+                model_input=src,
+                input_modality=input_modality,
+                output_modality=output_modality,
+                src_texts=src_texts,
+                original_text_out=text_output,
+                original_unit_out=unit_output,
+                unit_generation_ngram_filtering=unit_generation_ngram_filtering,
+                text_generation_opts=text_generation_opts,
+                unit_generation_opts=unit_generation_opts,
+                bad_word_checker=self.bad_word_checker,
+            )
 
         if output_modality == Modality.TEXT:
             return text_output.sentences, None
