@@ -4,13 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
-from fairseq2.generation.beam_search import BeamSearch
-from fairseq2.generation.logits_processor import LogitsProcessor
 from fairseq2.generation.sequence_generator import (
     Seq2SeqGenerator,
     SequenceGeneratorOptions,
@@ -251,15 +249,7 @@ class Transcriber(nn.Module):
         audio: Union[str, Tensor],
         src_lang: str,
         sample_rate: int = 16000,
-        beam_size: int = 1,
-        min_seq_len: int = 1,
-        soft_max_seq_len: Optional[Tuple[int, int]] = (1, 200),
-        hard_max_seq_len: int = 1024,
-        len_penalty: float = 1,
-        unk_penalty: float = 0,
-        normalize_scores: bool = True,
-        search: Optional[BeamSearch] = None,
-        logits_processor: Optional[LogitsProcessor] = None,
+        **sequence_generator_options: Dict,
     ) -> Transcription:
         """
         The main method used to perform transcription.
@@ -270,8 +260,16 @@ class Transcriber(nn.Module):
             Source language of audio.
         :param sample_rate:
             Sample rate of the audio Tensor.
-        :params ...:
-            Sequence generator options.
+        :params **sequence_generator_options:
+            - beam_size
+            - min_seq_len
+            - soft_max_seq_len
+            - hard_max_seq_len
+            - len_penalty
+            - unk_penalty
+            - normalize_scores
+            - search
+            - logics_processor
 
         :returns:
             - List of Tokens with timestamps.
@@ -293,16 +291,6 @@ class Transcriber(nn.Module):
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
         )
 
-        gen_opts = SequenceGeneratorOptions(
-            beam_size=beam_size,
-            min_seq_len=min_seq_len,
-            soft_max_seq_len=soft_max_seq_len,
-            hard_max_seq_len=hard_max_seq_len,
-            len_penalty=len_penalty,
-            unk_penalty=unk_penalty,
-            normalize_scores=normalize_scores,
-            search=search,
-            logits_processor=logits_processor,
-        )
+        gen_opts = SequenceGeneratorOptions(beam_size=1, **sequence_generator_options)
 
         return self.run_inference(src, src_lang, length_seconds, gen_opts)
