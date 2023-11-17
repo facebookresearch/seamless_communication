@@ -36,7 +36,6 @@ from seamless_communication.models.unity.length_regulator import (
 from seamless_communication.models.unity.length_regulator import (
     VariancePredictor as VariancePredictor,
 )
-from seamless_communication.models.unity.loader import UnitYLoader as UnitYLoader
 from seamless_communication.models.unity.loader import (
     load_gcmvn_stats as load_gcmvn_stats,
 )

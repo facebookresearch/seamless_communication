@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -14,7 +14,7 @@ from seamless_communication.models.vocoder.codehifigan import CodeGenerator
 
 
 class Vocoder(nn.Module):
-    def __init__(self, code_generator: CodeGenerator, lang_spkr_idx_map: dict):
+    def __init__(self, code_generator: CodeGenerator, lang_spkr_idx_map: Dict):
         super(Vocoder, self).__init__()
         self.code_generator = code_generator
         self.lang_spkr_idx_map = lang_spkr_idx_map

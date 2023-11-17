@@ -97,7 +97,7 @@ class PretsselConfig:
 
 pretssel_archs = ArchitectureRegistry[PretsselConfig]("pretssel")
 
-pretssel_arch = pretssel_archs.marker
+pretssel_arch = pretssel_archs.decorator
 
 
 @pretssel_arch("base")

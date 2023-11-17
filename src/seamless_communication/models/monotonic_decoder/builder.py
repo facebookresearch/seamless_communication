@@ -26,9 +26,6 @@ from fairseq2.nn.transformer import (
 )
 from fairseq2.typing import DataType, Device
 
-from seamless_communication.models.monotonic_decoder.p_choose import (
-    PChooseLayer,
-)
 from seamless_communication.models.monotonic_decoder.model import MonotonicDecoderModel
 from seamless_communication.models.monotonic_decoder.monotonic_decoder import (
     MonotonicTransformerDecoder,
@@ -36,6 +33,7 @@ from seamless_communication.models.monotonic_decoder.monotonic_decoder import (
 from seamless_communication.models.monotonic_decoder.monotonic_decoder_layer import (
     MonotonicTransformerDecoderLayer,
 )
+from seamless_communication.models.monotonic_decoder.p_choose import PChooseLayer
 
 
 @dataclass
@@ -83,12 +81,11 @@ monotonic_decoder_archs = ArchitectureRegistry[MonotonicDecoderConfig](
     "monotonic_decoder"
 )
 
-monotonic_decoder_arch = monotonic_decoder_archs.marker
+monotonic_decoder_arch = monotonic_decoder_archs.decorator
 
 
 @monotonic_decoder_arch("dense_1b")
 def _dense_1b() -> MonotonicDecoderConfig:
-
     return MonotonicDecoderConfig(
         model_dim=1024,
         max_seq_len=4096,

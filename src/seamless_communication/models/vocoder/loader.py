@@ -3,11 +3,11 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Any, Mapping, final
+
+from typing import Any, Mapping
 
 from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils.model_loader import ModelLoader
-from overrides import override as finaloverride
+from fairseq2.models.utils import ConfigLoader, ModelLoader
 
 from seamless_communication.models.vocoder.builder import (
     VocoderConfig,
@@ -20,44 +20,40 @@ from seamless_communication.models.vocoder.melhifigan import MelGenerator
 from seamless_communication.models.vocoder.vocoder import Vocoder
 
 
-@final
-class VocoderLoader(ModelLoader[Vocoder, VocoderConfig]):
-    """Loads Vocoder models."""
-
-    @finaloverride
-    def _convert_checkpoint(
-        self, checkpoint: Mapping[str, Any], config: VocoderConfig
-    ) -> Mapping[str, Any]:
-        if (
-            "model" in checkpoint
-            and "code_generator.resblocks.0.convs1.0.weight_g" in checkpoint["model"]
-        ):
-            return checkpoint
-
-        old_state_dict = checkpoint["generator"]
-        new_state_dict = {}
-        for key in old_state_dict:
-            new_key = f"code_generator.{key}"
-            new_state_dict[new_key] = old_state_dict[key]
-        checkpoint["model"] = new_state_dict
-        del checkpoint["generator"]  # type: ignore
+def convert_vocoder_checkpoint(
+    checkpoint: Mapping[str, Any], config: VocoderConfig
+) -> Mapping[str, Any]:
+    if (
+        "model" in checkpoint
+        and "code_generator.resblocks.0.convs1.0.weight_g" in checkpoint["model"]
+    ):
         return checkpoint
 
+    old_state_dict = checkpoint["generator"]
+    new_state_dict = {}
+    for key in old_state_dict:
+        new_key = f"code_generator.{key}"
+        new_state_dict[new_key] = old_state_dict[key]
+    checkpoint["model"] = new_state_dict
+    del checkpoint["generator"]  # type: ignore
+    return checkpoint
 
-load_vocoder_model = VocoderLoader(
-    asset_store, download_manager, create_vocoder_model, vocoder_archs
+
+load_vocoder_config = ConfigLoader[VocoderConfig](asset_store, vocoder_archs)
+
+
+load_vocoder_model = ModelLoader[Vocoder, VocoderConfig](
+    asset_store,
+    download_manager,
+    load_vocoder_config,
+    create_vocoder_model,
+    convert_vocoder_checkpoint,
 )
 
 
-@final
-class MelVocoderLoader(ModelLoader[MelGenerator, VocoderConfig]):
-    @finaloverride
-    def _convert_checkpoint(
-        self, checkpoint: Mapping[str, Any], config: VocoderConfig
-    ) -> Mapping[str, Any]:
-        return checkpoint
+load_mel_vocoder_config = ConfigLoader[VocoderConfig](asset_store, mel_vocoder_archs)
 
 
-load_mel_vocoder_model = MelVocoderLoader(
-    asset_store, download_manager, create_mel_vocoder_model, mel_vocoder_archs
+load_mel_vocoder_model = ModelLoader[MelGenerator, VocoderConfig](
+    asset_store, download_manager, load_mel_vocoder_config, create_mel_vocoder_model
 )

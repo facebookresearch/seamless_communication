@@ -134,7 +134,7 @@ class UnitYT2UConfig:
 unity_t2u_archs = ArchitectureRegistry[UnitYT2UConfig]("unity_t2u")
 
 
-unity_t2u_arch = unity_t2u_archs.marker
+unity_t2u_arch = unity_t2u_archs.decorator
 
 
 @unity_t2u_arch("base")

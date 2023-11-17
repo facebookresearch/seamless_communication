@@ -7,4 +7,4 @@
 name: vocoder_mel
 model_type: vocoder_mel_hifigan
 model_arch: base_mel
-checkpoint: "file://large_experiments/seamless/ust/changhan/checkpoints/fairseq2/pretssel_hifigan.pt"
+checkpoint: "file:///large_experiments/seamless/ust/changhan/checkpoints/fairseq2/pretssel_hifigan.pt"

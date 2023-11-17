@@ -32,13 +32,12 @@ class VocoderConfig:
     num_langs: int
     spkr_embedding_dim: int
     num_spkrs: int
-    lang_spkr_idx_map: dict
+    lang_spkr_idx_map: Dict
 
 
 vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_code_hifigan")
 
-
-vocoder_arch = vocoder_archs.marker
+vocoder_arch = vocoder_archs.decorator
 
 
 @vocoder_arch("base")
@@ -139,7 +138,8 @@ def create_vocoder_model(
 
 
 mel_vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_mel_hifigan")
-mel_vocoder_arch = mel_vocoder_archs.marker
+
+mel_vocoder_arch = mel_vocoder_archs.decorator
 
 
 @mel_vocoder_arch("base_mel")

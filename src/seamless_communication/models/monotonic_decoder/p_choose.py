@@ -5,13 +5,13 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import Optional, final
+
+import torch
+from fairseq2.nn.projection import Linear
+from fairseq2.typing import DataType, Device, finaloverride
 from torch import Tensor
 from torch.nn import AvgPool1d, Module, ModuleList, ReLU
 from torch.nn.parameter import Parameter
-import torch
-
-from fairseq2.nn.projection import Linear
-from fairseq2.typing import DataType, Device, finaloverride
 
 
 class EnergyProjection(Module):

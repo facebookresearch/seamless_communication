@@ -102,8 +102,7 @@ class UnitYConfig:
 
 unity_archs = ArchitectureRegistry[UnitYConfig]("unity")
 
-
-unity_arch = unity_archs.marker
+unity_arch = unity_archs.decorator
 
 
 @unity_arch("base")

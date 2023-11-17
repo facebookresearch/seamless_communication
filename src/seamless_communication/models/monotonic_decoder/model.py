@@ -4,17 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from overrides import final as finaloverride
 from typing import Optional, Tuple, final
 
-
+from fairseq2.models.transformer.frontend import TransformerFrontend
+from fairseq2.nn.incremental_state import IncrementalStateBag
+from fairseq2.nn.padding import PaddingMask
+from fairseq2.nn.projection import Projection
+from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Module
-from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.models.transformer.frontend import TransformerFrontend
-
-from fairseq2.nn.projection import Projection
-from fairseq2.nn.padding import PaddingMask
 
 from seamless_communication.models.monotonic_decoder.monotonic_decoder import (
     MonotonicTransformerDecoder,

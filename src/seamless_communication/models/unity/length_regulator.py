@@ -283,7 +283,6 @@ class VarianceAdaptor(Module):
         min_duration: int = 0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, PaddingMask]:
-
         if self.duration_predictor is not None:
             log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
             durations = torch.clamp(

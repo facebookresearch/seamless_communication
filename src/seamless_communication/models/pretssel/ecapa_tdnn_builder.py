@@ -29,7 +29,7 @@ class EcapaTDNNConfig:
 
 ecapa_tdnn_archs = ArchitectureRegistry[EcapaTDNNConfig]("ecapa_tdnn")
 
-ecapa_tdnn_arch = ecapa_tdnn_archs.marker
+ecapa_tdnn_arch = ecapa_tdnn_archs.decorator
 
 
 @ecapa_tdnn_arch("base")

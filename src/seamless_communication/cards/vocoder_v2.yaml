@@ -7,7 +7,7 @@
 name: vocoder_v2
 model_type: vocoder_code_hifigan
 model_arch: base
-checkpoint: "file://large_experiments/seamless/ust/krs/fairseq2_checkpoints/vocoder_v2.pt"
+checkpoint: "file:///large_experiments/seamless/ust/krs/fairseq2_checkpoints/vocoder_v2.pt"
 model_config: {
   "lang_spkr_idx_map": {
       "multilingual": {

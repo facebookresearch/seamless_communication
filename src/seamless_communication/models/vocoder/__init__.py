@@ -16,10 +16,6 @@ from seamless_communication.models.vocoder.codehifigan import (
 )
 from seamless_communication.models.vocoder.hifigan import Generator as Generator
 from seamless_communication.models.vocoder.loader import (
-    MelVocoderLoader as MelVocoderLoader,
-)
-from seamless_communication.models.vocoder.loader import VocoderLoader as VocoderLoader
-from seamless_communication.models.vocoder.loader import (
     load_mel_vocoder_model as load_mel_vocoder_model,
 )
 from seamless_communication.models.vocoder.loader import (

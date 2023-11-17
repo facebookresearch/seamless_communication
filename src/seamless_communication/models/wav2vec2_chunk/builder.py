@@ -62,7 +62,7 @@ wav2vec2_chunk_archs = ArchitectureRegistry[Wav2Vec2ChunkEncoderConfig](
     "wav2vec2_chunk"
 )
 
-wav2vec2_chunk_arch = wav2vec2_chunk_archs.marker
+wav2vec2_chunk_arch = wav2vec2_chunk_archs.decorator
 
 
 @wav2vec2_chunk_arch("600m")
