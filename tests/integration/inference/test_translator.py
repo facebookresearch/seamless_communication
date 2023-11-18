@@ -10,7 +10,7 @@ import torch
 from fairseq2.typing import Device
 
 from seamless_communication.inference import Translator
-from tests.common import device
+from tests.common import device, get_default_dtype
 
 # fmt: off
 ENG_SENTENCE:     Final = "On Monday, scientists from the Stanford University School of Medicine announced the invention of a new diagnostic tool that can sort cells by type: a tiny printable chip that can be manufactured using standard inkjet printers for possibly about one U.S. cent each."
@@ -24,10 +24,7 @@ def test_seamless_m4t_large_t2tt() -> None:
     src_lang = "eng"
     tgt_lang = "deu"
 
-    if device == Device("cpu"):
-        dtype = torch.float32
-    else:
-        dtype = torch.float16
+    dtype = get_default_dtype()
 
     translator = Translator(model_name, "vocoder_36langs", device, dtype=dtype)
     text_output, _ = translator.predict(
@@ -44,10 +41,7 @@ def test_seamless_m4t_v2_large_t2tt() -> None:
     src_lang = "eng"
     tgt_lang = "deu"
 
-    if device == Device("cpu"):
-        dtype = torch.float32
-    else:
-        dtype = torch.float16
+    dtype = get_default_dtype()
 
     translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
     text_output, _ = translator.predict(
@@ -67,10 +61,7 @@ def test_seamless_m4t_v2_large_multiple_tasks() -> None:
     ref_spanish_text = "Hola, espero que todos estéis haciendo bien."
     ref_spanish_asr_text = "Hola, espero que todos estéis haciendo bien."
 
-    if device == Device("cpu"):
-        dtype = torch.float32
-    else:
-        dtype = torch.float16
+    dtype = get_default_dtype()
 
     translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
 

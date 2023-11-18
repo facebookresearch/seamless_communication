@@ -4,46 +4,39 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import tempfile
-from urllib.request import urlretrieve
+from typing import cast
 
 import torch
-import torchaudio
+from fairseq2.data.audio import AudioDecoderOutput, WaveformToFbankInput
 
 from seamless_communication.models.vocoder.loader import load_mel_vocoder_model
-from tests.common import assert_close, device
+from tests.common import (
+    assert_close,
+    convert_to_collated_fbank,
+    device,
+    get_default_dtype,
+)
 
 
-def test_pretssel_vocoder() -> None:
-    n_mel_bins = 80
+def test_pretssel_vocoder(example_rate16k_audio: AudioDecoderOutput) -> None:
     sample_rate = 16_000
 
-    vocoder = load_mel_vocoder_model(
-        "vocoder_mel", device=device, dtype=torch.float32
-    )
+    dtype = get_default_dtype()
 
-    url = "https://keithito.com/LJ-Speech-Dataset/LJ037-0171.wav"
+    audio_dict = example_rate16k_audio
 
-    with tempfile.NamedTemporaryFile() as f:
-        urlretrieve(url, f.name)
-        _wav, _sr = torchaudio.load(f.name)
+    feat = convert_to_collated_fbank(audio_dict, dtype=dtype)["seqs"][0]
 
-    wav = torchaudio.sox_effects.apply_effects_tensor(
-        _wav, _sr, [["rate", f"{sample_rate}"], ["channels", "1"]]
-    )[0].to(device=device)
-    feat = torchaudio.compliance.kaldi.fbank(
-        wav * (2**15), num_mel_bins=n_mel_bins, sample_frequency=sample_rate
-    )
+    vocoder = load_mel_vocoder_model("vocoder_mel", device=device, dtype=torch.float32)
+    vocoder.eval()
 
     with torch.no_grad():
-        wav_hat = vocoder(feat).t()
+        wav_hat = vocoder(feat).view(1, -1)
 
-    feat_hat = torchaudio.compliance.kaldi.fbank(
-        wav_hat * (2**15), num_mel_bins=n_mel_bins, sample_frequency=sample_rate
-    )
+    audio_hat = {"sample_rate": sample_rate, "waveform": wav_hat}
+
+    audio_hat_dict = cast(WaveformToFbankInput, audio_hat)
+
+    feat_hat = convert_to_collated_fbank(audio_hat_dict, dtype=dtype)["seqs"][0]
 
     assert_close(feat_hat, feat[: feat_hat.shape[0], :], atol=0.0, rtol=5.0)
-
-
-if __name__ == "__main__":
-    test_pretssel_vocoder()

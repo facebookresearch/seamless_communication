@@ -8,7 +8,9 @@ from contextlib import contextmanager
 from typing import Any, Generator, List, Optional, Union
 
 import torch
-from fairseq2.typing import Device
+from fairseq2.data import Collater
+from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
+from fairseq2.typing import DataType, Device
 from torch import Tensor
 
 # The default device that tests should use. Note that pytest can change it based
@@ -64,3 +66,28 @@ def tmp_rng_seed(device: Device, seed: int = 0) -> Generator[None, None, None]:
         torch.manual_seed(seed)
 
         yield
+
+
+def get_default_dtype() -> DataType:
+    if device == Device("cpu"):
+        dtype = torch.float32
+    else:
+        dtype = torch.float16
+    return dtype
+
+
+def convert_to_collated_fbank(audio_dict: WaveformToFbankInput, dtype: DataType) -> Any:
+    convert_to_fbank = WaveformToFbankConverter(
+        num_mel_bins=80,
+        waveform_scale=2**15,
+        channel_last=True,
+        standardize=True,
+        device=device,
+        dtype=dtype,
+    )
+
+    collater = Collater(pad_value=1)
+
+    feat = collater(convert_to_fbank(audio_dict))["fbank"]
+
+    return feat
