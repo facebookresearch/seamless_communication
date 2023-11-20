@@ -248,8 +248,14 @@ def run_evaluation(
     logger.info(f"Device: {device}, float dtype: {float_dtype}")
     audio_zips_root = parameters.train_data.audio.audio_root_dir
     logger.info(f"Audio zip root: {audio_zips_root}")
+    text_tokenizer = _init_text_tokenizer(data_config=parameters.train_data)
+    unit_tokenizer = _init_unit_tokenizer(data_config=parameters.train_data)
     model = _model.ModelBuilder(
-        config=parameters.model, dtype=float_dtype, device=device
+        config=parameters.model,
+        dtype=float_dtype,
+        device=device,
+        override_s2t_vocabulary_info=text_tokenizer.vocab_info,
+        override_t2u_vocabulary_info=unit_tokenizer.vocab_info,
     ).build_model(skip_loading_weights=True)
     logger.info(f"Loading checkpoint from {checkpoint_path}")
     state_dict = torch.load(checkpoint_path, map_location=device)
@@ -262,8 +268,6 @@ def run_evaluation(
     }
     model.load_state_dict(state_dict)
     model.eval()
-    text_tokenizer = _init_text_tokenizer(data_config=parameters.train_data)
-    unit_tokenizer = _init_unit_tokenizer(data_config=parameters.train_data)
     fbank_extractor = WaveformToFbankConverter(
         num_mel_bins=parameters.train_data.audio.fbanks_num_mel_bins or 80,
         waveform_scale=parameters.train_data.audio.fbanks_waveform_scale,

@@ -60,10 +60,6 @@ def run_training(
         parameters.training.float_dtype
     )
     logger.info(f"Device: {device}, float dtype: {float_dtype}")
-    model = _model.ModelBuilder(
-        config=parameters.model, dtype=float_dtype, device=device
-    ).build_model()
-    logger.info(f"Model: {model}")
     train_data = _dataloader.UnityDataLoader(
         config=parameters.train_data,
         rank=rank,
@@ -78,6 +74,14 @@ def run_training(
         target_device=device,
         float_dtype=float_dtype,
     )
+    model = _model.ModelBuilder(
+        config=parameters.model,
+        dtype=float_dtype,
+        device=device,
+        override_s2t_vocabulary_info=train_data.text_tokenizer.vocab_info,
+        override_t2u_vocabulary_info=train_data.unit_tokenizer.vocab_info,
+    ).build_model()
+    logger.info(f"Model: {model}")
     trainer = _trainer.UnitYTrainer(
         model=model,
         params=parameters.training,
