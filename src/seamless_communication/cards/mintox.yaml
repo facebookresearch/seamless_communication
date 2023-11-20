@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+name: mintox
 model_name: MinTox
 etox_dataset: https://dl.fbaipublicfiles.com/nllb/NLLB-200_TWL/nllb-200_twl.zip
 etox_lang_variants:

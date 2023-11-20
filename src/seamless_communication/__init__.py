@@ -6,17 +6,15 @@
 
 from pathlib import Path
 
-from fairseq2.assets import LocalAssetCardStorage, asset_store
+from fairseq2.assets import FileAssetMetadataProvider, asset_store
 
 __version__ = "0.1.0"
 
 
 def _update_asset_store() -> None:
-    pathname = Path(__file__).parent.joinpath("cards")
+    cards_dir = Path(__file__).parent.joinpath("cards")
 
-    card_storage = LocalAssetCardStorage(pathname)
-
-    asset_store.add_storage(card_storage)
+    asset_store.metadata_providers.append(FileAssetMetadataProvider(cards_dir))
 
 
 _update_asset_store()
