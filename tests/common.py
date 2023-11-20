@@ -39,6 +39,29 @@ def assert_equal(a: Tensor, b: Union[Tensor, List[Any]]) -> None:
     torch.testing.assert_close(a, b, rtol=0, atol=0)  # type: ignore[attr-defined]
 
 
+def assert_unit_close(
+    a: Tensor,
+    b: Union[Tensor, List[Any]],
+    num_unit_tol: int = 1,
+    percent_unit_tol: float = 0.0,
+) -> None:
+    """Assert two unit sequence are equal within a tolerance"""
+    if not isinstance(b, Tensor):
+        b = torch.tensor(b, device=device, dtype=a.dtype)
+
+    assert (
+        a.shape == b.shape
+    ), f"Two shapes are different, one is {a.shape}, the other is {b.shape}"
+
+    if percent_unit_tol > 0.0:
+        num_unit_tol = int(percent_unit_tol * len(a))
+
+    num_unit_diff = (a != b).sum()
+    assert (
+        num_unit_diff <= num_unit_tol
+    ), f"The difference is beyond tolerance, {num_unit_diff} units are different, tolerance is {num_unit_tol}"
+
+
 def has_no_inf(a: Tensor) -> bool:
     """Return ``True`` if ``a`` has no positive or negative infinite element."""
     return not torch.any(torch.isinf(a))
