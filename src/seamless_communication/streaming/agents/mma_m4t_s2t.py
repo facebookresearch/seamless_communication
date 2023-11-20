@@ -8,9 +8,12 @@ from seamless_communication.streaming.agents.online_feature_extractor import (
     OnlineFeatureExtractorAgent,
 )
 from seamless_communication.streaming.agents.unity_pipeline import UnitYAgentPipeline
+from seamless_communication.streaming.agents.offline_w2v_bert_encoder import (
+    OfflineWav2VecBertEncoderAgent,
+)
 from simuleval.utils import entrypoint
 
 
 @entrypoint
 class MonotonicM4TS2TSPMAgent(UnitYAgentPipeline):
-    pipeline = [OnlineFeatureExtractorAgent]
+    pipeline = [OnlineFeatureExtractorAgent, OfflineWav2VecBertEncoderAgent]
