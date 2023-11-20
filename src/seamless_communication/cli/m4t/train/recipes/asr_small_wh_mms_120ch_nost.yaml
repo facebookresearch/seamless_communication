@@ -2,7 +2,7 @@ eval_data:
   audio:
     audio_root_dir: /fsx-ust/data/audio_zips/
     fbanks_num_mel_bins: 80
-    fbanks_standardize_audio: true
+    fbanks_standardize_audio: false
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
   # manifest_list: dev_asr_only_aggregated_adapted_norm
@@ -35,6 +35,8 @@ eval_data:
 model:
   custom_params:
     model_embed_dim: 768
+    num_fbank_channels: 80
+    fbank_stride: 2
     nllb_decoder_layers: 3
     nllb_encoder_layers: 1
     nllb_vocabulary_size: 20010
@@ -58,10 +60,10 @@ train_data:
   audio:
     audio_root_dir: /fsx-ust/data/audio_zips/
     fbanks_num_mel_bins: 80
-    fbanks_standardize_audio: true
+    fbanks_standardize_audio: false
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
-  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted_wh_transc_norm
+  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted_wh_transc_norm,/data/home/mavlyutov/mmstts/dataset/premixed/all_mms
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15
@@ -92,7 +94,7 @@ training:
   float_dtype: fp32
   label_smoothing: 0.2
   learning_rate: 0.0001
-  log_steps:  50
+  log_steps:  100
   max_epochs: 100
   patience: 10
   start_learning_rate: 1.0e-07

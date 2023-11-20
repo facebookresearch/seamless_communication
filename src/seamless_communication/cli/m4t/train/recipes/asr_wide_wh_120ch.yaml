@@ -1,7 +1,7 @@
 eval_data:
   audio:
     audio_root_dir: /fsx-ust/data/audio_zips/
-    fbanks_num_mel_bins: 80
+    fbanks_num_mel_bins: 120
     fbanks_standardize_audio: true
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
@@ -34,14 +34,16 @@ eval_data:
   unit_tokenizer_name: seamlessM4T_large
 model:
   custom_params:
-    model_embed_dim: 768
+    model_embed_dim: 1024
+    num_fbank_channels: 120
+    fbank_stride: 2
     nllb_decoder_layers: 3
     nllb_encoder_layers: 1
     nllb_vocabulary_size: 20010
     t2u_decoder_layers: 1
     t2u_encoder_layers: 1
     unit_vocabulary_size: 10082
-    w2v2_encoder_layers: 6
+    w2v2_encoder_layers: 3
     w2v2_encoder_layers_layernorm_features: false
     w2v2_encoder_layers_use_conformer: true
     w2v2_num_pos_conv_groups: 16
@@ -57,7 +59,7 @@ model:
 train_data:
   audio:
     audio_root_dir: /fsx-ust/data/audio_zips/
-    fbanks_num_mel_bins: 80
+    fbanks_num_mel_bins: 120
     fbanks_standardize_audio: true
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
@@ -65,7 +67,7 @@ train_data:
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15
-  fixed_batch_size: 40
+  fixed_batch_size: 60
   max_tgt_text_tokens_per_batch: 600
   max_tgt_text_tokens_per_sample: 300
   max_units_per_sample: 1500
@@ -92,7 +94,7 @@ training:
   float_dtype: fp32
   label_smoothing: 0.2
   learning_rate: 0.0001
-  log_steps:  50
+  log_steps:  100
   max_epochs: 100
   patience: 10
   start_learning_rate: 1.0e-07

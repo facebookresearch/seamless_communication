@@ -61,7 +61,7 @@ train_data:
     fbanks_standardize_audio: true
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
-  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted_wh_transc_norm
+  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted_wh_transc_norm,/data/home/mavlyutov/mmstts/dataset/premixed/all_mms
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15

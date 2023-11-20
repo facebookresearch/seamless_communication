@@ -8,7 +8,7 @@
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.distributed as dist
@@ -18,6 +18,7 @@ from fairseq2.models.sequence import SequenceModelOutput
 from fairseq2.nn.padding import PaddingMask
 from fairseq2.optim.lr_scheduler import MyleLR
 from torch.optim import Adam
+from fairseq2.optim import AdamW
 
 from seamless_communication.cli.m4t.train import dataloader, dist_utils
 from seamless_communication.cli.m4t.train.configs import TrainingParams
@@ -47,6 +48,7 @@ class UnitYTrainWrapper(nn.Module):
         assert self.model.t2u_model is not None
         assert batch.speech_to_text.src_tokens is not None
         # s2t
+        assert batch.speech_to_text.src_lengths is not None
         speech_padding_mask = PaddingMask(
             seq_lens=batch.speech_to_text.src_lengths,
             batch_seq_len=int(torch.max(batch.speech_to_text.src_lengths).item()),
@@ -56,6 +58,7 @@ class UnitYTrainWrapper(nn.Module):
             padding_mask=speech_padding_mask,
         )
         assert batch.speech_to_text.prev_output_tokens is not None
+        assert batch.speech_to_text.target_lengths is not None
         s2t_prev_out_tokens_padding_mask = PaddingMask(
             seq_lens=batch.speech_to_text.target_lengths,
             batch_seq_len=int(torch.max(batch.speech_to_text.target_lengths).item()),
@@ -66,14 +69,15 @@ class UnitYTrainWrapper(nn.Module):
             encoder_output=speech_encoder_out,
             encoder_padding_mask=speech_encoder_padding_mask,
         )
+        assert self.model.final_proj is not None
         text_logits = self.model.final_proj(text_decoder_out)
         # t2u
         (
             unit_encoder_out,
             unit_encoder_padding_mask,
         ) = self.t2u.encode(
-            text_decoder_output=text_decoder_out,
-            text_decoder_padding_mask=text_decoder_padding_mask,
+            seqs=text_decoder_out,
+            padding_mask=text_decoder_padding_mask,
         )
         t2u_prev_out_tokens_padding_mask = PaddingMask(
             seq_lens=batch.text_to_units.target_lengths,
@@ -122,6 +126,12 @@ class CalcLoss:
             ignore_prefix_size=self.s2t_ignore_prefix_size,
             label_smoothing=self.label_smoothing,
         )
+        loss = s2t_loss / s2t_numel
+        if torch.any(torch.isnan(loss)):
+            logger.error("LOSS IS NAN. EXITING")
+            logger.error(batch.speech_to_text)
+            raise ValueError("LOSS IS NAN")
+        return loss
         assert batch.text_to_units.target_lengths is not None
         s2u_numel = torch.sum(batch.text_to_units.target_lengths).to(unit_logits.device)
         s2u_loss = SequenceModelOutput(
@@ -200,18 +210,12 @@ class UnitYTrainer:
             t2u_vocab_info=model.t2u_model.target_vocab_info,
         )
         self._try_load_checkpoint(model=model)
+
         self.model = self._wrap_model_for_trainining(model=model)
 
         # TODO: make tweakable
-        self.optimizer = Adam(
-            params=self.model.parameters(),
-            lr=self.params.learning_rate,
-            betas=(0.9, 0.98),
-            eps=1e-08,
-            maximize=False,
-            weight_decay=0.0,
-            fused=True,
-        )
+        self._use_fairseq_adam_w = True
+        self.optimizer = self._build_optimizer()
 
         self.grad_scaler = torch.cuda.amp.GradScaler() if self.float_dtype == torch.float16 else None  # type: ignore
 
@@ -232,11 +236,40 @@ class UnitYTrainer:
         self.batch_sizes: List[int] = []
         self.gpu_usage: List[float] = []
 
-    def _try_load_checkpoint(self, model: torch.nn.Module):
+    def _build_optimizer(self) -> Union[Adam, AdamW]:
+        betas = (0.9, 0.98)
+        eps = 1e-08
+        maximize = False
+        weight_decay = 0.0
+        if self._use_fairseq_adam_w:
+            return AdamW(
+                params=self.model.parameters(),
+                lr=self.params.learning_rate,
+                betas=betas,
+                eps=eps,
+                maximize=maximize,
+                weight_decay=weight_decay,
+                impl="fused",
+            )
+        return Adam(
+            params=self.model.parameters(),
+            lr=self.params.learning_rate,
+            betas=betas,
+            eps=eps,
+            maximize=maximize,
+            weight_decay=weight_decay,
+            fused=True,
+        )
+
+    def _try_load_checkpoint(self, model: torch.nn.Module) -> None:
         chck_path = self.get_best_checkpoint_path()
         if os.path.exists(chck_path):
             logger.info(f"Loading state dict from {chck_path}")
             state_dict = torch.load(chck_path)
+            state_dict = {
+                self._strip_state_key_prefixes(key): value
+                for key, value in state_dict.items()
+            }
             model.load_state_dict(state_dict)
 
     @classmethod
@@ -332,7 +365,7 @@ class UnitYTrainer:
         eval_loss = loss_hist.reduce()
         self._update_eval_stats(eval_loss)
 
-    def _train_step_log(self):
+    def _train_step_log(self) -> None:
         """Log train stats"""
         if (self.update_idx + 1) % self.params.log_steps == 0:
             avg_loss = self.train_loss_hist.reduce()
@@ -347,6 +380,25 @@ class UnitYTrainer:
                 f"gpu_avg={self._get_avg_gpu_usage():.2f}Gb"
             )
             self._reset_log_stats()
+
+    def _get_grad_norms(self) -> None:
+        if self.update_idx > 5000:
+            return
+        path = os.path.join(self.chck_save_dir, "grads.txt")
+        if self.update_idx == 0 and os.path.exists(path):
+            os.unlink(path)
+        out_fp = open(path, "a")
+        for key, param in self.model.named_parameters():
+            try:
+                if param.grad is None:
+                    norm = None
+                else:
+                    norm = (torch.linalg.norm(param.grad.reshape(-1), ord=1) / torch.numel(param.grad)).item()
+            except Exception:
+                logger.exception(f"Failed for param {key}")
+                raise
+            out_fp.write(f"{self.update_idx}\t{key}\t{norm}\n")
+        out_fp.close()
 
     def _train_step(self, batch: dataloader.MultimodalSeqsBatch) -> None:
         """Run one train step"""
@@ -363,6 +415,8 @@ class UnitYTrainer:
             self.grad_scaler.update()
         else:
             loss.backward()
+            if dist_utils.is_main_process():
+                self._get_grad_norms()
             self.optimizer.step()
 
         self.lr_scheduler.step()
@@ -376,12 +430,16 @@ class UnitYTrainer:
         """Explicitly release large memory consumers"""
         del batch
 
-    def _strip_state_key_prefixes(self, key: str) -> str:
+    @classmethod
+    def _strip_state_key_prefixes(cls, key: str) -> str:
         """Removes state_dict keys prefixes associated with model wrappers"""
         to_strip = ["module.", "model."]
         for prefix in to_strip:
             if key.startswith(prefix):
-                key = key[len(prefix) :]
+                key = key[len(prefix):]  # noqa
+        for prefix, rewrite in [("t2u.", "t2u_model.")]:
+            if key.startswith(prefix):
+                key = rewrite + key[len(prefix):]
         return key
 
     def _get_state(self) -> Dict[str, Any]:
@@ -392,12 +450,13 @@ class UnitYTrainer:
         }
         return model_state_dict
 
-    def _get_chck_path(self) -> str:
+    def _get_chck_path(self, suffix: Optional[str] = None) -> str:
         ts = str(int(time.time()))
         epoch = str(self.epoch_idx).zfill(3)
         update = str(self.update_idx).zfill(6)
         eval_loss = f"{self.last_eval_loss:.4f}"
-        name = f"{ts}_{epoch}_{update}_{eval_loss}.pt"
+        chck_suffix = "" if suffix is None else f"_{suffix}"
+        name = f"{ts}_{epoch}_{update}_{eval_loss}{chck_suffix}.pt"
         return os.path.join(self.chck_save_dir, name)
 
     def _get_best_checkpoint_link_path(self) -> str:
@@ -406,16 +465,18 @@ class UnitYTrainer:
     def get_best_checkpoint_path(self) -> str:
         return os.path.realpath(self._get_best_checkpoint_link_path())
 
-    def _save_model(self):
+    def _save_model(self, suffix: Optional[str] = None) -> None:
         if dist_utils.is_main_process():
             state_dict = self._get_state()
-            save_path = self._get_chck_path()
+            save_path = self._get_chck_path(suffix)
             logger.info(f"Saving checkpoint to {save_path}")
             torch.save(state_dict, save_path)
             if self.is_best_state:
                 best_link_path = self._get_best_checkpoint_link_path()
-                if os.path.exists(best_link_path):
+                try:
                     os.unlink(best_link_path)
+                except FileNotFoundError:
+                    pass
                 os.symlink(save_path, best_link_path)
                 logger.info(
                     f"Updating pointer to the best checkpoint {best_link_path} -> {save_path}"
@@ -423,7 +484,7 @@ class UnitYTrainer:
         if dist_utils.is_dist_initialized():
             dist.barrier()
 
-    def run(self):
+    def run(self) -> None:
         logger.info("Start training")
         self._reset_stats()
         self._eval_model()
@@ -443,3 +504,4 @@ class UnitYTrainer:
                 self.update_idx += 1
             self.train_data_loader.reset()
             self.epoch_idx += 1
+        self._save_model(suffix="last")

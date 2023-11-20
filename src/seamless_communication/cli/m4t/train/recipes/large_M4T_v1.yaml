@@ -81,7 +81,7 @@ training:
   float_dtype: bf16
   label_smoothing: 0.2
   learning_rate: 0.0001
-  log_steps: 200
+  log_steps: 1
   max_epochs: 100
   patience: 10
   start_learning_rate: 1.0e-07

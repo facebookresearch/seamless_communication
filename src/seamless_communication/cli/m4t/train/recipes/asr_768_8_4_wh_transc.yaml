@@ -35,13 +35,13 @@ eval_data:
 model:
   custom_params:
     model_embed_dim: 768
-    nllb_decoder_layers: 3
+    nllb_decoder_layers: 4
     nllb_encoder_layers: 1
     nllb_vocabulary_size: 20010
     t2u_decoder_layers: 1
     t2u_encoder_layers: 1
     unit_vocabulary_size: 10082
-    w2v2_encoder_layers: 6
+    w2v2_encoder_layers: 8
     w2v2_encoder_layers_layernorm_features: false
     w2v2_encoder_layers_use_conformer: true
     w2v2_num_pos_conv_groups: 16

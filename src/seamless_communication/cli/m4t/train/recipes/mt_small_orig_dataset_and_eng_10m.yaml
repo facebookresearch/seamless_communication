@@ -6,7 +6,7 @@ eval_data:
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
   # manifest_list: dev_asr_only_aggregated_adapted_norm
-  manifest_list: dev_vpsr_eng_norm
+  manifest_list: dev_vpsr_eng
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15
@@ -35,13 +35,13 @@ eval_data:
 model:
   custom_params:
     model_embed_dim: 768
-    nllb_decoder_layers: 3
+    nllb_decoder_layers: 4
     nllb_encoder_layers: 1
     nllb_vocabulary_size: 20010
     t2u_decoder_layers: 1
     t2u_encoder_layers: 1
     unit_vocabulary_size: 10082
-    w2v2_encoder_layers: 6
+    w2v2_encoder_layers: 8
     w2v2_encoder_layers_layernorm_features: false
     w2v2_encoder_layers_use_conformer: true
     w2v2_num_pos_conv_groups: 16
@@ -61,7 +61,7 @@ train_data:
     fbanks_standardize_audio: true
     fbanks_waveform_scale: 32768
   fbank_feats_pad_idx: 0
-  manifest_list: train_asr_only_aggregated_5_dial_filtered_adapted_wh_transc_norm
+  manifest_list: train_hindi_filt_balanced_aggregated_adapted,eng_10m_wh_transc_mt_cols
   manifest_list_path: null
   manifest_path_prefix: /data/home/mavlyutov/s2t_ondevice/
   max_seconds_per_input_audio: 15

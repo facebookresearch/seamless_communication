@@ -35,6 +35,8 @@ eval_data:
 model:
   custom_params:
     model_embed_dim: 768
+    num_fbank_channels: 80
+    fbank_stride: 2
     nllb_decoder_layers: 3
     nllb_encoder_layers: 1
     nllb_vocabulary_size: 20010

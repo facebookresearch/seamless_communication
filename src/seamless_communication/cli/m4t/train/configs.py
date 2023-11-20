@@ -74,7 +74,8 @@ class Config:
 
     @classmethod
     def from_file(cls, config_path: str):
-        return cls.deserialize(yaml.load(config_path, Loader=yaml.FullLoader))
+        with open(config_path, "r") as fp_in:
+            return cls.deserialize(yaml.load(fp_in, Loader=yaml.FullLoader))
 
 
 @dataclass
@@ -173,6 +174,12 @@ class DataLoadingConfig(Config):
 class CustomModelParams(Config):
     model_embed_dim: int = 1024
 
+    num_fbank_channels: int = 80
+
+    fbank_stride: int = 2
+
+    w2v2_ffn_inner_dim: Optional[int] = None
+
     w2v2_encoder_layers: int = 24
 
     w2v2_encoder_layers_use_conformer: bool = True
@@ -186,6 +193,8 @@ class CustomModelParams(Config):
     w2v2_pos_conv_kernel_size: int = 0
 
     w2v2_num_pos_conv_groups: int = 0
+
+    nllb_ffn_inner_dim: Optional[int] = None
 
     nllb_encoder_layers: int = 24
 

@@ -331,7 +331,7 @@ class UnityDataLoader:
             torch.LongTensor(
                 [
                     int(unit_id) + 4
-                    for unit_id in units_str.rstrip().bytes().decode("utf-8").split()
+                    for unit_id in str(units_str).split()
                 ]
                 + [self.unit_tokenizer.vocab_info.eos_idx]
             )
@@ -345,8 +345,8 @@ class UnityDataLoader:
         # prefixes for tokenized texts and speech units (<eos> <lang_tok>)
         prefix_builder = lambda lang_tok: torch.LongTensor(  # noqa: E731
             [
-                self.text_prefix_tokens[lang_tok.bytes().decode("utf8")],
-                self.unit_prefix_tokens[lang_tok.bytes().decode("utf8")],
+                self.text_prefix_tokens[str(lang_tok)],
+                self.unit_prefix_tokens[str(lang_tok)],
             ]
         )
         builder.map(
@@ -392,9 +392,10 @@ class UnityDataLoader:
         """Tells if NaNs present in fbank"""
         fbank = sample[self.ROOT_COLUMN][self.AUDIO_COLUMN_NAME]["data"]["fbank"]
         has_nans: bool = torch.any(torch.isnan(fbank)).item()  # type: ignore
-        if has_nans:
-            logger.warning("Sample fbank contains NaNs. Skipping")
-        return has_nans
+        empty = fbank.shape[0] == 0
+        if has_nans or empty:
+            logger.warning("Sample fbank contains NaNs or Empty. Skipping")
+        return has_nans or empty
 
     def _filter_samples(self, builder: DataPipelineBuilder) -> DataPipelineBuilder:
         # Drop:
