@@ -7,24 +7,20 @@
 import argparse
 import contextlib
 import logging
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import torch
 import torchaudio
-from fairseq2.assets import asset_store
-from fairseq2.data import Collater, CString, DataPipeline, FileMapper
+from fairseq2.data import Collater, DataPipeline, FileMapper
 from fairseq2.data.audio import (
     AudioDecoder,
     WaveformToFbankConverter,
     WaveformToFbankOutput,
 )
 from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
-from fairseq2.data.typing import PathLike, StringLike
 from fairseq2.generation import SequenceGeneratorOptions
-from fairseq2.nn.padding import get_seqs_and_padding_mask
 from fairseq2.typing import DataType, Device
 from sacrebleu.metrics import BLEU  # type: ignore[attr-defined]
 from torch import Tensor

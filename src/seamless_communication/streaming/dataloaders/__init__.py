@@ -3,3 +3,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+
+from seamless_communication.streaming.dataloaders.s2tt import (
+    SimulEvalSpeechToTextDataloader as SimulEvalSpeechToTextDataloader,
+)

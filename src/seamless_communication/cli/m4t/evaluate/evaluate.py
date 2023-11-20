@@ -25,7 +25,7 @@ from fairseq2.typing import DataType, Device
 from torch import Tensor
 from tqdm import tqdm
 
-from seamless_communication.cli.eval_utils.compute_metrics import (
+from seamless_communication.cli.eval_utils import (
     compute_quality_metrics,
 )
 from seamless_communication.cli.m4t.predict import (
@@ -367,6 +367,9 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         raise Exception(
             "Please provide required arguments for evaluation - data_file, task, tgt_lang"
         )
+
+    if not Path(args.data_file).exists():
+        raise ValueError(f"Invalid data_file to be evaluated: {args.data_file}")
 
     input_modality, output_modality = Translator.get_modalities_from_task_str(args.task)
 
