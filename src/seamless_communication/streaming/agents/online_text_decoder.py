@@ -5,28 +5,26 @@
 # LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
-import torch
-
 from argparse import ArgumentParser, Namespace
-from torch import Tensor
 from typing import Any, Dict, List, Tuple
 
+import torch
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.incremental_state import IncrementalStateBag
 from seamless_communication.models.monotonic_decoder import (
     MonotonicDecoderConfig,
     MonotonicDecoderModel,
 )
-
 from simuleval.agents import GenericAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
 from simuleval.agents.states import AgentStates
 from simuleval.data.segments import Segment, TextSegment
+from torch import Tensor
 
 
 class DecoderAgentStates(AgentStates):
     def reset(self) -> None:
-        self.source_steps = 0
+        self.source_len = 0
         self.target_indices: List[int] = []
         self.tgt_lang = None
         super().reset()
@@ -47,7 +45,7 @@ class DecoderAgentStates(AgentStates):
             if len(self.source) == 0 and segment.finished:
                 self.target_finished = True
                 return
-            self.source_steps = self.source.size(1)
+            self.source_len = self.source.size(1)
 
 
 class OnlineTextDecoderAgent(GenericAgent):
@@ -80,9 +78,9 @@ class OnlineTextDecoderAgent(GenericAgent):
         self.dtype = args.dtype
         self.eos_idx = text_tokenizer.vocab_info.eos_idx
         token_encoder = text_tokenizer.create_encoder(lang=args.tgt_lang, mode="target")
-        prefix_tokens = token_encoder.prefix_indices
-        assert prefix_tokens is not None
-        self.prefix_tokens: List[int] = prefix_tokens.tolist()
+        prefix_indices = token_encoder.prefix_indices
+        assert prefix_indices is not None
+        self.prefix_indices: List[int] = prefix_indices.tolist()
 
     def build_states(self) -> DecoderAgentStates:
         return DecoderAgentStates()
@@ -130,6 +128,12 @@ class OnlineTextDecoderAgent(GenericAgent):
 
     def policy(self, states: DecoderAgentStates) -> Action:
         raise NotImplementedError
+
+    def enforce_tgt_lang_in_prefix(self, states: DecoderAgentStates) -> None:
+        if states.tgt_lang:
+            tgt_lang_tag = f"__{states.tgt_lang}__"
+            tgt_lang_tag_idx = self.text_tokenizer.model.token_to_index(tgt_lang_tag)
+            self.prefix_indices[-1] = tgt_lang_tag_idx
 
 
 class MMATextDecoderAgent(OnlineTextDecoderAgent):
@@ -194,8 +198,9 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
         self, states: DecoderAgentStates, pred_indices: List[int]
     ) -> Tuple[int, float, Tensor]:
         if len(pred_indices) == 0:
+            self.enforce_tgt_lang_in_prefix(states)
             target_input = torch.tensor(
-                self.prefix_tokens + states.target_indices,
+                self.prefix_indices + states.target_indices,
                 device=self.device,
                 dtype=torch.int64,
             ).unsqueeze(0)
@@ -204,7 +209,6 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
                 pred_indices[-1:], device=self.device, dtype=torch.int64
             ).unsqueeze(0)
 
-        states.source_steps = states.source.size(1)
         torch.cuda.empty_cache()
 
         encoder_output = states.source
@@ -244,7 +248,7 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
         if len(states.source) == 0:
             return ReadAction()
 
-        if states.source_steps < self.min_starting_wait and not states.source_finished:
+        if states.source_len < self.min_starting_wait and not states.source_finished:
             return ReadAction()
 
         if states.target_finished:
@@ -254,6 +258,8 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
             return ReadAction()
 
         self.state_bag = IncrementalStateBag(4096)
+
+        states.source_len = states.source.size(1)
 
         pred_indices: List[int] = []
         index = None
@@ -279,7 +285,7 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
             ):
                 if prob == 1.0:
                     pred_indices = []
-                if states.source_steps < self.min_starting_wait_reset:
+                if states.source_len < self.min_starting_wait_reset:
                     pred_indices = []
                     if len(states.target_indices) < 3:
                         states.target_indices = []
@@ -302,7 +308,7 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
             pred_indices.append(index)
             if self.state_bag.step == 0:
                 self.state_bag.increment_step(
-                    len(self.prefix_tokens + states.target_indices)
+                    len(self.prefix_indices + states.target_indices)
                 )
             else:
                 self.state_bag.increment_step()

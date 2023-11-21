@@ -4,31 +4,28 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from __future__ import annotations
-from simuleval.agents.agent import GenericAgent
 
 import logging
-import torch
-
 from argparse import ArgumentParser, Namespace
 from typing import Any, List, Optional
 
+import torch
 from fairseq2.assets import asset_store
-from seamless_communication.streaming.agents.mixins import EarlyStoppingMixin
 from seamless_communication.inference.translator import Modality, Translator
+from seamless_communication.models.monotonic_decoder import (
+    load_monotonic_decoder_config,
+    load_monotonic_decoder_model,
+)
 from seamless_communication.models.unity import (
     load_unity_config,
     load_unity_model,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.models.monotonic_decoder import (
-    load_monotonic_decoder_model,
-    load_monotonic_decoder_config,
-)
-
+from seamless_communication.streaming.agents.mixins import EarlyStoppingMixin
 from simuleval.agents import AgentPipeline, AgentStates
+from simuleval.agents.agent import GenericAgent
 from simuleval.data.segments import Segment
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -81,16 +78,11 @@ class UnitYPipelineMixin:
             type=str,
         )
 
-    @classmethod
-    def from_args(cls, args: Any) -> UnitYPipelineMixin:
-        return cls()
-
 
 class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
     pipeline: List[GenericAgent] = []
 
     def __init__(self, args: Namespace):
-
         if not torch.cuda.is_available() and "cuda" in args.device:
             raise ValueError("CUDA not available, use CPU.")
 
@@ -175,3 +167,7 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
             output_segment.finished = False
 
         return output_segment
+
+    @classmethod
+    def from_args(cls, args: Any) -> UnitYPipelineMixin:
+        return cls(args)
