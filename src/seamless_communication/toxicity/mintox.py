@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 from typing import List, Optional, Tuple
 
 from torch import Tensor
@@ -28,6 +29,9 @@ from seamless_communication.models.unity import (
     UnitTokenizer,
     UnitYModel,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_bad_words_with_batch_indices(
@@ -177,6 +181,12 @@ def mintox_pipeline(
         else:
             return original_text_out, original_unit_out
     else:
+        logger.info(
+            "TOX src_lang=%s tgt_lang=%s added_tox=%d",
+            src_lang,
+            tgt_lang,
+            len(indices_with_toxicity),
+        )
         # otherwise, redo the prediction with a list of bad words to ban
         banned_sequence_processor = _get_banned_sequence_processor(
             banned_sequences=list(set(bad_words)),
