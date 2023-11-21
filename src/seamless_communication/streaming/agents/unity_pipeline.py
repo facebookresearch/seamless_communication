@@ -62,13 +62,13 @@ class UnitYPipelineMixin:
             "--unity-model-name",
             type=str,
             help="Unity model name.",
-            default="unity_sans_decoder",
+            default="seamless_streaming_unity",
         )
         parser.add_argument(
             "--monotonic-decoder-model-name",
             type=str,
             help="Monotonic decoder model name.",
-            default="monotonic_decoder",
+            default="seamless_streaming_monotonic_decoder",
         )
         parser.add_argument(
             "--sample-rate",
