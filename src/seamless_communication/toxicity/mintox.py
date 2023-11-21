@@ -4,19 +4,22 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 from torch import Tensor
 import torch
 from torch.nn import functional as F
 
 
-from seamless_communication.inference.generator import SequenceToUnitOutput, SequenceGeneratorOptions
+from seamless_communication.inference.generator import (
+    SequenceToUnitOutput,
+    SequenceGeneratorOptions,
+)
 from seamless_communication.toxicity.bad_word_checker import (
     BadWordChecker,
 )
 from fairseq2.generation import SequenceToTextOutput, BannedSequenceProcessor
-from fairseq2.data.text.text_tokenizer import TextTokenizer, TextTokenEncoder
+from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.typing import Device
 from fairseq2.data import SequenceData
@@ -32,7 +35,7 @@ def _extract_bad_words_with_batch_indices(
     target_texts: List[StringLike],
     source_lang: str,
     target_lang: str,
-    bad_word_checker: BadWordChecker
+    bad_word_checker: BadWordChecker,
 ) -> Tuple[List[str], List[int]]:
     all_bad_words, batch_indices = [], []
 
@@ -139,9 +142,9 @@ def mintox_pipeline(
     text_generation_opts: SequenceGeneratorOptions = SequenceGeneratorOptions(
         beam_size=5, soft_max_seq_len=(1, 200)
     ),
-    unit_generation_opts: Optional[
-        SequenceGeneratorOptions
-    ] = SequenceGeneratorOptions(beam_size=5, soft_max_seq_len=(25, 50)),
+    unit_generation_opts: Optional[SequenceGeneratorOptions] = SequenceGeneratorOptions(
+        beam_size=5, soft_max_seq_len=(25, 50)
+    ),
     bad_word_checker: BadWordChecker = None,
 ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
     """MinTox: Mitigation at INference time of added TOXicity."""

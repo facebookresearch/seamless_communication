@@ -26,11 +26,6 @@ def test_unit_extractor() -> None:
     dtype = get_default_dtype()
 
     translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
-    unit_extractor = UnitExtractor(
-        "xlsr2_1b_v2",
-        "https://dl.fbaipublicfiles.com/seamlessM4T/models/unit_extraction/kmeans_10k.npy",
-        device=device,
-    )
 
     # Generate english speech for the english text.
     _, speech_output = translator.predict(
@@ -40,6 +35,13 @@ def test_unit_extractor() -> None:
         src_lang="eng",
     )
     assert speech_output is not None
+
+    unit_extractor = UnitExtractor(
+        "xlsr2_1b_v2",
+        "https://dl.fbaipublicfiles.com/seamlessM4T/models/unit_extraction/kmeans_10k.npy",
+        device=device,
+        dtype=torch.float32,
+    )
 
     units = unit_extractor.predict(speech_output.audio_wavs[0][0], 34)
 
