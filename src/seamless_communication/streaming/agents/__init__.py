@@ -5,5 +5,5 @@
 # LICENSE file in the root directory of this source tree.
 
 from seamless_communication.streaming.agents.mma_m4t_s2t import (
-    MonotonicM4TS2TSPMAgent as MonotonicM4TS2TSPMAgent,
+    MonotonicM4TS2TAgent as MonotonicM4TS2TAgent,
 )

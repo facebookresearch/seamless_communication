@@ -30,7 +30,7 @@ def test_pretssel_vocoder(example_rate16k_audio: AudioDecoderOutput) -> None:
     vocoder = load_mel_vocoder_model("vocoder_mel", device=device, dtype=torch.float32)
     vocoder.eval()
 
-    with torch.no_grad():
+    with torch.inference_mode():
         wav_hat = vocoder(feat).view(1, -1)
 
     audio_hat = {"sample_rate": sample_rate, "waveform": wav_hat}

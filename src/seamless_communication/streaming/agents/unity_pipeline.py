@@ -21,7 +21,10 @@ from seamless_communication.models.unity import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.models.monotonic_decoder import load_monotonic_decoder_model
+from seamless_communication.models.monotonic_decoder import (
+    load_monotonic_decoder_model,
+    load_monotonic_decoder_config,
+)
 
 from simuleval.agents import AgentPipeline, AgentStates
 from simuleval.data.segments import Segment
@@ -36,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 def maybe_reset_states(states: Optional[List[Optional[AgentStates]]]) -> None:
+    assert states is not None
     for s in states:
         if s is not None:
             if isinstance(s, EarlyStoppingMixin):
@@ -46,7 +50,7 @@ def maybe_reset_states(states: Optional[List[Optional[AgentStates]]]) -> None:
 
 class UnitYPipelineMixin:
     """
-    Mixin for fairseq pipeline which works with both AgentPipeline
+    Mixin for UnitY pipeline which works with both AgentPipeline
     and TreeAgentPipeline
     """
 
@@ -79,7 +83,7 @@ class UnitYPipelineMixin:
 
     @classmethod
     def from_args(cls, args: Any) -> UnitYPipelineMixin:
-        return cls(args)
+        return cls()
 
 
 class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
@@ -125,6 +129,9 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
         unity_model = load_unity_model(asset_card, device=args.device, dtype=args.dtype)
         unity_model.eval()
 
+        monotonic_decoder_config = load_monotonic_decoder_config(
+            args.monotonic_decoder_model_name
+        )
         logger.info(
             f"Loading the Monotonic Decoder model: {args.monotonic_decoder_model_name} on device={args.device}, dtype={args.dtype}"
         )
@@ -141,6 +148,7 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
                     unity_model=unity_model,
                     unity_config=unity_config,
                     monotonic_decoder_model=monotonic_decoder_model,
+                    monotonic_decoder_config=monotonic_decoder_config,
                     text_tokenizer=text_tokenizer,
                     unit_tokenizer=unit_tokenizer,
                 )

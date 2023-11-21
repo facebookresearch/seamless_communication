@@ -48,7 +48,7 @@ class OfflineWav2VecBertEncoderAgent(SpeechToSpeechAgent):
         return self.w2v2_encoder_config.fbank_stride
 
     @staticmethod
-    def add_args(parser: ArgumentParser):
+    def add_args(parser: ArgumentParser) -> None:
         parser.add_argument(
             "--min-starting-wait-w2vbert",
             default=None,
@@ -94,6 +94,9 @@ class OfflineWav2VecBertEncoderAgent(SpeechToSpeechAgent):
         cls, args: Namespace, **kwargs: Dict[str, Any]
     ) -> OfflineWav2VecBertEncoderAgent:
         unity_model = kwargs.get("unity_model", None)
+        assert isinstance(unity_model, UnitYModel)
         unity_config = kwargs.get("unity_config", None)
+        assert unity_config is not None
         text_tokenizer = kwargs.get("text_tokenizer", None)
+        assert isinstance(text_tokenizer, TextTokenizer)
         return cls(unity_model, unity_config.w2v2_encoder_config, text_tokenizer, args)
