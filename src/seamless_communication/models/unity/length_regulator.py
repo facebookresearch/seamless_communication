@@ -238,8 +238,6 @@ class VarianceAdaptor(Module):
         embed_energy: Optional[Conv1d] = None,
         add_variance_parallel: bool = True,
         upsampling_type: Literal["gaussian", "hard"] = "hard",
-        use_film: bool = False,
-        film_cond_dim: Optional[int] = None,
     ):
         super().__init__()
 
@@ -282,7 +280,7 @@ class VarianceAdaptor(Module):
         duration_factor: float = 1.0,
         min_duration: int = 0,
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, PaddingMask]:
+    ) -> Tuple[Tensor, PaddingMask, Tensor]:
         if self.duration_predictor is not None:
             log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
             durations = torch.clamp(
@@ -320,4 +318,4 @@ class VarianceAdaptor(Module):
         else:
             seqs, seq_lens = self.length_regulator(seqs, durations)
 
-        return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1))
+        return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1)), durations

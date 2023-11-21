@@ -252,7 +252,7 @@ class UnitYGenerator:
             )
             unit_seqs, _ = unit_gen_output.collate()
         else:
-            unit_decoder_output, decoder_padding_mask = self.model.t2u_model(
+            unit_decoder_output, decoder_padding_mask, _ = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,

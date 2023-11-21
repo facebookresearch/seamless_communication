@@ -5,13 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Union
+from typing import Literal, Optional
 
 from fairseq2.assets import asset_store
-from fairseq2.assets.card import AssetCard
 from fairseq2.data import VocabularyInfo
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
-from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
+from fairseq2.nn.embedding import StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import Linear
 from fairseq2.nn.transformer import (
@@ -40,7 +39,6 @@ from seamless_communication.models.unity.fft_decoder_layer import (
     FeedForwardTransformerLayer,
 )
 from seamless_communication.models.unity.length_regulator import (
-    HardUpsampling,
     VarianceAdaptor,
     VariancePredictor,
 )

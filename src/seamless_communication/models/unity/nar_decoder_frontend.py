@@ -304,7 +304,7 @@ class NARDecoderFrontend(Module):
         text_seqs: Optional[Tensor],
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
         assert text_seqs is not None
 
         # text_seqs: (N, S_text)
@@ -321,7 +321,7 @@ class NARDecoderFrontend(Module):
         )
 
         # (N, S_char, M) -> (N, S_unit, M)
-        seqs, padding_mask = self.variance_adaptor(
+        seqs, padding_mask, durations = self.variance_adaptor(
             seqs,
             encoder_padding_mask,
             duration_factor=duration_factor,
@@ -331,4 +331,4 @@ class NARDecoderFrontend(Module):
 
         seqs = self.forward_unit_pos_embedding(seqs, padding_mask)
 
-        return seqs, padding_mask
+        return seqs, padding_mask, durations

@@ -136,7 +136,7 @@ class PretsselDecoderFrontend(Module):
         min_duration: int = 0,
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        seqs, padding_mask = self.variance_adaptor(
+        seqs, padding_mask, _ = self.variance_adaptor(
             seqs, padding_mask, durations, duration_factor, min_duration, film_cond_emb
         )
 
