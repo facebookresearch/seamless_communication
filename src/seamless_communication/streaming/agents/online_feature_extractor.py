@@ -16,8 +16,8 @@ from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
 
 from simuleval.agents import SpeechToSpeechAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
-from simuleval.agents.states import AgentStates
 from simuleval.data.segments import Segment, SpeechSegment
+from seamless_communication.streaming.agents.common import AgentStates
 
 
 SHIFT_SIZE = 10

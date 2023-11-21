@@ -22,8 +22,11 @@ from seamless_communication.models.unity import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.streaming.agents.mixins import EarlyStoppingMixin
-from simuleval.agents import AgentPipeline, AgentStates
+from seamless_communication.streaming.agents.common import (
+    AgentStates,
+    EarlyStoppingMixin,
+)
+from simuleval.agents import AgentPipeline
 from simuleval.agents.agent import GenericAgent
 from simuleval.data.segments import Segment
 

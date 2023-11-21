@@ -10,10 +10,13 @@ from typing import Any, Dict
 
 from simuleval.agents import TextToTextAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
-from simuleval.agents.states import AgentStates
+from seamless_communication.streaming.agents.common import (
+    AgentStates,
+    NoUpdateTargetMixin,
+)
 
 
-class DetokenizerAgent(TextToTextAgent):
+class DetokenizerAgent(TextToTextAgent, NoUpdateTargetMixin):
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.detokenize_only = args.detokenize_only

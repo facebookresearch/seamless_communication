@@ -25,7 +25,7 @@ setup(
         "fairseq2==0.2.*",
         "librosa",
         "openai-whisper",
-        "simuleval",
+        "simuleval~=1.1.1",
         "soundfile",
         "torchaudio",
         "tqdm",

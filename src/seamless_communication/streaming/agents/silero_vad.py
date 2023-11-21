@@ -17,8 +17,11 @@ from typing import Any, List, Optional, Union
 import numpy as np
 import torch
 import soundfile
-from seamless_communication.streaming.agents.mixins import EarlyStoppingMixin
-from simuleval.agents import AgentStates, SpeechToSpeechAgent
+from seamless_communication.streaming.agents.common import (
+    AgentStates,
+    EarlyStoppingMixin,
+)
+from simuleval.agents import SpeechToSpeechAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
 from simuleval.data.segments import EmptySegment, Segment, SpeechSegment
 

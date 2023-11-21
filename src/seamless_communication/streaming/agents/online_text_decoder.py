@@ -17,7 +17,7 @@ from seamless_communication.models.monotonic_decoder import (
 )
 from simuleval.agents import GenericAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
-from simuleval.agents.states import AgentStates
+from seamless_communication.streaming.agents.common import AgentStates
 from simuleval.data.segments import Segment, TextSegment
 from torch import Tensor
 
