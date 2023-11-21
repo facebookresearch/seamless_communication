@@ -62,10 +62,14 @@ class OfflineWav2VecBertEncoderAgent(SpeechToSpeechAgent):
         The policy for encoder is always write
         only if the input is too short
         """
-        if len(states.source) < self.min_input_length or (
+        if (
             self.min_starting_wait is not None
             and len(states.source) < self.min_starting_wait
+            and not states.source_finished
         ):
+            return ReadAction()
+
+        if len(states.source) < self.min_input_length:
             if states.source_finished:
                 return WriteAction({}, finished=states.source_finished)
             else:
