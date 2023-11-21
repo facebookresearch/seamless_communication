@@ -4,8 +4,8 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-name: vocoder_mel
+name: vocoder_mel_24khz
 model_type: vocoder_mel_hifigan
-model_arch: base_mel
-checkpoint: "file:///large_experiments/seamless/workstream/expressivity/oss/checkpoints/16khz_pretssel_hifigan.pt"
-sample_rate: 16000
+model_arch: 24khz_mel
+checkpoint: "file:///large_experiments/seamless/workstream/expressivity/oss/checkpoints/24khz_pretssel_hifigan.pt"
+sample_rate: 24000

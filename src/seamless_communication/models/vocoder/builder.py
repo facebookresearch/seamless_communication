@@ -162,6 +162,26 @@ def _base_mel_vocoder() -> VocoderConfig:
     )
 
 
+@mel_vocoder_arch("24khz_mel")
+def _base_mel_vocoder() -> VocoderConfig:
+    return VocoderConfig(
+        upsample_rates=[5, 4, 4, 3],
+        upsample_kernel_sizes=[10, 8, 8, 6],
+        upsample_initial_channel=512,
+        resblock_kernel_sizes=[3, 7, 11],
+        resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        model_in_dim=80,
+        num_embeddings=0,
+        embedding_dim=0,
+        dur_predictor_params={},
+        lang_embedding_dim=0,
+        num_langs=0,
+        spkr_embedding_dim=0,
+        num_spkrs=0,
+        lang_spkr_idx_map={},
+    )
+
+
 class MelVocoderBuilder:
     config: VocoderConfig
     device: Optional[Device]
