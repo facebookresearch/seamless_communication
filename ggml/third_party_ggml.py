@@ -102,8 +102,8 @@ def load_shared_library(base_path: Path, lib_base_name: str):
     )
 
 
-base_path = Path(__file__).parent.resolve() / "build/src"
-lib_base_name = "ggml"
+base_path = Path(__file__).parent.resolve() / "build/examples/unity"
+lib_base_name = "fairseq2_cpp"
 lib = load_shared_library(base_path, lib_base_name)
 
 #####################################################
