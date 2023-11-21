@@ -26,7 +26,7 @@ from fairseq2.nn.transformer import (
 from fairseq2.typing import DataType, Device, override
 from torch.nn import GELU, ReLU
 
-from seamless_communication.models.pretssel import (
+from seamless_communication.models.generator.ecapa_tdnn_builder import (
     EcapaTDNNBuilder,
     EcapaTDNNConfig,
     ecapa_tdnn_archs,

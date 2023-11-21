@@ -6,6 +6,7 @@
 import argparse
 import logging
 from argparse import Namespace
+from pathlib import Path
 from typing import Tuple
 
 import torch
@@ -35,7 +36,7 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
     )
     parser.add_argument(
         "--output_path",
-        type=str,
+        type=Path,
         help="Path to save the generated audio.",
         default=None,
     )
@@ -167,7 +168,7 @@ def set_generation_opts(
     return text_generation_opts, unit_generation_opts
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="M4T inference on supported tasks using Translator."
     )

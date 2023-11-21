@@ -424,7 +424,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         text_generation_opts=text_generation_opts,
         unit_generation_opts=unit_generation_opts,
         unit_generation_ngram_filtering=args.unit_generation_ngram_filtering,
-        output_path=Path(args.output_path),
+        output_path=args.output_path,
     )
     # fmt: on
     logger.info(f"Running inference on {device=} with {dtype=}, {ctx.batch_size=}.")

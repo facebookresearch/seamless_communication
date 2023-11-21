@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Mapping, Tuple, Union
 
 import torch
 from fairseq2.assets import AssetStore, asset_store, download_manager
-from fairseq2.assets.card import AssetCard
+from fairseq2.assets.card import AssetCard, AssetCardFieldNotFoundError
 from fairseq2.models.nllb import NllbConfig
 from fairseq2.models.nllb.loader import NllbTokenizerLoader
 from fairseq2.models.utils import ConfigLoader, ModelLoader
@@ -459,7 +459,11 @@ class GcmvnStatsLoader:
         else:
             card = self.asset_store.retrieve_card(model_name_or_card)
 
-        gcmvn_stats: Dict[str, List[float]] = card.field("gcmvn_stats").as_(dict)
+        try:
+            gcmvn_stats: Dict[str, List[float]] = card.field("gcmvn_stats").as_(dict)
+        except AssetCardFieldNotFoundError:
+            model_override = card.field("model_config").as_(dict)
+            gcmvn_stats = model_override["gcmvn_stats"]
 
         return gcmvn_stats["mean"], gcmvn_stats["std"]
 

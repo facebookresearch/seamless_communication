@@ -385,7 +385,7 @@ def main() -> None:
         text_generation_opts=text_generation_opts,
         unit_generation_opts=unit_generation_opts,
         unit_generation_ngram_filtering=args.unit_generation_ngram_filtering,
-        output_path=Path(args.output_path),
+        output_path=args.output_path,
         gcmvn_mean=torch.tensor(gcmvn_mean, device=device, dtype=dtype),
         gcmvn_std=torch.tensor(gcmvn_std, device=device, dtype=dtype),
         pretssel_model=args.pretssel_model,

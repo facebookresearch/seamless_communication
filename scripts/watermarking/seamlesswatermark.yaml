@@ -1,0 +1,44 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+
+name: seamlesswatermark
+model_type: seanet
+checkpoint: "/large_experiments/seamless/nllb/watermarking/checkpoints/ckpt_e9d0008c.th"
+watermarker_model:
+  channels: 1
+  sample_rate: 16000
+seanet:
+  activation: ELU
+  activation_params:
+    alpha: 1.0
+  causal: false
+  channels: 1
+  compress: 2
+  decoder:
+    final_activation: null
+    final_activation_params: null
+    trim_right_ratio: 1.0
+  detector: {}
+  dilation_base: 2
+  dimension: 128
+  disable_norm_outer_blocks: 0
+  encoder: {}
+  kernel_size: 7
+  last_kernel_size: 7
+  lstm: 2
+  n_filters: 32
+  n_residual_layers: 1
+  norm: weight_norm
+  norm_params: {}
+  pad_mode: constant
+  ratios:
+  - 8
+  - 5
+  - 4
+  - 2
+  residual_kernel_size: 3
+  true_skip: true

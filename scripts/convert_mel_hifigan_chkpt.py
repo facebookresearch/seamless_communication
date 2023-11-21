@@ -9,10 +9,9 @@ out_channels -> upsample_initial_channel
 """
 
 
-def main():
-    chkpt_root = "/checkpoint/mjhwang/experiments/231007-mel_vocoder-mls_multilingual_6lang/train_mls_multilingual_6lang_subset_hifigan.v1_8gpu_adapt"
-    cfg = f"{chkpt_root}/config.yml"
-    # TODO: display cfg
+def main() -> None:
+    # chkpt_root = "/checkpoint/mjhwang/experiments/231007-mel_vocoder-mls_multilingual_6lang/train_mls_multilingual_6lang_subset_hifigan.v1_8gpu_adapt"
+    chkpt_root = "/checkpoint/mjhwang/experiments/231112-mel_vocoder-ai_speech_24khz/train_train_highquality_speech_20231111_no16khz_100000_hifigan.v1_8gpu_adapt"
     chkpt = torch.load(f"{chkpt_root}/checkpoint-400000steps.pkl")
     del chkpt["model"]["discriminator"]
     conv_seq_map = {
@@ -21,7 +20,7 @@ def main():
         ".1.weight_v": ".weight_v",
     }
 
-    def update_key(k):
+    def update_key(k: str) -> str:
         if k.startswith("input_conv"):
             k = k.replace("input_conv", "conv_pre")
         elif k.startswith("upsamples"):
@@ -50,7 +49,8 @@ def main():
     for k in ["optimizer", "scheduler", "steps", "epochs"]:
         del chkpt[k]
 
-    out_path = "/large_experiments/seamless/ust/changhan/checkpoints/fairseq2/pretssel_hifigan.pt"
+    # out_path = "/large_experiments/seamless/ust/changhan/checkpoints/fairseq2/pretssel_hifigan.pt"
+    out_path = "/large_experiments/seamless/workstream/expressivity/oss/checkpoints/melhifigan_20231121.pt"
     torch.save(chkpt, out_path)
 
 
