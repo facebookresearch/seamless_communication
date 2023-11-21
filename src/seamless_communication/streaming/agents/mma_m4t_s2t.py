@@ -4,18 +4,17 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from seamless_communication.streaming.agents.detokenizer import (
-    DetokenizerAgent,
+from seamless_communication.streaming.agents.detokenizer import DetokenizerAgent
+from seamless_communication.streaming.agents.offline_w2v_bert_encoder import (
+    OfflineWav2VecBertEncoderAgent,
 )
 from seamless_communication.streaming.agents.online_feature_extractor import (
     OnlineFeatureExtractorAgent,
 )
-from seamless_communication.streaming.agents.offline_w2v_bert_encoder import (
-    OfflineWav2VecBertEncoderAgent,
-)
 from seamless_communication.streaming.agents.online_text_decoder import (
     MMASpeechToTextDecoderAgent,
 )
+from seamless_communication.streaming.agents.silero_vad import SileroVADAgent
 from seamless_communication.streaming.agents.unity_pipeline import UnitYAgentPipeline
 from simuleval.utils import entrypoint
 
@@ -36,4 +35,14 @@ class MonotonicM4TS2TAgent(UnitYAgentPipeline):
         OnlineFeatureExtractorAgent,
         OfflineWav2VecBertEncoderAgent,
         MMASpeechToTextDecoderAgent,
+    ]
+
+
+class MonotonicM4TS2TVADAgent(UnitYAgentPipeline):
+    pipeline = [
+        SileroVADAgent,
+        OnlineFeatureExtractorAgent,
+        OfflineWav2VecBertEncoderAgent,
+        MMASpeechToTextDecoderAgent,
+        DetokenizerAgent,
     ]

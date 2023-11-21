@@ -71,13 +71,15 @@ class OnlineTextDecoderAgent(GenericAgent):
         self.max_len_b: int = args.max_len_b
         self.max_consecutive_writes = self.args.max_consecutive_write
         self.min_starting_wait = args.min_starting_wait
-        self.min_starting_wait_reset = args.min_starting_wait_reset
         self.no_early_stop = args.no_early_stop
 
         self.device = args.device
         self.dtype = args.dtype
         self.eos_idx = text_tokenizer.vocab_info.eos_idx
-        token_encoder = text_tokenizer.create_encoder(lang=args.tgt_lang, mode="target")
+        if hasattr(args, "tgt_lang") and hasattr(args, "prefix_tgt_lang"):
+            assert args.tgt_lang == args.prefix_tgt_lang
+        tgt_lang = getattr(args, "tgt_lang", None) or getattr(args, "prefix_tgt_lang", None)
+        token_encoder = text_tokenizer.create_encoder(lang=tgt_lang, mode="target")
         prefix_indices = token_encoder.prefix_indices
         assert prefix_indices is not None
         self.prefix_indices: List[int] = prefix_indices.tolist()
@@ -111,7 +113,7 @@ class OnlineTextDecoderAgent(GenericAgent):
         parser.add_argument(
             "--min-starting-wait",
             type=int,
-            default=12,
+            default=1,
             help="Minimal starting waiting source steps",
         )
         parser.add_argument(
@@ -123,7 +125,12 @@ class OnlineTextDecoderAgent(GenericAgent):
         parser.add_argument(
             "--no-early-stop",
             action="store_true",
-            default=True,
+            default=False,
+        )
+        parser.add_argument(
+            "--prefix-tgt-lang",
+            type=str,
+            default=None,
         )
 
     def policy(self, states: DecoderAgentStates) -> Action:
@@ -285,10 +292,6 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):
             ):
                 if prob == 1.0:
                     pred_indices = []
-                if states.source_len < self.min_starting_wait_reset:
-                    pred_indices = []
-                    if len(states.target_indices) < 3:
-                        states.target_indices = []
                 break
             if (
                 finished
