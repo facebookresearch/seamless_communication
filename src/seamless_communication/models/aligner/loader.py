@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, List, Mapping, final
+from typing import Any, List, Mapping
 
 import torch
 from fairseq2.assets import asset_store, download_manager
@@ -22,6 +22,12 @@ from seamless_communication.models.unity.char_tokenizer import load_unity_char_t
 def convert_unity2_aligner_checkpoint(
     checkpoint: Mapping[str, Any], config: UnitY2AlignmentConfig
 ) -> Mapping[str, Any]:
+    if (
+        "model" in checkpoint
+        and "alignment_encoder.t_conv.1.weight" in checkpoint["model"]
+    ):
+        return checkpoint
+
     alignment_frontend_statedict = {}
     text_emb_state_keymap = {"weight": "alignment_frontend.embed_text.weight"}
     for k, v in checkpoint["text_emb_state"].items():

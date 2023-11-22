@@ -15,7 +15,6 @@ from fairseq2.data import CString
 from fairseq2.nn.embedding import StandardEmbedding
 from fairseq2.nn.padding import to_padding_mask
 from fairseq2.typing import DataType
-from numba import jit
 from torch import Tensor
 from torch.nn import Module
 

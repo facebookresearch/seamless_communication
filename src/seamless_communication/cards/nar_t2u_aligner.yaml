@@ -5,10 +5,10 @@
 # LICENSE file in the root directory of this source tree.
 
 name: nar_t2u_aligner
-char_tokenizer: "file:///private/home/hirofumii/large_experiments/datasets/m4t/t2u_v2/spm_char_lang38_tc.model"
+char_tokenizer: "file:///checkpoint/krs/unity2/spm_char_lang38_tc.model"
 model_type: unity2_aligner
 model_arch: nar_t2u_aligner
-checkpoint: "file:///checkpoint/kulikov/nar_t2u_m4tv2_aligner.pt"
+checkpoint: "file:///large_experiments/seamless/ust/krs/fairseq2_checkpoints/unity2_aligner.pt"
 num_units: 10000
 unit_langs:
   - arb

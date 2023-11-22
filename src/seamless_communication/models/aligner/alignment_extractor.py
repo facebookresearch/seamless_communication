@@ -11,7 +11,6 @@ import numpy
 import torch
 import torch.nn as nn
 import torchaudio
-from fairseq2.data import CString
 from fairseq2.typing import DataType, Device
 from fairseq2.data.typing import StringLike
 from torch import Tensor
@@ -127,7 +126,7 @@ class AlignmentExtractor(nn.Module):
                 text, add_trailing_silence=add_trailing_silence
             )
         )
-        alignment_lprobs, alignment_durations = self.alignment_model(
+        _, alignment_durations = self.alignment_model(
             tokenized_text_ids, tokenized_unit_ids
         )
 
@@ -148,7 +147,7 @@ class AlignmentExtractor(nn.Module):
             raise RuntimeError(
                 "Please `pip install matplotlib` in order to use plot alignment."
             )
-        fig, ax = plt.subplots(figsize=(22, 3.5))
+        _, ax = plt.subplots(figsize=(22, 3.5))
         ax.plot(audio, color="gray", linewidth=0.3)
         durations_cumul = numpy.concatenate([numpy.array([0]), numpy.cumsum(durations)])
         alignment_ticks = durations_cumul * 320  # 320 is hardcoded for 20ms rate here
