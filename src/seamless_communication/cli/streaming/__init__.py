@@ -3,8 +3,3 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
-name: unity_sans_decoder
-base: unity_nllb-100
-model_arch: base_v2
-checkpoint: "file:///large_experiments/seamless/ust/krs/fairseq2_checkpoints/unity_sans_decoder.pt"

@@ -16,6 +16,8 @@ from seamless_communication.streaming.agents.online_text_decoder import (
 from seamless_communication.streaming.agents.online_unit_decoder import (
     NARUnitYUnitDecoderAgent,
 )
+from seamless_communication.streaming.agents.online_vocoder import VocoderAgent
+
 from seamless_communication.streaming.agents.unity_pipeline import UnitYAgentPipeline
 from simuleval.utils import entrypoint
 
@@ -27,4 +29,5 @@ class MonotonicM4TS2STAgent(UnitYAgentPipeline):
         OfflineWav2VecBertEncoderAgent,
         UnitYMMATextDecoderAgent,
         NARUnitYUnitDecoderAgent,
+        VocoderAgent,
     ]

@@ -164,7 +164,7 @@ class SileroVADStates(EarlyStoppingMixin, AgentStates):
             self.source_finished = True
             self.debug_write_wav(np.empty(0, dtype=np.int16), finished=True)
 
-    def decay_silence_acc_ms(self):
+    def decay_silence_acc_ms(self) -> None:
         if self.consecutive_silence_decay_count <= 2:
             self.silence_acc_ms = self.silence_acc_ms // 2
             self.consecutive_silence_decay_count += 1

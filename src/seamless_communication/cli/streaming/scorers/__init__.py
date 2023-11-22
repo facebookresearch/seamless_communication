@@ -3,8 +3,3 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
-name: monotonic_decoder
-model_type: monotonic_decoder
-model_arch: dense_1b
-checkpoint: "file:///large_experiments/seamless/ust/krs/fairseq2_checkpoints/monotonic_decoder.pt"

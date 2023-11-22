@@ -49,7 +49,6 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
         self.data_pipeline = data_pipeline
         self.data_itr = iter(self.data_pipeline)
         self.cur_index = self.start_index - 1
-        self.item = None
 
     def __iter__(self) -> SimulEvalSpeechToTextDataloader:
         return self

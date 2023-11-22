@@ -14,3 +14,6 @@ from seamless_communication.cli.eval_utils.compute_metrics import (
 from seamless_communication.cli.eval_utils.lang_mapping import (
     LANG2_LANG3 as LANG2_LANG3,
 )
+from seamless_communication.cli.eval_utils.lang_mapping import (
+    LANG3_LANG2 as LANG3_LANG2,
+)

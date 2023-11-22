@@ -22,6 +22,7 @@ from seamless_communication.models.unity import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
+from seamless_communication.models.vocoder.loader import load_vocoder_model
 from seamless_communication.streaming.agents.common import (
     AgentStates,
     EarlyStoppingMixin,
@@ -69,6 +70,12 @@ class UnitYPipelineMixin:
             type=str,
             help="Monotonic decoder model name.",
             default="seamless_streaming_monotonic_decoder",
+        )
+        parser.add_argument(
+            "--vocoder-name",
+            type=str,
+            help="Vocoder name.",
+            default="vocoder_v2",
         )
         parser.add_argument(
             "--sample-rate",
@@ -135,6 +142,13 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
         )
         monotonic_decoder_model.eval()
 
+        self.vocoder = None
+        if args.vocoder_name is not None and output_modality == Modality.SPEECH:
+            self.vocoder = load_vocoder_model(
+                args.vocoder_name, device=args.device, dtype=args.dtype
+            )
+            self.vocoder.eval()
+
         module_list = []
         for p in self.pipeline:
             module_list.append(
@@ -146,6 +160,7 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
                     monotonic_decoder_config=monotonic_decoder_config,
                     text_tokenizer=text_tokenizer,
                     unit_tokenizer=unit_tokenizer,
+                    vocoder=self.vocoder,
                 )
             )
 

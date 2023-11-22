@@ -22,7 +22,7 @@ class EarlyStoppingMixin:
 
 
 class AgentStates(AgentStatesOrig):
-    def update_target(self, segment: Segment):
+    def update_target(self, segment: Segment) -> None:
         """An AgentStates impl which doesn't update states.target"""
         self.target_finished = segment.finished
 
