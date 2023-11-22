@@ -139,7 +139,7 @@ def _medium() -> UnitYConfig:
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_600m")
 
-    mt_model_config.vocab_info.size = 256102  # NLLB-100
+    mt_model_config.vocab_info.size = 256206  # NLLB-200
 
     t2u_config = unity_t2u_archs.get_config("medium")
 
