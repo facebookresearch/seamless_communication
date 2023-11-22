@@ -5,22 +5,19 @@
 # LICENSE file in the root directory of this source tree.
 
 import sys
-from typing import cast, List, Final, Optional
-from anyio import Path
+from pathlib import Path
+from typing import Final, List, Optional, cast
+
 import torch
-from fairseq2.typing import Device
 from fairseq2.data import Collater, SequenceData
 from fairseq2.data.audio import AudioDecoderOutput
+from fairseq2.typing import Device
 from torch.nn import Module
 
 from seamless_communication.inference.pretssel_generator import PretsselGenerator
-from seamless_communication.models.unity.loader import load_gcmvn_stats
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
-from tests.common import (
-    assert_close,
-    convert_to_collated_fbank,
-)
-
+from seamless_communication.models.unity.loader import load_gcmvn_stats
+from tests.common import assert_close, convert_to_collated_fbank
 
 N_MEL_BINS = 80
 

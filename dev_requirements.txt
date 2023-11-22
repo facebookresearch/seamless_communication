@@ -1,3 +1,4 @@
+audiocraft
 black
 flake8
 isort
