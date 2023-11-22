@@ -177,7 +177,7 @@ def _16khz_vocoder() -> VocoderConfig:
             size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
         ),
         model_dim=256,
-        max_seq_len=4000,
+        max_seq_len=10000,
         encoder_layers=4,
         decoder_layers=4,
         mel_dim=80,
@@ -227,7 +227,7 @@ def _24khz_vocoder() -> VocoderConfig:
             size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
         ),
         model_dim=256,
-        max_seq_len=4000,
+        max_seq_len=10000,
         encoder_layers=4,
         decoder_layers=4,
         mel_dim=80,
