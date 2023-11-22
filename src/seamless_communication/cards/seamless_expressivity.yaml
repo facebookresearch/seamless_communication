@@ -8,7 +8,7 @@ name: seamless_expressivity
 base: unity_nllb-100
 model_arch: expressivity_v2
 char_tokenizer: "file:///checkpoint/krs/unity2/spm_char_lang38_tc.model"
-checkpoint: "file:///checkpoint/hygong/Expressivity/multilingual_models/m2m.clean.ecapa_tdnn2.dim512.all.all.lr5e-05.mk4k.config_t2_fbank_nosa_gcmvn_10k.rdrop0.ls0.2.uf3.wu5k.fp16.mem_fp16.seed1.dr0.1.ld0.2.mp0.3.cmp0.25.ma.ak8.as8.al1.ald0.0.dld0.0.ca.D24L.t2uE4L.t2uD4L.usesfilm.inj_dec.ngpu64/checkpoint_best_export.pt"
+checkpoint: "file:///large_experiments/seamless/workstream/expressivity/oss/checkpoints/m2m_expressive_unity.pt"
 num_units: 10000
 unit_langs:
   - arb
