@@ -57,7 +57,7 @@ class UnitYPipelineMixin:
 
     @classmethod
     def add_args(cls, parser: ArgumentParser) -> None:
-        super().add_args(parser)
+        super().add_args(parser)  # type: ignore
         parser.add_argument("--task", type=str, help="Task type")
         parser.add_argument(
             "--unity-model-name",
@@ -157,7 +157,7 @@ class UnitYPipelineMixin:
         }
 
 
-class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
+class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):  # type: ignore
     pipeline: List[GenericAgent] = []
 
     def __init__(self, args: Namespace):
@@ -199,8 +199,8 @@ class UnitYAgentPipeline(UnitYPipelineMixin, AgentPipeline):
         return cls(args)
 
 
-class UnitYAgentTreePipeline(UnitYPipelineMixin, TreeAgentPipeline):
-    pipeline = {}
+class UnitYAgentTreePipeline(UnitYPipelineMixin, TreeAgentPipeline):  # type: ignore
+    pipeline: Any = {}
 
     def __init__(self, args: Namespace):
         models_and_configs = self.load_model(args)
@@ -231,10 +231,10 @@ class UnitYAgentTreePipeline(UnitYPipelineMixin, TreeAgentPipeline):
             # An early stop.
             # The temporary solution is to start over
             if states is not None:
-                maybe_reset_states(states.values())
+                maybe_reset_states(states)
             else:
                 self.reset()
             for segment in output_segment:
                 segment.finished = False
 
-        return output_segment
+        return output_segment  # type: ignore[no-any-return]

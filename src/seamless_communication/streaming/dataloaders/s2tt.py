@@ -38,7 +38,7 @@ def count_lines(filename: Path) -> int:
 
 
 @register_dataloader("fairseq2_s2tt")
-class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader):
+class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader):  # type: ignore
     def __init__(self, data_pipeline: DataPipeline, args: Namespace) -> None:
         self.args = args
         self.data_file: Path = Path(getattr(self.args, "data_file", ""))

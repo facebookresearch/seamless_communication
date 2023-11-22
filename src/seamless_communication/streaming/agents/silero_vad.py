@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 SPEECH_PROB_THRESHOLD = 0.6
 
 
-class SileroVADStates(EarlyStoppingMixin, AgentStates):
+class SileroVADStates(EarlyStoppingMixin, AgentStates):  # type: ignore
     def __init__(self, args: Namespace) -> None:
         self.model, utils = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
@@ -253,7 +253,7 @@ class SileroVADStates(EarlyStoppingMixin, AgentStates):
                 )
 
 
-class SileroVADAgent(SpeechToSpeechAgent):
+class SileroVADAgent(SpeechToSpeechAgent):  # type: ignore
     def __init__(self, args: Namespace) -> None:
         super().__init__(args)
         self.chunk_size_samples = args.chunk_size_samples

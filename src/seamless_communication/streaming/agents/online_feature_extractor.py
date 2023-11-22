@@ -26,7 +26,7 @@ SAMPLE_RATE = 16000
 FEATURE_DIM = 80
 
 
-class FeatureStates(AgentStates):
+class FeatureStates(AgentStates):  # type: ignore
     def reset(self) -> None:
         super().reset()
         self.previous_residual_samples: List[float] = []
@@ -45,7 +45,7 @@ class FeatureStates(AgentStates):
             self.source.append(segment.content)
 
 
-class OnlineFeatureExtractorAgent(SpeechToSpeechAgent):
+class OnlineFeatureExtractorAgent(SpeechToSpeechAgent):  # type: ignore
     """
     Extract speech features on the fly.
     """

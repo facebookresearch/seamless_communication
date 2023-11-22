@@ -30,7 +30,7 @@ def normalize_text_whisper(sentences: List[str], lang: str) -> List[str]:
 
 
 @register_quality_scorer("SEAMLESS_WHISPER_ASR_BLEU")
-class SeamlessWhisperASRSacreBLEUScorer(WhisperASRSacreBLEUScorer):
+class SeamlessWhisperASRSacreBLEUScorer(WhisperASRSacreBLEUScorer):  # type: ignore
     def __init__(
         self,
         tokenizer: str = "13a",

@@ -21,7 +21,7 @@ class EarlyStoppingMixin:
         raise NotImplementedError()
 
 
-class AgentStates(AgentStatesOrig):
+class AgentStates(AgentStatesOrig):  # type: ignore
     def update_target(self, segment: Segment) -> None:
         """An AgentStates impl which doesn't update states.target"""
         self.target_finished = segment.finished

@@ -20,7 +20,7 @@ from simuleval.agents.states import AgentStates
 from simuleval.data.segments import Segment, TextSegment
 
 
-class NARUnitDecoderAgentStates(AgentStates):
+class NARUnitDecoderAgentStates(AgentStates):  # type: ignore
     def reset(self) -> None:
         self.source_token_list: List[str] = []
         self.source_indices: Optional[torch.Tensor] = None
@@ -51,7 +51,7 @@ class NARUnitDecoderAgentStates(AgentStates):
         self.source = content
 
 
-class NARUnitYUnitDecoderAgent(GenericAgent):
+class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
     """Non-autoregressive unit decoder"""
 
     source_type = "text"

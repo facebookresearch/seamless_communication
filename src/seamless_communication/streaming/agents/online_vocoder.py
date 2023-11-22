@@ -14,7 +14,7 @@ from simuleval.agents.actions import ReadAction, WriteAction
 from simuleval.data.segments import SpeechSegment
 
 
-class VocoderAgent(TextToSpeechAgent):
+class VocoderAgent(TextToSpeechAgent):  # type: ignore
     def __init__(self, vocoder: Vocoder, args: Namespace) -> None:
         super().__init__(args)
         self.sample_rate = args.sample_rate

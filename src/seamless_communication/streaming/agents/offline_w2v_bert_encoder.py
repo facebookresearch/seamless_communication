@@ -24,7 +24,7 @@ from seamless_communication.streaming.agents.common import (
 )
 
 
-class OfflineWav2VecBertEncoderAgent(NoUpdateTargetMixin, SpeechToSpeechAgent):
+class OfflineWav2VecBertEncoderAgent(NoUpdateTargetMixin, SpeechToSpeechAgent):  # type: ignore
     """
     Incremental encoding of an wav2vec encoder output
     It update the whole encoder states every time when there is a new incoming segment.

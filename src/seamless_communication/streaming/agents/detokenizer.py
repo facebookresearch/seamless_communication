@@ -16,7 +16,7 @@ from seamless_communication.streaming.agents.common import (
 )
 
 
-class DetokenizerAgent(NoUpdateTargetMixin, TextToTextAgent):
+class DetokenizerAgent(NoUpdateTargetMixin, TextToTextAgent):  # type: ignore
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.detokenize_only = args.detokenize_only
