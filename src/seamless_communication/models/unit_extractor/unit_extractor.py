@@ -70,6 +70,10 @@ class UnitExtractor(nn.Module):
             with Path(audio).open("rb") as fb:
                 block = MemoryBlock(fb.read())
             decoded_audio = self.decode_audio(block)
+            assert (
+                sample_rate == decoded_audio["sample_rate"]
+            ), f"Input audio must have {sample_rate} sampling rate"
+
         else:
             assert audio.dim() <= 2, "The audio tensor can't be more than 2 dimensions."
             if audio.dim() == 1:
