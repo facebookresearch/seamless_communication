@@ -366,6 +366,8 @@ class Translator(nn.Module):
                 text_generation_opts=text_generation_opts,
                 unit_generation_opts=unit_generation_opts,
                 bad_word_checker=self.bad_word_checker,
+                duration_factor=duration_factor,
+                prosody_encoder_input=prosody_encoder_input,
             )
 
         if output_modality == Modality.TEXT:

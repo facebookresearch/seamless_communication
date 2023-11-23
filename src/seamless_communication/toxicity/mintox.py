@@ -150,6 +150,8 @@ def mintox_pipeline(
         beam_size=5, soft_max_seq_len=(25, 50)
     ),
     bad_word_checker: BadWordChecker = None,
+    duration_factor: float = 1.0,
+    prosody_encoder_input: Optional[SequenceData] = None,
 ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
     """MinTox: Mitigation at INference time of added TOXicity."""
     from seamless_communication.inference.translator import Modality, Translator
@@ -221,6 +223,8 @@ def mintox_pipeline(
             unit_generation_ngram_filtering=unit_generation_ngram_filtering,
             text_generation_opts=text_generation_opts,
             unit_generation_opts=unit_generation_opts,
+            duration_factor=duration_factor,
+            prosody_encoder_input=prosody_encoder_input,
         )
         batch_size = len(original_text_out.sentences)
         if batch_size > 1:
