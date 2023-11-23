@@ -3,25 +3,19 @@ We are vendoring https://github.com/abetlen/ggml-python (MIT License)
 adding a few utilities to convert between ggml and numpy tensors for testing.
 """
 
-import numpy as np
+import contextlib
 import ctypes
-import torch
+import dataclasses
 import functools
 import logging
-import dataclasses
-import contextlib
-from typing import Iterator
-from typing import NamedTuple
 from pathlib import Path
-from typing import Dict
-from typing import Callable
-from typing import Any
-from typing import Tuple
-from typing import Union
-from typing import Type
+from typing import Any, Callable, Dict, Iterator, NamedTuple, Tuple, Type, Union
 
+import numpy as np
+import torch
+
+from ctypes_utils import Ptr, c_fn, c_struct
 from third_party_ggml import *
-from ctypes_utils import c_struct, c_fn, Ptr
 
 ### Helpers
 
@@ -44,7 +38,6 @@ def numpy_dtype(ggml_type: ctypes.c_int) -> np.dtype:
 
 @functools.lru_cache()
 def from_numpy_dtype(dtype: np.dtype) -> ctypes.c_int:
-
     def _ggml_type(name: bytes, value: int) -> ctypes.c_int:
         t = ctypes.c_int(value)
         type_name = ggml_type_name(t)

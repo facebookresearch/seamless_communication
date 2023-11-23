@@ -1,14 +1,9 @@
-import inspect
 import ctypes
-import types
-import functools
 import dataclasses
-from typing import Callable
-from typing import Any
-from typing import Optional
-from typing import Type
-from typing import TypeVar
-from typing import Generic
+import functools
+import inspect
+import types
+from typing import Any, Callable, Generic, Optional, Type, TypeVar
 
 T = TypeVar("T")
 
@@ -21,6 +16,7 @@ class Ptr(Generic[T], ctypes._Pointer):  # type: ignore
 
 
 NULLPTR: Ptr[Any] = None  # type: ignore[assignment]
+
 
 def c_struct(cls: Type[T]) -> Type[T]:
     struct = types.new_class(cls.__name__, bases=(ctypes.Structure,))
@@ -71,6 +67,7 @@ def _py_type_to_ctype(t: type) -> type:
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 def _c_fn(module: Any, fn: F) -> F:
     if callable(module):
         c_fn = module
@@ -78,7 +75,9 @@ def _c_fn(module: Any, fn: F) -> F:
         c_fn = getattr(module, fn.__name__)
     annotations = fn.__annotations__
     if "return" not in annotations:
-        raise ValueError("@c_fn decorator requires type annotations on the decorated function.")
+        raise ValueError(
+            "@c_fn decorator requires type annotations on the decorated function."
+        )
 
     c_fn.argtypes = [
         _py_type_to_ctype(t) for k, t in fn.__annotations__.items() if k != "return"

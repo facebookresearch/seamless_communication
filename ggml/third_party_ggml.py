@@ -49,20 +49,15 @@ ggml.ggml_free(ctx)
 ```
 
 """
-import os
-import sys
 import ctypes
-import pathlib
 import importlib.resources
-import numpy as np
-from typing import Union
-from typing import Type
-from typing import Callable
-from typing import Tuple
-from typing import Dict
-from typing import Any
+import os
+import pathlib
+import sys
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
+
+import numpy as np
 from typing_extensions import TypeAlias
 
 NULL: ctypes.c_void_p = None  # ignore: type
@@ -4863,7 +4858,9 @@ ggml_custom3_op_f32_t = ctypes.CFUNCTYPE(
 #         struct ggml_tensor         * a,
 #                ggml_unary_op_f32_t   fun);
 def ggml_map_unary_f32(
-    ctx: ggml_context_p, a: ggml_tensor_p, fun: "ctypes._FuncPointer"  # type: ignore
+    ctx: ggml_context_p,
+    a: ggml_tensor_p,
+    fun: "ctypes._FuncPointer",  # type: ignore
 ) -> ggml_tensor_p:
     return lib.ggml_map_unary_f32(ctx, a, fun)
 
@@ -4881,7 +4878,9 @@ lib.ggml_map_unary_f32.restype = ctypes.POINTER(ggml_tensor)
 #         struct ggml_tensor         * a,
 #                 ggml_unary_op_f32_t   fun);
 def ggml_map_unary_inplace_f32(
-    ctx: ggml_context_p, a: ggml_tensor_p, fun: "ctypes._FuncPointer"  # type: ignore
+    ctx: ggml_context_p,
+    a: ggml_tensor_p,
+    fun: "ctypes._FuncPointer",  # type: ignore
 ) -> ggml_tensor_p:
     return lib.ggml_map_unary_inplace_f32(ctx, a, fun)
 
@@ -4945,7 +4944,9 @@ lib.ggml_map_binary_inplace_f32.restype = ctypes.POINTER(ggml_tensor)
 #         struct ggml_tensor           * a,
 #                 ggml_custom1_op_f32_t   fun);
 def ggml_map_custom1_f32(
-    ctx: ggml_context_p, a: ggml_tensor_p, fun: "ctypes._FuncPointer"  # type: ignore
+    ctx: ggml_context_p,
+    a: ggml_tensor_p,
+    fun: "ctypes._FuncPointer",  # type: ignore
 ) -> ggml_tensor_p:
     """Custom unary operator on a tensor.
 
@@ -4985,7 +4986,9 @@ lib.ggml_map_custom1_f32.restype = ctypes.POINTER(ggml_tensor)
 #         struct ggml_tensor           * a,
 #                 ggml_custom1_op_f32_t   fun);
 def ggml_map_custom1_inplace_f32(
-    ctx: ggml_context_p, a: ggml_tensor_p, fun: "ctypes._CFuncPtr"  # type: ignore
+    ctx: ggml_context_p,
+    a: ggml_tensor_p,
+    fun: "ctypes._CFuncPtr",  # type: ignore
 ) -> ggml_tensor_p:
     """Custom unary operator on a tensor inplace.
 

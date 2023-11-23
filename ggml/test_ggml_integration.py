@@ -1,24 +1,21 @@
-import ggml
 import ctypes
-import torch
-import pytest
-import numpy as np
-import torch
-import fairseq2.nn
-import fairseq2.nn.transformer
+import functools
 import logging
 import sys
-import functools
-from typing import Tuple
-from pathlib import Path
-from ctypes_utils import Ptr
 from ctypes import c_void_p
-from typing import Any
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator, Tuple
+
+import fairseq2.nn
+import fairseq2.nn.transformer
+import numpy as np
+import pytest
+import torch
+
+import ggml
+from ctypes_utils import Ptr
 from ggml import NativeObj
 from ggml_convert import convert_model
-from seamless_communication.models.inference.translator import Translator, Modality
 
 Ctx = ggml.ggml_context_p
 

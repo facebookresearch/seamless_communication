@@ -6,22 +6,21 @@
 
 import dataclasses
 import logging
+import math
 import struct
 from enum import Enum
 from io import BufferedWriter
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, Union
-import math
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import torch
-import ggml
-from typing import Callable
-from typing import Optional
-from typing import List
 from fairseq2.assets import AssetCard
 from fairseq2.models.transformer.frontend import TransformerEmbeddingFrontend
 from fairseq2.nn import SinusoidalPositionEncoder
 from fairseq2.nn.transformer import RelativePositionalEncoding
 from seamless_communication.models.unity import load_unity_config, load_unity_model
+
+import ggml
 
 Preprocessor = Callable[[Any], Any]
 
@@ -110,7 +109,6 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
         assert isinstance(pos_encoder.weight, torch.Tensor)
         assert name not in state_dict
         state_dict[name] = pos_encoder.weight
-
 
     relative_pos_encs = find_children(model, RelativePositionalEncoding)
     # speech_encoder has several copies of the relative_pos_enc module.
