@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.typing import DataType, Device
@@ -32,7 +32,7 @@ class VocoderConfig:
     num_langs: int
     spkr_embedding_dim: int
     num_spkrs: int
-    lang_spkr_idx_map: Dict
+    lang_spkr_idx_map: Dict[str, Any]
 
 
 vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_code_hifigan")
@@ -93,7 +93,6 @@ class VocoderBuilder:
             The data type of module parameters and buffers.
         """
         self.config = config
-
         self.device, self.dtype = device, dtype
 
     def build_model(self) -> Vocoder:
@@ -114,8 +113,8 @@ class VocoderBuilder:
             self.config.spkr_embedding_dim,
             self.config.num_spkrs,
         )
+        code_generator.to(device=self.device, dtype=self.dtype)
         vocoder = Vocoder(code_generator, self.config.lang_spkr_idx_map)
-        vocoder.to(dtype=self.dtype)
         return vocoder
 
 
@@ -163,7 +162,7 @@ def _base_mel_vocoder() -> VocoderConfig:
 
 
 @mel_vocoder_arch("24khz_mel")
-def _base_mel_vocoder() -> VocoderConfig:
+def _24khz_mel_vocoder() -> VocoderConfig:
     return VocoderConfig(
         upsample_rates=[5, 4, 4, 3],
         upsample_kernel_sizes=[10, 8, 8, 6],
@@ -206,7 +205,7 @@ class MelVocoderBuilder:
             self.config.resblock_dilation_sizes,
             self.config.model_in_dim,
         )
-        generator.to(dtype=self.dtype, device=self.device)
+        generator.to(device=self.device, dtype=self.dtype)
         return generator
 
 

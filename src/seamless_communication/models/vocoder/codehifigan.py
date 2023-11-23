@@ -73,7 +73,7 @@ class CodeGenerator(Generator):
         return signal
 
     def forward(self, sample: Dict[str, Any], dur_prediction: bool) -> Tensor:  # type: ignore
-        x = sample["code"].clone().to(device=self.dict.weight.device)
+        x = sample["code"]
         x = self.dict(x).transpose(1, 2)
 
         if self.dur_predictor and dur_prediction:
@@ -85,11 +85,11 @@ class CodeGenerator(Generator):
             # B x C x T
             x = torch.repeat_interleave(x, dur_out.view(-1), dim=2)
 
-        spkr = self.spkr(sample["spkr"].to(self.spkr.weight.device)).transpose(1, 2)
+        spkr = self.spkr(sample["spkr"]).transpose(1, 2)
         spkr = self._upsample(spkr, x.shape[-1])
         x = torch.cat([x, spkr], dim=1)
 
-        lang = self.lang(sample["lang"].to(self.lang.weight.device)).transpose(1, 2)
+        lang = self.lang(sample["lang"]).transpose(1, 2)
         lang = self._upsample(lang, x.shape[-1])
         x = torch.cat([lang, x], dim=1)
 

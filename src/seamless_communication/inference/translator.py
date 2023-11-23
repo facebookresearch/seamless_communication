@@ -151,7 +151,7 @@ class Translator(nn.Module):
             output_modality is None or output_modality == Modality.SPEECH
         ):
             self.vocoder = load_vocoder_model(
-                vocoder_name_or_card, device=device, dtype=torch.float32
+                vocoder_name_or_card, device=device, dtype=dtype
             )
             self.vocoder.eval()
 
@@ -232,7 +232,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-        src_text: Optional[str] = None 
+        src_text: Optional[str] = None,
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -259,15 +259,17 @@ class Translator(nn.Module):
             Optional source transcript (obtained by ASR for instance). This is used for
             applying mintox toxicity mitigation. If this is not specify and apply_mintox=True
             then src_lang must be specified and ASR will be run on the audio source.
-            
+
         :returns:
             - Batched list of Translated text.
             - Translated BatchedSpeechOutput.
         """
         input_modality, output_modality = self.get_modalities_from_task_str(task_str)
 
-        if self.apply_mintox and not (src_lang is not None or src_text is not None) :
-            raise ValueError("`src_lang` must be specified when `apply_mintox` is `True` or you need to specify src_text.")
+        if self.apply_mintox and not (src_lang is not None or src_text is not None):
+            raise ValueError(
+                "`src_lang` must be specified when `apply_mintox` is `True` or you need to specify src_text."
+            )
 
         if isinstance(input, dict):
             src = cast(SequenceData, input)
@@ -384,20 +386,18 @@ class Translator(nn.Module):
 
             audio_wavs = []
             speech_units = []
-            for i in range(len(unit_output.units)):
-                u = units[i].cpu().numpy().tolist()
-                index_of_first_one = next(
-                    (index for index, value in enumerate(u) if value == 1), len(u)
+            for i in range(len(units)):
+                padding_mask = (
+                    units[i] != self.model.t2u_model.target_vocab_info.pad_idx
                 )
-                u = u[:index_of_first_one]
-                speech_units.append(u)
+                u = units[i][padding_mask]
                 if self.vocoder is not None:
                     # TODO: Implement batched inference for vocoder.
                     translated_audio_wav = self.vocoder(
                         u, tgt_lang, spkr, dur_prediction=duration_prediction
                     )
                     audio_wavs.append(translated_audio_wav)
-
+                speech_units.append(u.tolist())
             return (
                 text_output.sentences,
                 BatchedSpeechOutput(

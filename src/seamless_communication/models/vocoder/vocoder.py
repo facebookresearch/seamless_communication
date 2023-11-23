@@ -4,36 +4,40 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import torch
-import torch.nn as nn
 from torch import Tensor
+from torch.nn import Module
 
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
 
 
-class Vocoder(nn.Module):
-    def __init__(self, code_generator: CodeGenerator, lang_spkr_idx_map: Dict):
-        super(Vocoder, self).__init__()
+class Vocoder(Module):
+    def __init__(
+        self,
+        code_generator: CodeGenerator,
+        lang_spkr_idx_map: Dict[str, Any],
+    ):
+        super().__init__()
         self.code_generator = code_generator
         self.lang_spkr_idx_map = lang_spkr_idx_map
 
     def forward(
         self,
-        code: List[int],
+        units: Tensor,
         lang: str,
         spkr: Optional[int] = -1,
         dur_prediction: bool = True,
     ) -> Tensor:
-        x = {
-            "code": torch.LongTensor(code).view(1, -1),
-        }
         lang_idx = self.lang_spkr_idx_map["multilingual"][lang]
         spkr_list = self.lang_spkr_idx_map["multispkr"][lang]
         if not spkr:
             spkr = -1
         spkr = spkr_list[0] if spkr == -1 else spkr
-        x["spkr"] = torch.tensor([[spkr]])
-        x["lang"] = torch.tensor([[lang_idx]])
-        return self.code_generator(x, dur_prediction)
+        x = {
+            "code": units.view(1, -1),
+            "spkr": torch.tensor([[spkr]], device=units.device),
+            "lang": torch.tensor([[lang_idx]], device=units.device),
+        }
+        return self.code_generator(x, dur_prediction)  # type: ignore[no-any-return]

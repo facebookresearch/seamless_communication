@@ -34,7 +34,7 @@ def convert_vocoder_checkpoint(
     for key in old_state_dict:
         new_key = f"code_generator.{key}"
         new_state_dict[new_key] = old_state_dict[key]
-    checkpoint["model"] = new_state_dict
+    checkpoint["model"] = new_state_dict  # type: ignore
     del checkpoint["generator"]  # type: ignore
     return checkpoint
 

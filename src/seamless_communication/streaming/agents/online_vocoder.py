@@ -37,15 +37,14 @@ class VocoderAgent(TextToSpeechAgent):  # type: ignore
                 return ReadAction()
 
         tgt_lang = states.tgt_lang if states.tgt_lang else self.tgt_lang
-        u = units[0][0].tolist()
-        wav_samples = self.vocoder(u, tgt_lang, self.speaker_id, dur_prediction=False)[
-            0
-        ][0].tolist()
+        u = units[0][0]
+
+        wav = self.vocoder(u, tgt_lang, self.speaker_id, dur_prediction=False)
         states.source = []
 
         return WriteAction(
             SpeechSegment(
-                content=wav_samples,
+                content=wav[0][0].tolist(),
                 finished=states.source_finished,
                 sample_rate=self.sample_rate,
                 tgt_lang=tgt_lang,

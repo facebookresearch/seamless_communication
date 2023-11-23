@@ -5,9 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-from itertools import groupby
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 import torch
 import torch.nn.functional as F
@@ -103,15 +102,11 @@ class UnitExtractor(nn.Module):
         units: Tensor,
         src_lang: str,
         device: Device,
-        vocoder_name: str = "vocoder_36langs",
+        dtype: DataType,
+        vocoder_name: str = "vocoder_v2",
     ) -> Tensor:
-        def reduce_list(lst: List[Tensor]) -> List[Tensor]:
-            return [key for key, _ in groupby(lst)]
-
-        reduced_units = reduce_list(units.cpu().tolist())
-
-        vocoder = load_vocoder_model(vocoder_name, device=device, dtype=torch.float32)
+        vocoder = load_vocoder_model(vocoder_name, device=device, dtype=dtype)
         vocoder.eval()
         assert isinstance(vocoder, Vocoder)
-        wav = vocoder(reduced_units, src_lang, spkr=-1, dur_prediction=True)
+        wav = vocoder(units, src_lang, spkr=-1, dur_prediction=True)
         return wav  # type: ignore[no-any-return]

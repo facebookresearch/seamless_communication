@@ -27,7 +27,7 @@ def test_pretssel_vocoder(example_rate16k_audio: AudioDecoderOutput) -> None:
 
     feat = convert_to_collated_fbank(audio_dict, dtype=dtype)["seqs"][0]
 
-    vocoder = load_mel_vocoder_model("vocoder_mel", device=device, dtype=torch.float32)
+    vocoder = load_mel_vocoder_model("vocoder_mel", device=device, dtype=dtype)
     vocoder.eval()
 
     with torch.inference_mode():

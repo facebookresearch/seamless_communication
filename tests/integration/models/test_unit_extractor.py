@@ -7,12 +7,12 @@
 from typing import Final
 
 import torch
-from fairseq2.typing import Device
 from torch import tensor
 
+from fairseq2.typing import Device
 from seamless_communication.inference import Translator
 from seamless_communication.models.unit_extractor import UnitExtractor
-from tests.common import assert_equal, device, get_default_dtype
+from tests.common import assert_equal
 
 # fmt: off
 REF_ENG_UNITS: Final = [8976, 8299, 0, 0, 9692, 5395, 785, 785, 7805, 6193, 2922, 4806, 3362, 3560, 8119, 8119, 4335, 205, 5424, 5424, 5064, 7421, 6547, 9952, 3728, 8544, 3321, 1093, 1443, 7962, 3978, 8063, 5168, 5491, 9133, 9275, 5912, 8729, 5097, 5495, 1650, 5048, 2839, 6756, 5665, 4191, 5205, 5205, 9568, 9568, 5932, 1190, 9339, 5839, 5839, 6244, 5320, 3454, 5216, 721, 6994, 6513, 7754, 3469, 296, 1849, 3254, 3254, 5042, 5042, 3961, 2079, 1907, 1846, 661, 2225, 944, 9295, 4712, 1785, 6060, 8701, 7646, 1355, 2876, 8199, 5901, 8199, 3861, 5153, 6420, 2897, 1389, 334, 6334]
@@ -23,7 +23,9 @@ def test_unit_extractor() -> None:
     model_name = "seamlessM4T_v2_large"
     english_text = "Hello! I hope you're all doing well."
 
-    dtype = get_default_dtype()
+    # We can't test on the GPU since the output is non-deterministic.
+    device = Device("cpu")
+    dtype = torch.float32
 
     translator = Translator(model_name, "vocoder_v2", device, dtype=dtype)
 

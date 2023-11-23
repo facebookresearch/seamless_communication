@@ -6,9 +6,6 @@
 
 from typing import Final
 
-import torch
-from fairseq2.typing import Device
-
 from seamless_communication.inference import Translator
 from tests.common import device, get_default_dtype
 
