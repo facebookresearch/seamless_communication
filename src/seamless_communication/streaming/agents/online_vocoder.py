@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
+import torch
 
 from seamless_communication.models.vocoder.vocoder import Vocoder
 from simuleval.agents import AgentStates, TextToSpeechAgent
@@ -22,6 +23,7 @@ class VocoderAgent(TextToSpeechAgent):  # type: ignore
         self.tgt_lang = args.tgt_lang
         self.speaker_id = args.vocoder_speaker_id
 
+    @torch.inference_mode()
     def policy(self, states: AgentStates) -> WriteAction:
         """
         The policy is always write if there are units

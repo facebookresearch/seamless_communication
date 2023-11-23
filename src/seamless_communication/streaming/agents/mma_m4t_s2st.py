@@ -18,6 +18,7 @@ from seamless_communication.streaming.agents.online_unit_decoder import (
 )
 from seamless_communication.streaming.agents.silero_vad import SileroVADAgent
 from seamless_communication.streaming.agents.online_vocoder import VocoderAgent
+from seamless_communication.streaming.agents.pretssel_vocoder import PretsselVocoderAgent
 
 from seamless_communication.streaming.agents.detokenizer import UnitYDetokenizerAgent
 from seamless_communication.streaming.agents.unity_pipeline import (
@@ -27,7 +28,6 @@ from seamless_communication.streaming.agents.unity_pipeline import (
 from simuleval.utils import entrypoint
 
 
-@entrypoint
 class MonotonicM4TS2STAgent(UnitYAgentPipeline):
     pipeline = [
         OnlineFeatureExtractorAgent,
@@ -35,6 +35,16 @@ class MonotonicM4TS2STAgent(UnitYAgentPipeline):
         UnitYMMATextDecoderAgent,
         NARUnitYUnitDecoderAgent,
         VocoderAgent,
+    ]
+
+
+class SeamlessS2STAgent(UnitYAgentPipeline):
+    pipeline = [
+        OnlineFeatureExtractorAgent,
+        OfflineWav2VecBertEncoderAgent,
+        UnitYMMATextDecoderAgent,
+        NARUnitYUnitDecoderAgent,
+        PretsselVocoderAgent,
     ]
 
 

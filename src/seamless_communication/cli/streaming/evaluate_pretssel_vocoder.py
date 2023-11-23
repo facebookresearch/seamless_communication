@@ -7,7 +7,7 @@
 from seamless_communication.cli.streaming.scorers.seamless_whisper_asr_bleu import (
     SeamlessWhisperASRSacreBLEUScorer as SeamlessWhisperASRSacreBLEUScorer,
 )
-from seamless_communication.streaming.agents.mma_m4t_s2st import MonotonicM4TS2STAgent
+from seamless_communication.streaming.agents.mma_m4t_s2st import SeamlessS2STAgent
 from simuleval.cli import evaluate
 
 
@@ -24,7 +24,8 @@ if __name__ == "__main__":
     )
 
     model_configs = dict(
-        agent_class="seamless_communication.streaming.agents.mma_m4t_s2st.MonotonicM4TS2STAgent",
+        vocoder_name="vocoder_pretssel_16khz",
+        agent_class="seamless_communication.streaming.agents.mma_m4t_s2st.SeamlessS2STAgent",
         source_segment_size=320,
         task="s2st",
         device="cuda:0",
@@ -38,11 +39,11 @@ if __name__ == "__main__":
     )
 
     eval_configs = dict(
-        output=f"MonotonicM4TS2STAgent_spa-eng_debug",
+        output=f"SeamlessS2STAgent_spa-eng_debug",
         quality_metrics="SEAMLESS_WHISPER_ASR_BLEU",
         latency_metrics="StartOffset EndOffset",
         whisper_model_size="large-v2",
         normalize_asr_bleu_references=True,
     )
 
-    evaluate(MonotonicM4TS2STAgent, {**data_configs, **model_configs, **eval_configs})
+    evaluate(SeamlessS2STAgent, {**data_configs, **model_configs, **eval_configs})
