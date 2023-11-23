@@ -14,6 +14,10 @@ from seamless_communication.streaming.agents.common import (
     AgentStates,
     NoUpdateTargetMixin,
 )
+from seamless_communication.streaming.agents.online_text_decoder import (
+    UnitYTextDecoderOutput,
+)
+from simuleval.data.segments import Segment, EmptySegment
 
 
 class DetokenizerAgent(NoUpdateTargetMixin, TextToTextAgent):  # type: ignore
@@ -54,3 +58,22 @@ class DetokenizerAgent(NoUpdateTargetMixin, TextToTextAgent):  # type: ignore
 
     def decode(self, x: str) -> str:
         return x.replace(" ", "").replace("\u2581", " ").strip()
+
+
+class UnitYDetokenizerAgentStates(AgentStates):
+    def update_source(self, segment: Segment) -> None:
+        """
+        Extract tokens from UnitYTextDecoderOutput
+        """
+        self.source_finished = segment.finished
+        if isinstance(segment, EmptySegment):
+            return
+        # TextSegment
+        segment_content: UnitYTextDecoderOutput = segment.content
+        token = segment_content.tokens
+        self.source += token
+
+
+class UnitYDetokenizerAgent(DetokenizerAgent):
+    def build_states(self) -> UnitYDetokenizerAgentStates:
+        return UnitYDetokenizerAgentStates()

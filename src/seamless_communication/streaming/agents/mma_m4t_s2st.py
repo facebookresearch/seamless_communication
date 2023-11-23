@@ -16,9 +16,14 @@ from seamless_communication.streaming.agents.online_text_decoder import (
 from seamless_communication.streaming.agents.online_unit_decoder import (
     NARUnitYUnitDecoderAgent,
 )
+from seamless_communication.streaming.agents.silero_vad import SileroVADAgent
 from seamless_communication.streaming.agents.online_vocoder import VocoderAgent
 
-from seamless_communication.streaming.agents.unity_pipeline import UnitYAgentPipeline
+from seamless_communication.streaming.agents.detokenizer import UnitYDetokenizerAgent
+from seamless_communication.streaming.agents.unity_pipeline import (
+    UnitYAgentPipeline,
+    UnitYAgentTreePipeline,
+)
 from simuleval.utils import entrypoint
 
 
@@ -31,3 +36,26 @@ class MonotonicM4TS2STAgent(UnitYAgentPipeline):
         NARUnitYUnitDecoderAgent,
         VocoderAgent,
     ]
+
+
+class MonotonicM4TS2STVADAgent(UnitYAgentPipeline):
+    pipeline = [
+        SileroVADAgent,
+        OnlineFeatureExtractorAgent,
+        OfflineWav2VecBertEncoderAgent,
+        UnitYMMATextDecoderAgent,
+        NARUnitYUnitDecoderAgent,
+        VocoderAgent,
+    ]
+
+
+class MonotonicM4TS2STJointVADAgent(UnitYAgentTreePipeline):
+    pipeline = {
+        SileroVADAgent: [OnlineFeatureExtractorAgent],
+        OnlineFeatureExtractorAgent: [OfflineWav2VecBertEncoderAgent],
+        OfflineWav2VecBertEncoderAgent: [UnitYMMATextDecoderAgent],
+        UnitYMMATextDecoderAgent: [UnitYDetokenizerAgent, NARUnitYUnitDecoderAgent],
+        UnitYDetokenizerAgent: [],
+        NARUnitYUnitDecoderAgent: [VocoderAgent],
+        VocoderAgent: [],
+    }
