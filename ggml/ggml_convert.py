@@ -106,9 +106,9 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
         [x[0] for x in pos_encoders],
     )
     for name, pos_encoder in pos_encoders:
-        assert isinstance(pos_encoder.weight, torch.Tensor)
+        assert isinstance(pos_encoder.freqs, torch.Tensor)
         assert name not in state_dict
-        state_dict[name] = pos_encoder.weight
+        state_dict[name] = pos_encoder.freqs
 
     relative_pos_encs = find_children(model, RelativePositionalEncoding)
     # speech_encoder has several copies of the relative_pos_enc module.
@@ -116,8 +116,8 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
     if relative_pos_encs:
         print("Merging all speech_encoder RelativePositionalEncoding into one.")
         _, rel_pos_enc = relative_pos_encs[0]
-        assert isinstance(rel_pos_enc.weight, torch.Tensor)
-        state_dict["speech_encoder.pos_enc"] = rel_pos_enc.weight
+        assert isinstance(rel_pos_enc.freqs, torch.Tensor)
+        state_dict["speech_encoder.pos_enc"] = rel_pos_enc.freqs
 
 
 def write_ggml_file(

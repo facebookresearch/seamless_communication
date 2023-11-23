@@ -67,9 +67,7 @@ def g_model(ctx: Ctx) -> c_void_p:
 
 @functools.lru_cache(maxsize=1)
 def load_translator() -> Translator:
-    return Translator(
-        "seamlessM4T_medium", "vocoder_36langs", torch.device("cpu"), torch.float32
-    )
+    return Translator("seamlessM4T_medium", None, device=torch.device("cpu"))
 
 
 def load_pt_model() -> Any:
@@ -271,7 +269,7 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
 
             nodes = ggml.nodes(gf)
             state = state_bag.get_state(attn, fairseq2.nn.transformer.AttentionState)
-            state_bag.increment_step()
+            state_bag.increment_step_nr()
             assert state is not None
             assert np.allclose(
                 state.get()[0].transpose(1, 2).reshape(2, t + 1, -1).numpy(),
@@ -329,14 +327,14 @@ def test_MultiheadAttention_forward_cross_attn_with_cache(
                 )
                 assert state is not None
                 assert np.allclose(
-                    state.get()[0].transpose(1, 2).reshape(2, 11, -1).numpy(),
+                    state.get()[0].transpose(1, 2).numpy(),
                     ggml.to_numpy(
-                        nodes[b"text_decoder.layers.0.encoder_decoder_attn.k_cache"]
+                        nodes[b"text_decoder.layers.0.encoder_decoder_attn.k_cache (view)"]
                     ),
                     atol=1e-3,
                 )
 
-            state_bag.increment_step()
+            state_bag.increment_step_nr()
             y_exp = attn(xq, None, xk, None, xk, state_bag=state_bag).numpy()
             assert y_exp.shape == (2, 1, 1024)
             assert np.allclose(y, y_exp, atol=1e-2)
@@ -577,7 +575,7 @@ def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> 
             y = ggml.to_numpy(gy)
 
             y_exp = pos_encoder(seq[:, t : t + 1, :], None, state_bag=state_bag).numpy()
-            state_bag.increment_step()
+            state_bag.increment_step_nr()
             assert y.shape == y_exp.shape
             assert np.allclose(y_exp, y, atol=1e-6)
 
@@ -730,10 +728,13 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
             translator.model,
             translator.text_tokenizer,
             translator.unit_tokenizer,
-            src,
+            src["seqs"],
+            padding_mask=None,
             input_modality=Modality.SPEECH,
             output_modality=Modality.TEXT,
             tgt_lang="cmn",
+            text_generation_opts=SequenceGeneratorOptions(),
+            unit_generation_opts=None,
         )
 
         tgt_text = str(text_out.sentences[0])
@@ -752,10 +753,10 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
             hypotheses=hypotheses,
         )
 
-    text_out = np.load(sample_file, allow_pickle=True)
-    encoder_out = ggml.from_numpy(ctx, text_out["encoder_output"])
-    tgt_tokens = text_out["hypotheses"][0]["seq"]
-    max_seq_len = max(len(h["seq"]) for h in text_out["hypotheses"])
+    exp = np.load(sample_file, allow_pickle=True)
+    encoder_out = ggml.from_numpy(ctx, exp["encoder_output"])
+    tgt_tokens = exp["hypotheses"][0]["seq"]
+    max_seq_len = max(len(h["seq"]) for h in exp["hypotheses"])
     max_seq_len = int(max_seq_len * 1.5)
 
     # Apply scale before sending into ggml!
@@ -766,7 +767,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
         g_model,
         "speech_encoder",
         gx,
-        None,  # TODO support padding mask
+        NULLPTR,  # TODO support padding mask
     )
     gf = ggml.ggml_build_forward(encoder_out)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
@@ -789,7 +790,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
     result_ptr = ggml.generate_sequence(g_model, Ptr(job), encoder_out, NULLPTR, ctx)
     results = [result_ptr[i] for i in range(beam_size) if result_ptr[i].seq != None]
     assert_hypotheses(
-        text_out["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1
+        exp["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1
     )
 
 

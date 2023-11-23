@@ -43,7 +43,7 @@ def from_numpy_dtype(dtype: np.dtype) -> ctypes.c_int:
         type_name = ggml_type_name(t)
         if name != type_name:
             raise RuntimeError(
-                f"Type '{name}' doesn't have value {value}. ggml.h was probably updated but not ggml.py"
+                f"Type {name!r} doesn't have value {value}. ggml.h was probably updated but not ggml.py"
             )
         return t
 
