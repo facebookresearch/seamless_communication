@@ -69,3 +69,15 @@ class MonotonicM4TS2STJointVADAgent(UnitYAgentTreePipeline):
         NARUnitYUnitDecoderAgent: [VocoderAgent],
         VocoderAgent: [],
     }
+
+
+class SeamlessS2STJointVADAgent(UnitYAgentTreePipeline):
+    pipeline = {
+        SileroVADAgent: [OnlineFeatureExtractorAgent],
+        OnlineFeatureExtractorAgent: [OfflineWav2VecBertEncoderAgent],
+        OfflineWav2VecBertEncoderAgent: [UnitYMMATextDecoderAgent],
+        UnitYMMATextDecoderAgent: [UnitYDetokenizerAgent, NARUnitYUnitDecoderAgent],
+        UnitYDetokenizerAgent: [],
+        NARUnitYUnitDecoderAgent: [PretsselVocoderAgent],
+        PretsselVocoderAgent: [],
+    }
