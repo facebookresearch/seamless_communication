@@ -19,6 +19,7 @@ from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
 from fairseq2.typing import DataType, Device
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -156,20 +157,52 @@ class Transcriber(nn.Module):
             seq.append(arr[idx])
         return (maximum, reversed(seq))
 
+    @staticmethod
+    def generate_dtw(
+        arr: np.array,
+    ) -> List[Tuple[int, int]]:
+        n = arr.shape[0] - 1
+        m = arr.shape[1] - 1
+        path = [(n, m)]
+        while n > 0 or m > 0:
+            if n == 0:
+                next_pos = (0, m - 1)
+            elif m == 0:
+                next_pos = (n - 1, 0)
+            else:
+                val = min(arr[n - 1, m - 1], arr[n - 1, m], arr[n, m - 1])
+                if val == arr[n - 1, m - 1]:
+                    next_pos = (n - 1, m - 1)
+                elif val == arr[n - 1, m]:
+                    next_pos = (n - 1, m)
+                else:
+                    next_pos = (n, m - 1)
+            path.append(next_pos)
+            n, m = next_pos
+        return path[::-1]
+
     @classmethod
-    def _extract_timestamps(cls, attn_weights, audio_len) -> List[float]:
+    def _extract_timestamps(cls, attn_weights, audio_len, use_dtw) -> List[float]:
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
-        col_maxes = np.argmax(attn_weights, axis=0)
-        lis_input = [
-            (out_tok_idx, -enc_bin_idx)
-            for enc_bin_idx, out_tok_idx in enumerate(col_maxes)
-        ]
-        tok_idx_to_start_enc_bin_idx = {
-            out_tok_idx: -enc_bin_idx
-            for out_tok_idx, enc_bin_idx in cls.generate_lis(lis_input)[1]
-        }
+        attn_weights = attn_weights / attn_weights.sum(axis=0, keepdims=1)  # normalize
+        if not use_dtw:  # longest increasing subsequence
+            col_maxes = np.argmax(attn_weights, axis=0)
+            lis_input = [
+                (out_tok_idx, -enc_bin_idx)
+                for enc_bin_idx, out_tok_idx in enumerate(col_maxes)
+            ]
+            tok_idx_to_start_enc_bin_idx = {
+                out_tok_idx: -enc_bin_idx
+                for out_tok_idx, enc_bin_idx in cls.generate_lis(lis_input)[1]
+            }
+        else:  # dynamic time warping
+            dtw_path = cls.generate_dtw(-attn_weights)
+            tok_idx_to_start_enc_bin_idx = {
+                out_tok_idx: enc_bin_idx
+                for out_tok_idx, enc_bin_idx in reversed(dtw_path)
+            }
         prev_start = 0
         starts = []
         for tok_idx in range(num_out_tokens):
@@ -211,6 +244,7 @@ class Transcriber(nn.Module):
         fbanks: torch.Tensor,
         src_lang: str,
         length_seconds: float,
+        use_dtw: bool,
         gen_opts: SequenceGeneratorOptions,
     ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
@@ -234,7 +268,9 @@ class Transcriber(nn.Module):
         token_ids = output.results[0][0].seq.squeeze(0)[prefix_len:].tolist()
         step_scores = output.results[0][0].step_scores[prefix_len:].tolist()
         enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
-        token_timestamps = self._extract_timestamps(enc_dec_attn_scores, length_seconds)
+        token_timestamps = self._extract_timestamps(
+            enc_dec_attn_scores, length_seconds, use_dtw
+        )
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
         ]
@@ -249,6 +285,7 @@ class Transcriber(nn.Module):
         audio: Union[str, Tensor],
         src_lang: str,
         sample_rate: int = 16000,
+        use_dtw: bool = False,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -260,6 +297,9 @@ class Transcriber(nn.Module):
             Source language of audio.
         :param sample_rate:
             Sample rate of the audio Tensor.
+        :param use_dtw:
+            Use Dynamic Time Warping to extract timestamps
+            rather than default Longest Increasing Subsequence
         :params **sequence_generator_options:
             - beam_size
             - min_seq_len
@@ -293,4 +333,4 @@ class Transcriber(nn.Module):
 
         gen_opts = SequenceGeneratorOptions(beam_size=1, **sequence_generator_options)
 
-        return self.run_inference(src, src_lang, length_seconds, gen_opts)
+        return self.run_inference(src, src_lang, length_seconds, use_dtw, gen_opts)
