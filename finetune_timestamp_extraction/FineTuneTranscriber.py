@@ -246,14 +246,14 @@ class FineTuneTranscriber:
                 )
             )
 
-    def compare(self):
+    def compare(self, **transcription_params):
         results = {}
 
         for idx, transcription in enumerate(self.transcriptions):
             print(f"Processing [{idx+1:3}/{len(self.transcriptions)}]")
 
             new_transcription = self.model.transcribe(
-                transcription.path, transcription.lang
+                transcription.path, transcription.lang, **transcription_params
             )
             new_words = [FTWord(token=token) for token in new_transcription.tokens]
             new_words.append(FTWord())  # empty so the last word always matches
