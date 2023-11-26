@@ -19,6 +19,7 @@ from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
 from fairseq2.typing import DataType, Device
 
 import numpy as np
+from scipy.signal import medfilt2d
 import matplotlib.pyplot as plt
 
 import torch
@@ -182,11 +183,15 @@ class Transcriber(nn.Module):
         return path[::-1]
 
     @classmethod
-    def _extract_timestamps(cls, attn_weights, audio_len, use_dtw) -> List[float]:
+    def _extract_timestamps(
+        cls, attn_weights, audio_len, median_filter_width, use_dtw
+    ) -> List[float]:
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
         attn_weights = attn_weights / attn_weights.sum(axis=0, keepdims=1)  # normalize
+        if median_filter_width > 0:
+            attn_weights = medfilt2d(attn_weights, kernel_size=(1, median_filter_width))
         if not use_dtw:  # longest increasing subsequence
             col_maxes = np.argmax(attn_weights, axis=0)
             lis_input = [
@@ -244,6 +249,7 @@ class Transcriber(nn.Module):
         fbanks: torch.Tensor,
         src_lang: str,
         length_seconds: float,
+        median_filter_width: int,
         use_dtw: bool,
         gen_opts: SequenceGeneratorOptions,
     ) -> Transcription:
@@ -269,7 +275,7 @@ class Transcriber(nn.Module):
         step_scores = output.results[0][0].step_scores[prefix_len:].tolist()
         enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
         token_timestamps = self._extract_timestamps(
-            enc_dec_attn_scores, length_seconds, use_dtw
+            enc_dec_attn_scores, length_seconds, median_filter_width, use_dtw
         )
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
@@ -284,6 +290,7 @@ class Transcriber(nn.Module):
         self,
         audio: Union[str, Tensor],
         src_lang: str,
+        median_filter_width: int = 0,
         sample_rate: int = 16000,
         use_dtw: bool = False,
         **sequence_generator_options: Dict,
@@ -300,6 +307,8 @@ class Transcriber(nn.Module):
         :param use_dtw:
             Use Dynamic Time Warping to extract timestamps
             rather than default Longest Increasing Subsequence
+        :param median_filter_width:
+            Window size for padding weights tensor.
         :params **sequence_generator_options:
             - beam_size
             - min_seq_len
@@ -333,4 +342,6 @@ class Transcriber(nn.Module):
 
         gen_opts = SequenceGeneratorOptions(beam_size=1, **sequence_generator_options)
 
-        return self.run_inference(src, src_lang, length_seconds, use_dtw, gen_opts)
+        return self.run_inference(
+            src, src_lang, length_seconds, median_filter_width, use_dtw, gen_opts
+        )
