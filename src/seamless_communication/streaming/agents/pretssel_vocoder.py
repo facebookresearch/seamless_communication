@@ -95,7 +95,7 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):
 
         return WriteAction(
             SpeechSegment(
-                content=wav[0][0].tolist(),
+                content=wav[0][0][0].tolist(),
                 finished=states.source_finished,
                 sample_rate=self.vocoder_sample_rate,
                 tgt_lang=tgt_lang,
