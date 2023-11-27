@@ -4,33 +4,34 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Optional
 import argparse
 import contextlib
 import logging
 from argparse import Namespace
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from tqdm import tqdm
 
 import torch
 import torchaudio
-from fairseq2.assets import asset_store
-from fairseq2.assets.card import AssetCard
-from fairseq2.data import Collater, DataPipeline, FileMapper, SequenceData
+from fairseq2.data import (
+    Collater,
+    DataPipeline,
+    FileMapper,
+)
 from fairseq2.data.audio import (
     AudioDecoder,
     WaveformToFbankConverter,
     WaveformToFbankOutput,
 )
-from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
-from fairseq2.generation import SequenceGeneratorOptions
-from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.data.text import StrSplitter, read_text
 from fairseq2.typing import DataType, Device
 from sacrebleu.metrics import BLEU  # type: ignore[attr-defined]
 from torch import Tensor
-from torch.nn import Module
-from tqdm import tqdm
 
+from seamless_communication.cli.expressivity.evaluate.pretssel_inference_helper import (
+    PretsselGenerator,
+)
 from seamless_communication.cli.m4t.evaluate.evaluate import (
     adjust_output_for_corrupted_inputs,
     count_lines,
@@ -40,11 +41,8 @@ from seamless_communication.cli.m4t.predict import (
     set_generation_opts,
 )
 from seamless_communication.inference import BatchedSpeechOutput, Translator
-from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 from seamless_communication.models.unity import (
-    UnitTokenizer,
     load_gcmvn_stats,
-    load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
 
@@ -56,87 +54,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class PretsselGenerator(Module):
-    def __init__(
-        self,
-        pretssel_name_or_card: str,
-        unit_tokenizer: UnitTokenizer,
-        device: Device,
-        dtype: DataType = torch.float16,
-    ):
-        super().__init__()
-        # Load the model.
-        if device == torch.device("cpu"):
-            dtype = torch.float32
-
-        self.device = device
-        self.dtype = dtype
-
-        self.pretssel_model = load_pretssel_vocoder_model(
-            pretssel_name_or_card,
-            device=device,
-            dtype=dtype,
-        )
-        self.pretssel_model.eval()
-
-        vocoder_model_card = asset_store.retrieve_card(pretssel_name_or_card)
-        self.output_sample_rate = vocoder_model_card.field("sample_rate").as_(int)
-
-        self.unit_tokenizer = unit_tokenizer
-        self.unit_collate = Collater(pad_value=unit_tokenizer.vocab_info.pad_idx)
-        self.duration_collate = Collater(pad_value=0)
-
-    @torch.inference_mode()
-    def predict(
-        self,
-        units: List[List[int]],
-        tgt_lang: str,
-        prosody_encoder_input: SequenceData,
-    ) -> BatchedSpeechOutput:
-        audio_wavs = []
-        unit_eos_token = torch.tensor(
-            [self.unit_tokenizer.vocab_info.eos_idx],
-            device=self.device,
-        )
-
-        prosody_input_seqs = prosody_encoder_input["seqs"]
-        prosody_input_lens = prosody_encoder_input["seq_lens"]
-
-        for i, u in enumerate(units):
-            unit = torch.tensor(u).to(unit_eos_token)
-
-            # adjust the control symbols for the embedding
-            unit += 4
-            unit = torch.cat([unit, unit_eos_token], dim=0)
-
-            unit, duration = torch.unique_consecutive(unit, return_counts=True)
-
-            # adjust for the last eos token
-            duration[-1] = 0
-
-            duration *= 2
-
-            prosody_input_seq = prosody_input_seqs[i][: prosody_input_lens[i]]
-
-            audio_wav = self.pretssel_model(
-                unit,
-                tgt_lang,
-                prosody_input_seq,
-                durations=duration.unsqueeze(0),
-            )
-
-            audio_wavs.append(audio_wav)
-
-        return BatchedSpeechOutput(
-            units=units,
-            audio_wavs=audio_wavs,
-            sample_rate=self.output_sample_rate,
-        )
-
-
 def build_data_pipeline(
     args: Namespace,
-    text_tokenizer: TextTokenizer,
     device: Device,
     dtype: DataType,
     gcmvn_mean: Tensor,
@@ -232,22 +151,18 @@ def main() -> None:
         device = torch.device("cpu")
         dtype = torch.float32
 
-    text_tokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
 
     _gcmvn_mean, _gcmvn_std = load_gcmvn_stats(args.vocoder_name)
     gcmvn_mean = torch.tensor(_gcmvn_mean, device=device, dtype=dtype)
     gcmvn_std = torch.tensor(_gcmvn_std, device=device, dtype=dtype)
 
-    pipeline = build_data_pipeline(
-        args, text_tokenizer, device, dtype, gcmvn_mean, gcmvn_std
-    )
+    pipeline = build_data_pipeline(args, device, dtype, gcmvn_mean, gcmvn_std)
 
     translator = Translator(
         args.model_name,
         vocoder_name_or_card=None,
         device=device,
-        text_tokenizer=text_tokenizer,
         dtype=dtype,
     )
 
@@ -261,7 +176,7 @@ def main() -> None:
 
     pretssel_generator = PretsselGenerator(
         args.vocoder_name,
-        unit_tokenizer=unit_tokenizer,
+        vocab_info=unit_tokenizer.vocab_info,
         device=device,
         dtype=dtype,
     )
@@ -272,7 +187,7 @@ def main() -> None:
     output_path = args.output_path / args.data_file.stem
     output_path.mkdir(parents=True, exist_ok=True)
 
-    waveforms_dir = output_path / f"waveform"
+    waveforms_dir = output_path / "waveform"
     waveforms_dir.mkdir(parents=True, exist_ok=True)
 
     hyps = []

@@ -7,10 +7,7 @@
 
 name: seamlesswatermark
 model_type: seanet
-checkpoint: "/large_experiments/seamless/nllb/watermarking/checkpoints/ckpt_e9d0008c.th"
-watermarker_model:
-  channels: 1
-  sample_rate: 16000
+checkpoint: "/checkpoint/hadyelsahar/experiments/audiocraft/outputs/xps/6f05be46/checkpoint.th"
 seanet:
   activation: ELU
   activation_params:

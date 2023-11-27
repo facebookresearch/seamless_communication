@@ -196,7 +196,7 @@ def run_eval(
     output_path.mkdir(parents=True, exist_ok=True)
 
     if ctx.output_modality == Modality.SPEECH:
-        waveforms_dir = output_path / f"waveform"
+        waveforms_dir = output_path / "waveform"
         waveforms_dir.mkdir(parents=True, exist_ok=True)
 
     hyps = []

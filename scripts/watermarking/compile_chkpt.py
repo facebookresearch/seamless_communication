@@ -128,7 +128,9 @@ def wm_key_map() -> Mapping[Any, Any]:
     }
 
 
-def combine_chkpts(pretssel_file: str, vocoder_file: str, out_path: str) -> None:
+def combine_chkpts(
+    pretssel_file: str, vocoder_file: str, wm_file: str, out_path: str
+) -> None:
     """Combine the pretssel and melhifigan into one model"""
     pretssel_chkpt = load_checkpoint(pretssel_file)
     pretssel_chkpt = convert_fairseq_checkpoint(pretssel_chkpt, pretssel_key_map())
@@ -136,10 +138,10 @@ def combine_chkpts(pretssel_file: str, vocoder_file: str, out_path: str) -> None
     vocoder_chkpt = load_checkpoint(vocoder_file)
     vocoder_chkpt = convert_fairseq_checkpoint(vocoder_chkpt, vocoder_key_map())
 
-    wm_ckpt = load_checkpoint(
-        "/large_experiments/seamless/nllb/watermarking/checkpoints/ckpt_e9d0008c.th",
-    )
-    # wm_ckpt is not a fairseq2 checkpoint so we have to handle it differently
+    wm_ckpt = load_checkpoint(wm_file)
+    # some wm checkpoints are not a fairseq2 checkpoint, so we have to inspect it differently
+    if "model" in wm_ckpt:
+        wm_ckpt = wm_ckpt["model"]
     wm_ckpt = convert_model_state_dict(wm_ckpt, wm_key_map())
 
     # Merge the state dicts
@@ -170,7 +172,6 @@ def combine_chkpts(pretssel_file: str, vocoder_file: str, out_path: str) -> None
         if key in state_dict:
             del state_dict[key]
 
-    out_path = "/large_experiments/seamless/workstream/expressivity/oss/checkpoints/pretssel_melhifigan_wm-final.pt"
     model_mapping_metafile = Path(out_path).with_suffix(".arch")
     with open(model_mapping_metafile, "w", encoding="utf-8") as o:
         o.write(vocoder_key_map.__doc__)  # type: ignore
@@ -197,6 +198,12 @@ if __name__ == "__main__":
         help="Path to the mel-vocoder checkpoint",
     )
     parser.add_argument(
+        "--wm",
+        default="/checkpoint/hadyelsahar/experiments/audiocraft/outputs/xps/BA6f05be46/checkpoint.th",
+        type=str,
+        help=""
+    )
+    parser.add_argument(
         "--output",
         default="/large_experiments/seamless/workstream/expressivity/oss/checkpoints/pretssel_melhifigan_wm-final.pt",
         # default="/large_experiments/seamless/workstream/expressivity/oss/checkpoints/pretssel_melhifigan_wm-20231121.pt",
@@ -205,4 +212,4 @@ if __name__ == "__main__":
     )
     # fmt: on
     args = parser.parse_args()
-    combine_chkpts(args.pretssel, args.vocoder, args.output)
+    combine_chkpts(args.pretssel, args.vocoder, args.wm, args.output)

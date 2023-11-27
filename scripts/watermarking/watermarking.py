@@ -10,7 +10,7 @@
 import math
 from argparse import ArgumentParser, ArgumentTypeError
 from pathlib import Path
-from typing import Any, Dict, Union, cast
+from typing import Any, Dict, Optional, Union, cast
 
 import audiocraft
 import omegaconf
@@ -61,12 +61,8 @@ class Watermarker(nn.Module):
         encoder (nn.Module): Watermark Encoder.
         decoder (nn.Module): Watermark Decoder.
         detector (nn.Module): Watermark Detector.
-        sample_rate (int): Audio sample rate.
-        channels (int): Number of audio channels.
     """
 
-    sample_rate: int = 0
-    channels: int = 0
     encoder: SEANetEncoder
     decoder: SEANetEncoder
     detector: SEANetEncoderKeepDimension
@@ -76,15 +72,11 @@ class Watermarker(nn.Module):
         encoder: SEANetEncoder,
         decoder: SEANetEncoder,
         detector: SEANetEncoderKeepDimension,
-        sample_rate: int,
-        channels: int,
     ):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.detector = detector
-        self.sample_rate = sample_rate
-        self.channels = channels
 
     def get_watermark(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -122,8 +114,7 @@ class Watermarker(nn.Module):
 
 
 def model_from_checkpoint(
-    checkpoint_path: Union[Path, str] = Path(__file__).parent
-    / "seamlesswatermark.yaml",
+    config_file: Union[Path, str] = "seamlesswatermark.yaml",
     device: Union[torch.device, str] = "cpu",
     dtype: DataType = torch.float32,
 ) -> Watermarker:
@@ -137,8 +128,9 @@ def model_from_checkpoint(
     >>> wav, _ = torchaudio.load("random.wav")
     >>> wav = wav.unsqueeze(0)  # add bsz dimension
 
-    # code starts here
-    >>> model = model_from_checkpoint(cfg, device = wav.device)
+    >>> model = model_from_config(cfg, device = wav.device)
+    # Other way is to load directly from the checkpoint
+    >>> model = model_from_checkpoint(checkpoint_path, device = wav.device)
 
     >>> watermark = model.get_watermark(wav)
 
@@ -157,8 +149,13 @@ def model_from_checkpoint(
     Returns:
         Watermarker: An instance of the Watermarker model loaded from the checkpoint.
     """
-    cfg = omegaconf.OmegaConf.load(checkpoint_path)
+    config_path = Path(__file__).parent / config_file
+    cfg = omegaconf.OmegaConf.load(config_path)
     state: Dict[str, Any] = torch.load(cfg["checkpoint"])
+    if "model" in state and "xp.cfg" in state:
+        cfg = omegaconf.OmegaConf.create(state["xp.cfg"])
+        omegaconf.OmegaConf.resolve(cfg)
+        state = state["model"]
     watermarking_model = get_watermarking_model(cfg)
     watermarking_model.load_state_dict(state)
     watermarking_model = watermarking_model.to(device, dtype=dtype)
@@ -167,10 +164,9 @@ def model_from_checkpoint(
 
 
 def get_watermarking_model(cfg: omegaconf.DictConfig) -> Watermarker:
-    kwargs = dict_from_config(getattr(cfg, "watermarker_model"))
     encoder, decoder = get_encodec_autoencoder(cfg)
     detector = get_detector(cfg)
-    return Watermarker(encoder, decoder, detector, **kwargs)
+    return Watermarker(encoder, decoder, detector)
 
 
 def get_encodec_autoencoder(cfg: omegaconf.DictConfig):
@@ -209,16 +205,20 @@ def parse_device_arg(value: str) -> Device:
 
 
 if __name__ == "__main__":
-    """
-    Example usage:
-    python watermarking.py --device cuda:0 detect [file.wav]
-    """
+    # Example usage: python watermarking.py --device cuda:0 detect [file.wav]
+
     parser = ArgumentParser(description="Handle the watermarking for audios")
     parser.add_argument(
         "--device",
         default="cpu",
         type=parse_device_arg,
         help="device on which to run tests (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--model-file",
+        default="seamlesswatermark.yaml",
+        type=str,
+        help="path to a config or checkpoint file (default: %(default)s)",
     )
     sub_parser = parser.add_subparsers(title="actions", dest="sub_cmd")
     detect_parser = sub_parser.add_parser("detect")
@@ -228,9 +228,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.sub_cmd == "detect":
-        model = model_from_checkpoint(device=args.device)
+        model = model_from_checkpoint(args.model_file, device=args.device)
         wav, _ = torchaudio.load(args.file)
         wav = wav.unsqueeze(0)
         wav = wav.to(args.device)
         detection = model.detect_watermark(wav)
         print(detection[:, 1, :])
+        print(torch.count_nonzero(torch.gt(detection[:, 1, :], 0.5)))

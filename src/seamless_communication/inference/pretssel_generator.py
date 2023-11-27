@@ -3,14 +3,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import torch
 import torch.nn as nn
 from fairseq2.assets import asset_store
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater, SequenceData
-from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
+from fairseq2.nn.padding import get_seqs_and_padding_mask
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 
@@ -53,7 +53,8 @@ class PretsselGenerator(nn.Module):
             dtype=dtype,
         )
         self.pretssel_model.eval()
-
+        if isinstance(vocoder_name_or_card, AssetCard):
+            vocoder_name_or_card = vocoder_name_or_card.name
         vocoder_model_card = asset_store.retrieve_card(vocoder_name_or_card)
         self.output_sample_rate = vocoder_model_card.field("sample_rate").as_(int)
 

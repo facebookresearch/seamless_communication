@@ -484,9 +484,9 @@ class PretsselVocoder(Module):
         duration_factor: float = 1.0,
         min_duration: int = 0,
         normalize_before: bool = True,
-    ) -> torch.Tensor:
+    ) -> List[torch.Tensor]:
         # Here we are adding batch dimension for the pretssel
-        if seqs.ndim < 3:
+        if seqs.ndim < 2:
             seqs = seqs.unsqueeze(0)
         if prosody_input_seqs.ndim < 3:
             prosody_input_seqs = prosody_input_seqs.unsqueeze(0)
@@ -510,63 +510,67 @@ class PretsselVocoder(Module):
         pn = pn.transpose(1, 2)
 
         x = seqs + pn
-        x = self.gcmvn_denormalize(x).squeeze(0)
-        if normalize_before:
-            x = (x - self.mean) / self.scale
+        x = self.gcmvn_denormalize(x)
 
-        x = x.transpose(1, 0).unsqueeze(0)
-        chunk_size = self.n_streams // 4
-        x = self.layers[self.pn_layers + chunk_size](x)
-        for i in range(self.num_upsamples):
-            x = F.leaky_relu(x, LRELU_SLOPE)
-            x = self.layers[i + self.pn_layers + 1 + 2 * chunk_size](x)
-            xs = None
-            for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.layers[
-                        i * self.num_kernels
-                        + j
-                        + self.pn_layers
-                        + 3 * chunk_size
-                        + self.num_upsamples
-                        + 1
-                    ](x)
-                else:
-                    xs += self.layers[
-                        i * self.num_kernels
-                        + j
-                        + self.pn_layers
-                        + 3 * chunk_size
-                        + self.num_upsamples
-                        + 1
-                    ](x)
-            x = xs / self.num_kernels  # type: ignore
-        x = F.leaky_relu(x)
-        x = self.layers[
-            self.pn_layers
-            + self.n_streams
-            + self.num_upsamples * (1 + self.num_kernels)
-            + 1
-        ](x)
-        skip_output = x
-        h = skip_output
+        wavs = []
+        for idx, _x in enumerate(x):
+            _x = _x[: durations[idx].sum()]  # type: ignore[index]
+            if normalize_before:
+                _x = (_x - self.mean) / self.scale
 
-        for i1 in range(self.pn_layers, self.pn_layers + chunk_size):
-            h = self.layers[i1](h)
-        i1 += 2
-        for i2 in range(i1, i1 + chunk_size):
-            h = self.layers[i2](h)
-        i2 = i2 + self.num_upsamples + 1
+            _x = _x.transpose(1, 0).unsqueeze(0)
+            chunk_size = self.n_streams // 4
+            _x = self.layers[self.pn_layers + chunk_size](_x)
+            for i in range(self.num_upsamples):
+                _x = F.leaky_relu(_x, LRELU_SLOPE)
+                _x = self.layers[i + self.pn_layers + 1 + 2 * chunk_size](_x)
+                xs = None
+                for j in range(self.num_kernels):
+                    if xs is None:
+                        xs = self.layers[
+                            i * self.num_kernels
+                            + j
+                            + self.pn_layers
+                            + 3 * chunk_size
+                            + self.num_upsamples
+                            + 1
+                        ](_x)
+                    else:
+                        xs += self.layers[
+                            i * self.num_kernels
+                            + j
+                            + self.pn_layers
+                            + 3 * chunk_size
+                            + self.num_upsamples
+                            + 1
+                        ](_x)
+                _x = xs / self.num_kernels  # type: ignore
+            _x = F.leaky_relu(_x)
+            _x = self.layers[
+                self.pn_layers
+                + self.n_streams
+                + self.num_upsamples * (1 + self.num_kernels)
+                + 1
+            ](_x)
+            skip_output = _x
+            h = skip_output
 
-        for i3 in range(i2, i2 + chunk_size):
-            h = self.layers[i3](h)
-        i3 = i3 + (self.num_upsamples * self.num_kernels) + 1
-        for i4 in range(i3, i3 + chunk_size):
-            h = self.layers[i4](h)
-        h = h[:, :, : x.size(-1)]
+            for i1 in range(self.pn_layers, self.pn_layers + chunk_size):
+                h = self.layers[i1](h)
+            i1 += 2
+            for i2 in range(i1, i1 + chunk_size):
+                h = self.layers[i2](h)
+            i2 = i2 + self.num_upsamples + 1
 
-        h += torch.tanh(skip_output).squeeze(0)
-        return h
+            for i3 in range(i2, i2 + chunk_size):
+                h = self.layers[i3](h)
+            i3 = i3 + (self.num_upsamples * self.num_kernels) + 1
+            for i4 in range(i3, i3 + chunk_size):
+                h = self.layers[i4](h)
+            h = h[:, :, : _x.size(-1)]
+
+            wavs.append(0.8 * h + torch.tanh(skip_output).squeeze(0))
+        return wavs
 
     def remove_weight_norm(self) -> None:
         i = self.pn_layers + 1
