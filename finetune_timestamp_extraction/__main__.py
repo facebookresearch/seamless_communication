@@ -22,6 +22,7 @@ It is expected that the files `transcriptions/whisper_{lang}.json` contain data 
 ```
 """
 
+from datetime import datetime
 import json
 
 from FineTuneTranscriber import FineTuneTranscriber
@@ -48,7 +49,18 @@ for w_lang, s_lang in WHISPER_TO_SEAMLESS.items():
 
 ftt = FineTuneTranscriber(MODEL, transcriptions)
 
-results = ftt.compare(use_dtw=True)
+for use_dtw in [True, False]:
+    for median_filter_width in [0, 3, 5, 7]:
+        print(use_dtw, median_filter_width)
+        results = ftt.compare(use_dtw=use_dtw, median_filter_width=median_filter_width)
+        results["metadata"] = {
+            "use_dtw": use_dtw,
+            "median_filter_width": median_filter_width,
+        }
 
-with open("results.txt", "w", encoding="utf-16") as file:
-    file.write(json.dumps(results, indent=2, ensure_ascii=False))
+        with open(
+            f"{PATH}/results_{int(datetime.now().timestamp())}.txt",
+            "w",
+            encoding="utf-16",
+        ) as file:
+            file.write(json.dumps(results, indent=2, ensure_ascii=False))
