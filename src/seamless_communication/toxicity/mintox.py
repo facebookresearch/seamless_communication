@@ -16,8 +16,8 @@ from seamless_communication.inference.generator import (
     SequenceToUnitOutput,
     SequenceGeneratorOptions,
 )
-from seamless_communication.toxicity.bad_word_checker import (
-    BadWordChecker,
+from seamless_communication.toxicity.etox_bad_word_checker import (
+    ETOXBadWordChecker,
 )
 from fairseq2.generation import SequenceToTextOutput, BannedSequenceProcessor
 from fairseq2.data.text.text_tokenizer import TextTokenizer
@@ -39,7 +39,7 @@ def _extract_bad_words_with_batch_indices(
     target_texts: List[StringLike],
     source_lang: str,
     target_lang: str,
-    bad_word_checker: BadWordChecker,
+    bad_word_checker: ETOXBadWordChecker,
 ) -> Tuple[List[str], List[int]]:
     all_bad_words, batch_indices = [], []
 
@@ -149,7 +149,7 @@ def mintox_pipeline(
     unit_generation_opts: Optional[SequenceGeneratorOptions] = SequenceGeneratorOptions(
         beam_size=5, soft_max_seq_len=(25, 50)
     ),
-    bad_word_checker: BadWordChecker = None,
+    bad_word_checker: ETOXBadWordChecker = None,
     duration_factor: float = 1.0,
     prosody_encoder_input: Optional[SequenceData] = None,
 ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:

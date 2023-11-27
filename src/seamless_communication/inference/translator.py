@@ -39,8 +39,8 @@ from seamless_communication.models.unity import (
 )
 from seamless_communication.models.vocoder import load_vocoder_model
 from seamless_communication.toxicity import (
-    BadWordChecker,
-    load_bad_word_checker,
+    ETOXBadWordChecker,
+    load_etox_bad_word_checker,
 )
 from seamless_communication.toxicity.mintox import mintox_pipeline
 
@@ -127,9 +127,9 @@ class Translator(nn.Module):
         if self.model.t2u_model is not None:
             self.unit_tokenizer = load_unity_unit_tokenizer(model_name_or_card)
 
-        self.bad_word_checker: Optional[BadWordChecker] = None
+        self.bad_word_checker: Optional[ETOXBadWordChecker] = None
         if apply_mintox:
-            self.bad_word_checker = load_bad_word_checker("mintox")
+            self.bad_word_checker = load_etox_bad_word_checker("mintox")
 
         self.apply_mintox = apply_mintox
 

@@ -6,13 +6,20 @@
 
 from fairseq2.assets import download_manager
 from seamless_communication.inference.translator import Translator
+from seamless_communication.toxicity.etox_bad_word_checker import ETOXBadWordChecker
 from seamless_communication.toxicity.mintox import _extract_bad_words_with_batch_indices
 from tests.common import device, get_default_dtype
-from seamless_communication.toxicity import load_bad_word_checker
+from seamless_communication.toxicity import load_etox_bad_word_checker
+
+import pytest
 
 
-def test_mintox_s2tt():
-    bad_words_checker = load_bad_word_checker("mintox")
+@pytest.fixture
+def bad_words_checker() -> ETOXBadWordChecker:
+    return load_etox_bad_word_checker("mintox")
+
+
+def test_mintox_s2tt(bad_words_checker: ETOXBadWordChecker):
     model_name = "seamlessM4T_v2_large"
     vocoder_name = "vocoder_v2"
     src_text = "The strategy proved effective, cutting off vital military and civilian supplies, although this blockade violated generally accepted international law codified by several international agreements of the past two centuries."
@@ -66,8 +73,7 @@ def test_mintox_s2tt():
     assert batch_indices == []
 
 
-def test_mintox_t2tt():
-    bad_words_checker = load_bad_word_checker("mintox")
+def test_mintox_t2tt(bad_words_checker: ETOXBadWordChecker):
     model_name = "seamlessM4T_v2_large"
     vocoder_name = "vocoder_v2"
     src_text = "I wonder what it'd be like to be a doff parent."

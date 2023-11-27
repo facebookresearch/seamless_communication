@@ -13,14 +13,14 @@ from fairseq2.assets import (
     AssetCard,
     AssetDownloadManager,
     AssetStore,
-    asset_store,
-    download_manager,
+    asset_store as base_asset_store,
+    download_manager as base_download_manager,
 )
 from fairseq2.data import StringLike
 from fairseq2.data.text import SentencePieceEncoder, SentencePieceModel
 
 
-class BadWordChecker:
+class ETOXBadWordChecker:
     bad_words: Dict[str, List[str]]
     bad_word_variants: Dict[str, Dict[str, List[str]]]
     sp_encoder: SentencePieceEncoder
@@ -45,13 +45,19 @@ class BadWordChecker:
         source_lang: str,
         target_lang: str,
     ) -> List[str]:
-        bad_words_in_target_text = self._get_bad_words(target_text, target_lang)
+        bad_words_in_target_text = self.get_bad_words(
+            target_text,
+            target_lang,
+        )
 
         # If there are no bad words in the target text, do nothing.
         if len(bad_words_in_target_text) == 0:
             return []
 
-        bad_words_in_source_text = self._get_bad_words(source_text, source_lang)
+        bad_words_in_source_text = self.get_bad_words(
+            source_text,
+            source_lang,
+        )
 
         # If there are bad words in the source text, do nothing.
         if len(bad_words_in_source_text) > 0:
@@ -64,11 +70,11 @@ class BadWordChecker:
 
         return bad_words
 
-    def _get_bad_words(self, text: str, lang: str) -> List[str]:
+    def get_bad_words(self, text: str, lang: str) -> List[str]:
         try:
             bad_words = self.bad_words[lang]
-        except KeyError:
-            raise RuntimeError(f"MinTox model does not support {lang}.")
+        except KeyError as e:
+            raise RuntimeError(f"MinTox model does not support {lang}.") from e
 
         text = self._preprocess(text)
 
@@ -122,21 +128,26 @@ class BadWordChecker:
         return False
 
 
-class BadWordCheckerLoader:
+class ETOXBadWordCheckerLoader:
     asset_store: AssetStore
     download_manager: AssetDownloadManager
 
     def __init__(
-        self, asset_store: AssetStore, download_manager: AssetDownloadManager
+        self,
+        asset_store: AssetStore,
+        download_manager: AssetDownloadManager,
     ) -> None:
         self.asset_store = asset_store
         self.download_manager = download_manager
 
-    def __call__(self, model_name_or_card: Union[str, AssetCard]) -> BadWordChecker:
+    def __call__(
+        self,
+        model_name_or_card: Union[str, AssetCard],
+    ) -> ETOXBadWordChecker:
         if isinstance(model_name_or_card, AssetCard):
             card = model_name_or_card
         else:
-            card = asset_store.retrieve_card(model_name_or_card)
+            card = self.asset_store.retrieve_card(model_name_or_card)
 
         bad_words: Dict[str, List[str]] = {}
 
@@ -177,17 +188,25 @@ class BadWordCheckerLoader:
 
         sp_langs = card.field("sp_langs").as_set(str)
 
-        return BadWordChecker(bad_words, bad_word_variants, sp_encoder, sp_langs)
+        return ETOXBadWordChecker(
+            bad_words,
+            bad_word_variants,
+            sp_encoder,
+            sp_langs,
+        )
 
     @staticmethod
     def _load_words(pathname: Path) -> List[str]:
         words: List[str] = []
 
-        with open(pathname) as fp:
+        with open(pathname, "r", encoding="utf-8") as fp:
             for line in fp.readlines():
                 words.append(codecs.encode(line, "rot_13").rstrip("\n"))
 
         return list(set(words))  # Dedup.
 
 
-load_bad_word_checker = BadWordCheckerLoader(asset_store, download_manager)
+load_etox_bad_word_checker = ETOXBadWordCheckerLoader(
+    base_asset_store,
+    base_download_manager,
+)
