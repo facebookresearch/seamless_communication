@@ -210,7 +210,16 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
             help="Source segment size, For text the unit is # token, for speech is ms",
         )
         parser.add_argument(
-            "--tgt-lang", type=str, help="Target language to translate/transcribe into."
+            "--tgt-lang",
+            default="eng",
+            type=str,
+            help="Target language to translate/transcribe into.",
+        )
+        parser.add_argument(
+            "--output",
+            type=str,
+            required=True,
+            help="Output directory. Required if using iterable dataloader.",
         )
         parser.add_argument(
             "--strip-silence",

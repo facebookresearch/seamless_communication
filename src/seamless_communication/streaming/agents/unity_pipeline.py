@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import logging
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from fairseq2.assets import asset_store
 from seamless_communication.inference.translator import Modality, Translator
+from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
+from seamless_communication.models.generator.vocoder import PretsselVocoder
 from seamless_communication.models.monotonic_decoder import (
     load_monotonic_decoder_config,
     load_monotonic_decoder_model,
@@ -23,7 +25,7 @@ from seamless_communication.models.unity import (
     load_unity_unit_tokenizer,
 )
 from seamless_communication.models.vocoder.loader import load_vocoder_model
-from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
+from seamless_communication.models.vocoder.vocoder import Vocoder
 from seamless_communication.streaming.agents.common import (
     AgentStates,
     EarlyStoppingMixin,
@@ -85,8 +87,13 @@ class UnitYPipelineMixin:
         )
         parser.add_argument(
             "--dtype",
+            choices=["fp16", "fp32"],
             default="fp16",
             type=str,
+            help=(
+                "Choose between half-precision (fp16) and single precision (fp32) floating point formats."
+                + " Prefer this over the fp16 flag."
+            ),
         )
 
     @classmethod
@@ -140,8 +147,11 @@ class UnitYPipelineMixin:
         )
         monotonic_decoder_model.eval()
 
-        vocoder = None
+        vocoder: Optional[Union[PretsselVocoder, Vocoder]] = None
         if args.vocoder_name is not None and output_modality == Modality.SPEECH:
+            logger.info(
+                f"Loading the Vocoder model: {args.vocoder_name} on device={args.device}, dtype={args.dtype}"
+            )
             if "pretssel" in args.vocoder_name:
                 vocoder = load_pretssel_vocoder_model(
                     args.vocoder_name, device=args.device, dtype=args.dtype
@@ -150,7 +160,7 @@ class UnitYPipelineMixin:
                 vocoder = load_vocoder_model(
                     args.vocoder_name, device=args.device, dtype=args.dtype
                 )
-
+            assert vocoder is not None
             vocoder.eval()
 
         return {

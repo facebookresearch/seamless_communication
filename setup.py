@@ -37,6 +37,7 @@ setup(
             "m4t_finetune=seamless_communication.cli.m4t.finetune.finetune:main",
             "m4t_prepare_dataset=seamless_communication.cli.m4t.finetune.dataset:main",
             "m4t_audio_to_units=seamless_communication.cli.m4t.audio_to_units.audio_to_units:main",
+            "streaming_evaluate=seamless_communication.cli.streaming.evaluate:main",
         ],
     },
     include_package_data=True,

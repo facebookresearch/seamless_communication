@@ -9,7 +9,7 @@ from argparse import ArgumentParser, Namespace
 from typing import Dict, List
 
 from sacrebleu.metrics.bleu import BLEU
-from seamless_communication.cli.eval_utils import get_tokenizer, LANG3_LANG2
+from seamless_communication.cli.eval_utils import LANG3_LANG2, get_tokenizer
 from simuleval.evaluator.instance import LogInstance
 from simuleval.evaluator.scorers.quality_scorer import (
     WhisperASRSacreBLEUScorer,

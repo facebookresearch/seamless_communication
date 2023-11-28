@@ -125,8 +125,8 @@ class OnlineTextDecoderAgent(GenericAgent):  # type: ignore
         )
         parser.add_argument(
             "--tgt-lang",
+            default="eng",
             type=str,
-            default=None,
         )
 
     def policy(self, states: DecoderAgentStates) -> Action:
