@@ -1,6 +1,6 @@
 # UnitY2 forced alignment extractor
 
-Please refer to Section 3.3.2 of the paper to read more details about aligner design & training.
+Please refer to Section 3.3.2 of the "Seamless: Multilingual Expressive and Streaming Speech Translation" paper to read more details about aligner design & training.
 
 We provide a light-weight wrapper to extract alignments between given text and acoustic unit sequences. Unit extractor is also available from the wrapper itself. 
 
@@ -60,7 +60,7 @@ En audio example:
 * en_transcription: `the examination and testimony of the experts enabled the commision to conclude that five shots may have been fired.`
 
 ```python
-alignment_durations, _, tokenized_text_tokens = extractor.extract_alignment("LJ037-0171_sr16k.wav", ru_transcription, plot=True, add_trailing_silence=False)
+alignment_durations, _, tokenized_text_tokens = extractor.extract_alignment("LJ037-0171_sr16k.wav", en_transcription, plot=True, add_trailing_silence=False)
 ```
 * here we set `add_trailing_silence` to False since terminal punctuation exists, but True will also work
 
