@@ -77,20 +77,25 @@ class CodeGenerator(Generator):
         x = self.dict(x).transpose(1, 2)
 
         if self.dur_predictor and dur_prediction:
-            assert x.size(0) == 1, "only support single sample"
             log_dur_pred = self.dur_predictor(x.transpose(1, 2), None)
             dur_out = torch.clamp(
                 torch.round((torch.exp(log_dur_pred) - 1)).long(), min=1
             )
             # B x C x T
-            x = torch.repeat_interleave(x, dur_out.view(-1), dim=2)
-
+            repeat_interleaved_x = []
+            for i in range(x.size(0)):
+                repeat_interleaved_x.append(torch.repeat_interleave(x[i].unsqueeze(0), dur_out[i].view(-1), dim=2))
+            x = torch.cat(repeat_interleaved_x)
+        upsampled_spkr = []
+        upsampled_lang = []
         spkr = self.spkr(sample["spkr"]).transpose(1, 2)
-        spkr = self._upsample(spkr, x.shape[-1])
-        x = torch.cat([x, spkr], dim=1)
-
         lang = self.lang(sample["lang"]).transpose(1, 2)
-        lang = self._upsample(lang, x.shape[-1])
+        for i in range(x.size(0)):
+            upsampled_spkr.append(self._upsample(spkr[i], x.shape[-1]))
+            upsampled_lang.append(self._upsample(lang[i], x.shape[-1]))
+        spkr = torch.cat(upsampled_spkr, dim=1).transpose(0, 1)
+        lang = torch.cat(upsampled_lang, dim=1).transpose(0, 1)
+        x = torch.cat([x, spkr], dim=1)
         x = torch.cat([lang, x], dim=1)
 
         return super().forward(x)

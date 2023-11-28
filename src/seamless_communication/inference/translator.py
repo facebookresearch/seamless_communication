@@ -393,13 +393,15 @@ class Translator(nn.Module):
                     units[i] != self.model.t2u_model.target_vocab_info.pad_idx
                 )
                 u = units[i][padding_mask]
-                if self.vocoder is not None:
-                    # TODO: Implement batched inference for vocoder.
-                    translated_audio_wav = self.vocoder(
-                        u, tgt_lang, spkr, dur_prediction=duration_prediction
-                    )
-                    audio_wavs.append(translated_audio_wav)
                 speech_units.append(u.tolist())
+            
+            if self.vocoder is not None:
+                translated_audio_wav = self.vocoder(
+                    units, tgt_lang, spkr, dur_prediction=duration_prediction
+                )
+                for i in range(len(units)):
+                    padding_removed_audio_wav = translated_audio_wav[i, :, :int(translated_audio_wav.size(-1)*len(speech_units[i])/len(units[i]))].unsqueeze(0)
+                    audio_wavs.append(padding_removed_audio_wav)
             return (
                 text_output.sentences,
                 BatchedSpeechOutput(
