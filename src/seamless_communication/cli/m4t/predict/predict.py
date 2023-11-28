@@ -135,6 +135,15 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         ),
         default=False,
     )
+    parser.add_argument(
+        "--text-unk-blocking",
+        type=bool,
+        help=(
+            "If True, set penalty of UNK to inf in text generator "
+            "to block unk output."
+        ),
+        default=False,
+    )
     return parser
 
 
@@ -149,6 +158,8 @@ def set_generation_opts(
             args.text_generation_max_len_b,
         ),
     )
+    if args.text_unk_blocking:
+        text_generation_opts.unk_penalty = torch.inf
     if args.text_generation_ngram_blocking:
         text_generation_opts.step_processor = NGramRepeatBlockProcessor(
             ngram_size=args.no_repeat_ngram_size
