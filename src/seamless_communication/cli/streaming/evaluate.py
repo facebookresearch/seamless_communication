@@ -7,13 +7,12 @@
 import argparse
 
 from fairseq2.assets import asset_store, download_manager
-from seamless_communication.cli.eval_utils import get_tokenizer
-from seamless_communication.cli.streaming.scorers.seamless_whisper_asr_bleu import (
-    SeamlessWhisperASRSacreBLEUScorer as SeamlessWhisperASRSacreBLEUScorer,
-)
 from seamless_communication.streaming.agents.mma_m4t_s2st import (
     MonotonicM4TS2STAgent,
     SeamlessS2STAgent,
+)
+from seamless_communication.cli.streaming.scorers.seamless_quality_scorer import (
+    SeamlessQualityScorer,
 )
 from seamless_communication.streaming.agents.mma_m4t_s2t import MonotonicM4TS2TAgent
 from simuleval.evaluator import build_evaluator
@@ -63,24 +62,22 @@ def main() -> None:
         model_configs.update(dict(fp16=True))
 
     EVALUATION_SYSTEM_LIST.clear()
+    eval_configs = dict(quality_metrics="SEAMLESS_QUALITY_SCORER")
     if args.task == "s2st":
         model_configs.update(
             dict(
                 min_unit_chunk_size=50,
             )
         )
-        eval_configs = dict(
-            quality_metrics="SEAMLESS_WHISPER_ASR_BLEU",
-            latency_metrics="StartOffset EndOffset",
-            whisper_model_size="large-v2",
-            normalize_asr_bleu_references=True,
-        )
+        eval_configs["latency_metrics"] = "StartOffset EndOffset"
+
         if args.expressive:
             EVALUATION_SYSTEM_LIST.append(SeamlessS2STAgent)
             model_configs.update(dict(vocoder_name="vocoder_pretssel"))
         else:
             EVALUATION_SYSTEM_LIST.append(MonotonicM4TS2STAgent)
     elif args.task == "s2tt":
+        assert args.expressive is False, "S2TT inference cannot be expressive."
         EVALUATION_SYSTEM_LIST.append(MonotonicM4TS2TAgent)
         parser.add_argument(
             "--unity-model-name",
@@ -88,24 +85,15 @@ def main() -> None:
             help="Unity model name.",
             default="seamless_streaming_unity",
         )
-        parser.add_argument(
-            "--tgt-lang",
-            default="eng",
-            type=str,
-            help="Target language to translate/transcribe into.",
-        )
         args, _ = parser.parse_known_args()
         asset_card = asset_store.retrieve_card(name=args.unity_model_name)
         tokenizer_uri = asset_card.field("tokenizer").as_uri()
         tokenizer_path = download_manager.download_tokenizer(
             tokenizer_uri, asset_card.name, force=False, progress=True
         )
-        eval_configs = dict(
-            sacrebleu_tokenizer=get_tokenizer(args.tgt_lang),
-            eval_latency_unit="spm",
-            eval_latency_spm_model=tokenizer_path,
-            latency_metrics="AL LAAL",
-        )
+        eval_configs["latency_metrics"] = "AL LAAL"
+        eval_configs["eval_latency_unit"] = "spm"
+        eval_configs["eval_latency_spm_model"] = tokenizer_path
 
     base_config = dict(
         dataloader="fairseq2_s2tt",

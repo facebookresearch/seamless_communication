@@ -16,7 +16,7 @@ from sacrebleu.metrics.bleu import BLEU
 from sacrebleu.metrics.chrf import CHRF
 from seamless_communication.cli.eval_utils.lang_mapping import LANG3_LANG2
 from tqdm import tqdm
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 from whisper import Whisper
 from whisper.normalizers import BasicTextNormalizer, EnglishTextNormalizer
 
@@ -257,9 +257,9 @@ def compute_quality_metrics(
     whisper_model_name: str = "large",
     whisper_normalize_text_output: bool = False,
     ref_text_col_name: str = "ref_tgt_text",
-    pred_text_col_name: str = "pred_tgt_text",
+    pred_text_col_name: Optional[str] = "pred_tgt_text",
     pred_audio_col_name: str = "pred_tgt_audio",
-) -> None:
+) -> str:
     """Wraps asr and s2t bleu functions to call it with TSV manifest composed on expressivity side
     Args:
         output_manifest_tsv_path (Path): output manifest which has "ref_text", "hypo_audio", "s2t_out" column names
@@ -337,9 +337,10 @@ def compute_quality_metrics(
         asr_bleu_normalized_json = asr_bleu_normalized.format(
             signature=asr_bleu_normalized_signature.format(), is_json=True
         )
+        filename = f"{task.lower()}_asr_bleu_normalized.json"
 
         with open(
-            output_path / f"{task.lower()}_asr_bleu_normalized.json",
+            output_path / filename,
             "w",
         ) as f:
             f.write(asr_bleu_normalized_json)
@@ -353,8 +354,11 @@ def compute_quality_metrics(
             lang=tgt_lang,
             whisper_normalize_text=whisper_normalize_text_output,
         )
+        filename = "asr_error_rate.json"
 
-        with open(output_path / "asr_error_rate.json", "w") as f:
+        with open(output_path / filename, "w") as f:
             f.write(asr_error_rate_signature)
 
         logger.info(f"ASR : {asr_error_rate_signature}")
+
+    return filename
