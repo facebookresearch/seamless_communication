@@ -4,6 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from seamless_communication.inference.generator import (
+    SequenceGeneratorOptions as SequenceGeneratorOptions,
+)
 from seamless_communication.inference.generator import UnitYGenerator as UnitYGenerator
 from seamless_communication.inference.translator import (
     BatchedSpeechOutput as BatchedSpeechOutput,

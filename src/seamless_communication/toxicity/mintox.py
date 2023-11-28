@@ -12,14 +12,11 @@ import torch
 from torch.nn import functional as F
 
 
-from seamless_communication.inference.generator import (
-    SequenceToUnitOutput,
-    SequenceGeneratorOptions,
-)
+from seamless_communication.inference import SequenceGeneratorOptions
 from seamless_communication.toxicity.etox_bad_word_checker import (
     ETOXBadWordChecker,
 )
-from fairseq2.generation import SequenceToTextOutput, BannedSequenceProcessor
+from fairseq2.generation import BannedSequenceProcessor
 from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
 from fairseq2.typing import Device
@@ -57,76 +54,40 @@ def _extract_bad_words_with_batch_indices(
 
 
 def _replace_with_new_text_output_in_batch(
-    original_text_out: SequenceToTextOutput,
+    original_texts: List[StringLike],
     indices_with_toxicity: List[int],
-    indices_with_toxicity_tensor: Tensor,
-    new_text_output: SequenceToTextOutput,
-    batch_size: int,
+    new_texts: List[StringLike],
 ) -> None:
-    original_text_out.encoder_output[
-        indices_with_toxicity_tensor
-    ] = new_text_output.encoder_output
-    if original_text_out.encoder_padding_mask is not None:
-        assert new_text_output.encoder_padding_mask is not None
-
-        original_text_out.encoder_padding_mask.seq_lens[
-            indices_with_toxicity_tensor
-        ] = new_text_output.encoder_padding_mask.seq_lens
-
-    new_i = 0
-    for original_i in range(batch_size):
-        if (
-            original_i in indices_with_toxicity
-        ):  # indices_with_toxicity is a small list, using list should be fast enough
-            original_text_out.sentences[original_i] = new_text_output.sentences[new_i]
-            original_text_out.generator_output.results[
-                original_i
-            ] = new_text_output.generator_output.results[new_i]
-            new_i += 1
+    new_idx = 0
+    # indices_with_toxicity is a small list, using list should be fast enough.
+    for original_idx in range(len(original_texts)):
+        if original_idx in indices_with_toxicity:
+            original_texts[original_idx] = new_texts[new_idx]
+            new_idx += 1
 
 
 def _replace_with_new_unit_output_in_batch(
     unit_tokenizer: UnitTokenizer,
-    original_unit_out: SequenceToUnitOutput,
-    indices_with_toxicity: List[int],
+    original_units: Tensor,
     indices_with_toxicity_tensor: Tensor,
-    new_unit_output: SequenceToUnitOutput,
-    batch_size: int,
+    new_units: Tensor,
 ) -> None:
-    original_units_length = original_unit_out.units.size(1)
-    new_units_length = new_unit_output.units.size(1)
+    original_units_length = original_units.size(1)
+    new_units_length = new_units.size(1)
     length_diff = abs(new_units_length - original_units_length)
     nb_pads = (0, length_diff)
     pad_idx = unit_tokenizer.vocab_info.pad_idx or 1
     if new_units_length > original_units_length:
         # pad on the original units
-        original_unit_out.units = F.pad(
-            original_unit_out.units,
-            pad=nb_pads,
-            mode="constant",
-            value=pad_idx,
+        original_units = F.pad(
+            original_units, pad=nb_pads, mode="constant", value=pad_idx
         )
     else:
         # pad on the new units
-        new_unit_output.units = F.pad(
-            new_unit_output.units,
-            pad=nb_pads,
-            mode="constant",
-            value=pad_idx,
+        new_units = F.pad(
+            new_units, pad=nb_pads, mode="constant", value=pad_idx
         )
-    original_unit_out.units[indices_with_toxicity_tensor] = new_unit_output.units
-
-    new_i = 0
-    if original_unit_out.generator_output is not None:
-        for original_i in range(batch_size):
-            if (
-                original_i in indices_with_toxicity
-                and new_unit_output.generator_output is not None
-            ):
-                original_unit_out.generator_output.results[
-                    original_i
-                ] = new_unit_output.generator_output.results[new_i]
-                new_i += 1
+    original_units[indices_with_toxicity_tensor] = new_units
 
 
 def mintox_pipeline(
@@ -140,15 +101,15 @@ def mintox_pipeline(
     input_modality: "Modality",
     output_modality: "Modality",
     src_texts: List[StringLike],
-    original_text_out: SequenceToTextOutput,
-    original_unit_out: Optional[SequenceToUnitOutput] = None,
+    original_texts: List[StringLike],
+    original_units: Optional[Tensor] = None,
     unit_generation_ngram_filtering: bool = False,
     text_generation_opts: Optional[SequenceGeneratorOptions] = None,
     unit_generation_opts: Optional[SequenceGeneratorOptions] = None,
     bad_word_checker: ETOXBadWordChecker = None,
     duration_factor: float = 1.0,
     prosody_encoder_input: Optional[SequenceData] = None,
-) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
+) -> Tuple[List[StringLike], Optional[Tensor]]:
     """MinTox: Mitigation at INference time of added TOXicity."""
     from seamless_communication.inference.translator import Modality, Translator
 
@@ -175,7 +136,7 @@ def mintox_pipeline(
 
     bad_words, indices_with_toxicity = _extract_bad_words_with_batch_indices(
         src_texts,
-        original_text_out.sentences,
+        original_texts,
         src_lang,
         tgt_lang,
         bad_word_checker,
@@ -184,9 +145,9 @@ def mintox_pipeline(
     if len(indices_with_toxicity) == 0:
         # if no added toxicity is found, retrun the orignal output
         if output_modality == Modality.TEXT:
-            return original_text_out, None
+            return original_texts, None
         else:
-            return original_text_out, original_unit_out
+            return original_texts, original_units
     else:
         logger.info(
             "TOX src_lang=%s tgt_lang=%s added_tox=%d",
@@ -216,7 +177,7 @@ def mintox_pipeline(
             )
         seqs, padding_mask = get_seqs_and_padding_mask(model_input)
         # redo the prediction
-        new_text_output, new_unit_output = Translator.get_prediction(
+        new_texts, new_units = Translator.get_prediction(
             model=model,
             text_tokenizer=text_tokenizer,
             unit_tokenizer=unit_tokenizer,
@@ -231,34 +192,30 @@ def mintox_pipeline(
             duration_factor=duration_factor,
             prosody_encoder_input=prosody_encoder_input,
         )
-        batch_size = len(original_text_out.sentences)
+        batch_size = len(original_texts)
         if batch_size > 1:
             # reconstruct the text output by updating the original one in place
             _replace_with_new_text_output_in_batch(
-                original_text_out,
-                indices_with_toxicity,
-                indices_with_toxicity_tensor,
-                new_text_output,
-                batch_size,
+                original_texts, indices_with_toxicity, new_texts
             )
-            final_text_output = original_text_out
+            final_texts = original_texts
         else:
-            final_text_output = new_text_output
+            final_texts = new_texts
 
         if output_modality == Modality.TEXT:
-            return final_text_output, None
+            return final_texts, None
         else:
             if batch_size > 1:
+                assert original_units is not None
+                assert new_units is not None
                 # reconstruct the unit output by updating the original one in place
                 _replace_with_new_unit_output_in_batch(
                     unit_tokenizer,
-                    original_unit_out,
-                    indices_with_toxicity,
+                    original_units,
                     indices_with_toxicity_tensor,
-                    new_unit_output,
-                    batch_size,
+                    new_units,
                 )
-                final_unit_out = original_unit_out
+                final_units = original_units
             else:
-                final_unit_out = new_unit_output
-            return final_text_output, final_unit_out
+                final_units = new_units
+            return final_texts, final_units

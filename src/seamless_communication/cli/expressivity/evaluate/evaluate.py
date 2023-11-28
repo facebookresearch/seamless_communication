@@ -20,7 +20,6 @@ from fairseq2.data.audio import (
     WaveformToFbankOutput,
 )
 from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
-from fairseq2.generation import SequenceGeneratorOptions
 from fairseq2.typing import DataType, Device
 from sacrebleu.metrics import BLEU  # type: ignore[attr-defined]
 from torch import Tensor
@@ -34,7 +33,12 @@ from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
-from seamless_communication.inference import BatchedSpeechOutput, Modality, Translator
+from seamless_communication.inference import (
+    BatchedSpeechOutput,
+    Modality,
+    SequenceGeneratorOptions,
+    Translator,
+)
 from seamless_communication.inference.pretssel_generator import PretsselGenerator
 from seamless_communication.models.unity import (
     load_gcmvn_stats,

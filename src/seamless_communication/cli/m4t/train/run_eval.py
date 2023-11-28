@@ -20,7 +20,7 @@ from jiwer import wer  # type: ignore
 
 import seamless_communication.cli.m4t.train.cleaners as cleaners
 from fairseq2.data.audio import WaveformToFbankConverter
-from fairseq2.generation import NGramRepeatBlockProcessor, SequenceGeneratorOptions
+from fairseq2.generation import NGramRepeatBlockProcessor
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from seamless_communication.cli.m4t.train import model as _model
 from seamless_communication.cli.m4t.train import trainer as _trainer
@@ -28,7 +28,7 @@ from seamless_communication.cli.m4t.train.configs import (
     DataLoadingConfig,
     WorkflowParams,
 )
-from seamless_communication.inference.generator import UnitYGenerator
+from seamless_communication.inference import SequenceGeneratorOptions, UnitYGenerator
 from seamless_communication.models.tokenizer import SPMTokenizer
 from seamless_communication.models.unity import (
     UnitTokenizer,
@@ -194,7 +194,7 @@ def translate(
     ngram_filtering: bool = True,
     text_max_len_a: int = 1,
     text_max_len_b: int = 200,
-    unit_max_len_a: int = 1,
+    unit_max_len_a: int = 25,
     unit_max_len_b: int = 50,
 ) -> Tuple[str, Any]:
     """Runs S2T translation. TBD: add S2S"""

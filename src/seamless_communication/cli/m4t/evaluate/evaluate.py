@@ -20,7 +20,6 @@ from fairseq2.data import Collater, DataPipeline, FileMapper
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
 from fairseq2.data.typing import StringLike
-from fairseq2.generation import SequenceGeneratorOptions
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 from tqdm import tqdm
@@ -32,7 +31,12 @@ from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
-from seamless_communication.inference import BatchedSpeechOutput, Modality, Translator
+from seamless_communication.inference import (
+    BatchedSpeechOutput,
+    Modality,
+    SequenceGeneratorOptions,
+    Translator,
+)
 from seamless_communication.models.unity import load_unity_text_tokenizer
 
 logging.basicConfig(

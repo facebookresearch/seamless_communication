@@ -11,9 +11,9 @@ from typing import Tuple
 
 import torch
 import torchaudio
-from fairseq2.generation import NGramRepeatBlockProcessor, SequenceGeneratorOptions
+from fairseq2.generation import NGramRepeatBlockProcessor
 
-from seamless_communication.inference import Translator
+from seamless_communication.inference import SequenceGeneratorOptions, Translator
 
 logging.basicConfig(
     level=logging.INFO,

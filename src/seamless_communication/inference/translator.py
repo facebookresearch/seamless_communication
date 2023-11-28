@@ -13,18 +13,16 @@ import torch
 import torch.nn as nn
 from fairseq2.assets import asset_store
 from fairseq2.assets.card import AssetCard
-from fairseq2.data import Collater, SequenceData
+from fairseq2.data import Collater, SequenceData, StringLike
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.data.text import TextTokenizer
-from fairseq2.data.typing import StringLike
-from fairseq2.generation import SequenceGeneratorOptions, SequenceToTextOutput
 from fairseq2.memory import MemoryBlock
 from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 
 from seamless_communication.inference.generator import (
-    SequenceToUnitOutput,
+    SequenceGeneratorOptions,
     UnitYGenerator,
 )
 from seamless_communication.models.unity import (
@@ -171,7 +169,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-    ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
+    ) -> Tuple[List[StringLike], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
             model.t2u_model, UnitYNART2UModel
@@ -228,7 +226,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-        src_text: Optional[str] = None,
+        src_text: Optional[StringLike] = None,
     ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
@@ -318,7 +316,7 @@ class Translator(nn.Module):
                 beam_size=5, soft_max_seq_len=(25, 50)
             )
 
-        text_output, unit_output = self.get_prediction(
+        texts, units = self.get_prediction(
             self.model,
             self.text_tokenizer,
             self.unit_tokenizer,
@@ -339,7 +337,7 @@ class Translator(nn.Module):
                 if src_text is not None:
                     src_texts = [src_text]
                 else:
-                    asr_text, _, = self.predict(
+                    src_texts, _, = self.predict(
                         input=input,
                         task_str=Task.ASR.name,
                         tgt_lang=tgt_lang,
@@ -350,11 +348,16 @@ class Translator(nn.Module):
                         sample_rate=sample_rate,
                         unit_generation_ngram_filtering=unit_generation_ngram_filtering,
                     )
-                    src_texts = [str(asr_text)]
             else:
-                src_texts = [str(input)]
+                assert isinstance(input, str)
 
-            text_output, unit_output = mintox_pipeline(
+                src_texts = [input]
+
+            assert src_lang is not None
+            assert self.unit_tokenizer is not None
+            assert self.bad_word_checker is not None
+
+            texts, units = mintox_pipeline(
                 model=self.model,
                 text_tokenizer=self.text_tokenizer,
                 unit_tokenizer=self.unit_tokenizer,
@@ -365,8 +368,8 @@ class Translator(nn.Module):
                 input_modality=input_modality,
                 output_modality=output_modality,
                 src_texts=src_texts,
-                original_text_out=text_output,
-                original_unit_out=unit_output,
+                original_texts=texts,
+                original_units=units,
                 unit_generation_ngram_filtering=unit_generation_ngram_filtering,
                 text_generation_opts=text_generation_opts,
                 unit_generation_opts=unit_generation_opts,
@@ -376,17 +379,16 @@ class Translator(nn.Module):
             )
 
         if output_modality == Modality.TEXT:
-            return text_output.sentences, None
+            return texts, None
         else:
-            assert unit_output is not None
+            assert units is not None
 
             if isinstance(self.model.t2u_model, UnitYT2UModel):
                 # Remove the lang token for AR UnitY since the vocoder doesn't need it
                 # in the unit sequence. tgt_lang is fed as an argument to the vocoder.
-                units = unit_output.units[:, 1:]
+                units = units[:, 1:]
                 duration_prediction = True
             else:
-                units = unit_output.units
                 # Vocoder duration predictions not required since the NAR
                 # T2U model already predicts duration in the units.
                 duration_prediction = False
@@ -417,7 +419,7 @@ class Translator(nn.Module):
                     ].unsqueeze(0)
                     audio_wavs.append(padding_removed_audio_wav)
             return (
-                text_output.sentences,
+                texts,
                 BatchedSpeechOutput(
                     units=speech_units,
                     audio_wavs=audio_wavs,
