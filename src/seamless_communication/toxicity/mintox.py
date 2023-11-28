@@ -143,18 +143,23 @@ def mintox_pipeline(
     original_text_out: SequenceToTextOutput,
     original_unit_out: Optional[SequenceToUnitOutput] = None,
     unit_generation_ngram_filtering: bool = False,
-    text_generation_opts: SequenceGeneratorOptions = SequenceGeneratorOptions(
-        beam_size=5, soft_max_seq_len=(1, 200)
-    ),
-    unit_generation_opts: Optional[SequenceGeneratorOptions] = SequenceGeneratorOptions(
-        beam_size=5, soft_max_seq_len=(25, 50)
-    ),
+    text_generation_opts: Optional[SequenceGeneratorOptions] = None,
+    unit_generation_opts: Optional[SequenceGeneratorOptions] = None,
     bad_word_checker: ETOXBadWordChecker = None,
     duration_factor: float = 1.0,
     prosody_encoder_input: Optional[SequenceData] = None,
 ) -> Tuple[SequenceToTextOutput, Optional[SequenceToUnitOutput]]:
     """MinTox: Mitigation at INference time of added TOXicity."""
     from seamless_communication.inference.translator import Modality, Translator
+
+    if text_generation_opts is None:
+        text_generation_opts = SequenceGeneratorOptions(
+            beam_size=5, soft_max_seq_len=(1, 200)
+        )
+    if unit_generation_opts is None:
+        unit_generation_opts = SequenceGeneratorOptions(
+            beam_size=5, soft_max_seq_len=(25, 50)
+        )
 
     def _get_banned_sequence_processor(
         banned_sequences: List[str],
