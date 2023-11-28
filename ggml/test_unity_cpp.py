@@ -8,6 +8,7 @@ from typing import Any, Iterator, List, Tuple
 
 import fairseq2.nn
 import fairseq2.nn.transformer
+from fairseq2.nn.padding import PaddingMask
 import numpy as np
 import pytest
 import torch
@@ -22,7 +23,6 @@ from ctypes_utils import NULLPTR, Ptr
 from ggml import NativeObj
 from ggml_convert import convert_model, read_layer_config
 
-
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
@@ -31,7 +31,7 @@ CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024 * 5, mem_buffer=N
 FAIRSEQ2_CPP = Path(__file__).parent / "examples/unity/fairseq2.cpp"
 UNITY_FLASH_ATTN = "\n# define UNITY_FLASH_ATTN 0\n" not in FAIRSEQ2_CPP.read_text()
 
-DATA = Path(__file__).parent
+DATA = Path(__file__).parent / "test_data"
 DATA_DEV = DATA / "dev"
 if not DATA_DEV.exists():
     DATA_DEV = Path(
@@ -329,7 +329,9 @@ def test_MultiheadAttention_forward_cross_attn_with_cache(
                 assert np.allclose(
                     state.get()[0].transpose(1, 2).numpy(),
                     ggml.to_numpy(
-                        nodes[b"text_decoder.layers.0.encoder_decoder_attn.k_cache (view)"]
+                        nodes[
+                            b"text_decoder.layers.0.encoder_decoder_attn.k_cache (view)"
+                        ]
                     ),
                     atol=1e-3,
                 )
@@ -378,7 +380,8 @@ def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> N
         pytest.skip(reason=f"Folder {DATA_DEV} not found !")
 
     x = torch.load(DATA_DEV / "seqs_before_conformer_block.pt")
-    padding_mask = torch.ones((1, x.shape[1]))
+    padding_mask = PaddingMask(torch.ones(1, x.shape[1]),x.shape[1])
+
     layer = pt_model.speech_encoder.inner.layers[0]
     gx = ggml.from_numpy(ctx, x[0])
     ggml.ggml_set_name(gx, b"x")
@@ -477,25 +480,32 @@ def test_StandardConformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
     gf = ggml.ggml_build_forward(gy)
     ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
-    converter = WaveformToFbankConverter(
-        num_mel_bins=80,
-        waveform_scale=2**15,
-        channel_last=True,
-        standardize=True,
-    )
-    converter_input = {
-        "waveform": wav.transpose(0, 1),
-        "sample_rate": 16000.0,
-        "format": -1,
-    }
-
     y = ggml.to_numpy(gy)
-    speech_encoder_input = pt_model.speech_encoder_frontend(
-        converter(converter_input)["fbank"].unsqueeze(0), None
-    )[0]
 
-    y_exp, _ = pt_model.speech_encoder(speech_encoder_input, None)
-    y_exp = y_exp.numpy()  # remove batch dimension
+    cache = DATA / "test_StandardConformerEncoder_forward.npy"
+    if not cache.exists():
+        converter = WaveformToFbankConverter(
+            num_mel_bins=80,
+            waveform_scale=2**15,
+            channel_last=True,
+            standardize=True,
+        )
+        converter_input = {
+            "waveform": wav.transpose(0, 1),
+            "sample_rate": 16000.0,
+            "format": -1,
+        }
+
+        pt_model = load_pt_model()
+        speech_encoder_input = pt_model.speech_encoder_frontend(
+            converter(converter_input)["fbank"].unsqueeze(0), None
+        )[0]
+
+        y_exp, _ = pt_model.speech_encoder(speech_encoder_input, None)
+        y_exp = y_exp.numpy()
+        np.save(cache, y_exp)
+    else:
+        y_exp = np.load(cache)
 
     assert y.shape == y_exp.shape
     assert np.allclose(
@@ -512,7 +522,7 @@ def test_WaveformToFbank_forward(ctx: Ctx, g_model: c_void_p) -> None:
         standardize=True,
     )
     extractor = Wav2Vec2FbankFeatureExtractor(80, stride=2, sample_every_k=1)
-    wav, _ = torchaudio.load(DATA / "test.wav")
+    wav, _ = torchaudio.load(DATA / "LJ037-0171_sr16k_test.wav")
     gx = ggml.from_numpy(ctx, wav * 2**15)  # Apply scale before sending into ggml!
     ggml.ggml_set_name(gx, b"x")
 
@@ -540,7 +550,7 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
     pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=0)
     y_exp = pos_encoder(seq, None)[0].numpy()
 
-    gseq = ggml.from_numpy(ctx, seq[0].numpy())
+    gseq = ggml.from_numpy(ctx, seq[0].clone().numpy())
     ggml.ggml_set_name(gseq, b"seq")
     gy = ggml.forward(
         "PositionalEmbedding", g_model, "text_decoder_frontend.pos_encoder", gseq
@@ -633,6 +643,32 @@ def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-3)
 
 
+def test_tokenizer(ctx: Ctx) -> None:
+    tokenizer = unity.load_unity_text_tokenizer("seamlessM4T_medium")
+    enc = tokenizer.create_encoder(task="translation", lang="eng", mode="source")
+
+    spm_path = DATA / "seamlessM4T_medium.spm.ggml"
+    # if not spm_path.exists():
+    if True:
+        vocab = ggml_convert.read_vocab(tokenizer)
+        ggml_convert.write_ggml_file(spm_path, {"spm_vocab_only": True}, {}, vocab, {})
+
+    g_model = ggml.load_fairseq2_ggml_file(spm_path)
+    ggml.lib.fairseq2_model_set_inference_ctx(g_model.ptr, ctx)
+
+    expected = enc("We are all in a yellow submarine.").tolist()[1:]
+    tokens = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_I32, 256)
+    ggml.fairseq2_spm_tokenize(
+        g_model.ptr, b"We are all in a yellow submarine.", tokens
+    )
+    res = ggml.to_numpy(tokens).tolist()
+    assert expected == res
+
+    out = ctypes.create_string_buffer(144)
+    ggml.fairseq2_spm_detokenize(g_model.ptr, tokens, out)
+    assert ctypes.string_at(out) == b"We are all in a yellow submarine."
+
+
 def test_t2tt(ctx: Ctx, g_model: c_void_p) -> None:
     src_lang = "eng"
     src_text = "We are all in a yellow submarine."
@@ -700,6 +736,7 @@ def test_t2tt(ctx: Ctx, g_model: c_void_p) -> None:
         unk_idx=1,
         bos_idx=2,
         eos_idx=3,
+        num_threads=16,
     )
 
     result_ptr = ggml.generate_sequence(g_model, job, encoder_out, NULLPTR, ctx)
@@ -789,9 +826,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
     )
     result_ptr = ggml.generate_sequence(g_model, Ptr(job), encoder_out, NULLPTR, ctx)
     results = [result_ptr[i] for i in range(beam_size) if result_ptr[i].seq != None]
-    assert_hypotheses(
-        exp["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1
-    )
+    assert_hypotheses(exp["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1)
 
 
 def assert_hypotheses(

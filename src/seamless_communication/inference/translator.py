@@ -142,7 +142,7 @@ class Translator(nn.Module):
             dtype=dtype,
         )
         self.collate = Collater(
-            pad_value=self.text_tokenizer.vocab_info.pad_idx, pad_to_multiple=2
+            pad_value=self.text_tokenizer.vocab_info.pad_idx or 0, pad_to_multiple=2
         )
         self.vocoder = None
         if vocoder_name_or_card is not None and (

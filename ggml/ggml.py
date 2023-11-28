@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Tuple, Type, Union
 import numpy as np
 import torch
 
-from ctypes_utils import Ptr, c_fn, c_struct
+from ctypes_utils import NULLPTR, Ptr, c_fn, c_struct
 from third_party_ggml import *
 
 ### Helpers
@@ -489,7 +489,7 @@ def _testing_return_hypothesis_ptr(ctx: ggml_context_p) -> Ptr[Hypothesis]:
 
 
 @c_fn(lib)
-def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: str) -> int:
+def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: bytes) -> int:
     return -1
 
 
@@ -514,3 +514,17 @@ def fairseq2_kv_cache_alloc(
         yield
     finally:
         _fairseq2_kv_cache_reset(model)
+
+
+@c_fn(lib)
+def fairseq2_spm_tokenize(
+    model: ctypes.c_void_p, text: bytes, out: Ptr[ggml_tensor]
+) -> None:
+    pass
+
+
+@c_fn(lib)
+def fairseq2_spm_detokenize(
+    model: ctypes.c_void_p, tensor: Ptr[ggml_tensor], out: ctypes.Array[ctypes.c_char]
+) -> ctypes.c_size_t:
+    return 0

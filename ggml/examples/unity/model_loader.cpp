@@ -44,7 +44,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
     fin.read((char*) &ctx_size, sizeof(ctx_size));
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ static_cast<std::size_t>(ctx_size),
+        /*.mem_size   =*/ ctx_size,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
@@ -71,7 +71,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
     }
 
     double mb = 1024.0 * 1024.0;
-    printf("%s: model size  = %8.2f MB, memory used = %8.2f MB, memory reserved = %8.2f \n",
+    printf("%s: model size: %8.2f MB, memory used: %8.2f MB, memory reserved: %8.2f MB\n",
         __func__,
         model_size / mb,
         ggml_used_mem(model.tensors_ctx) / mb,
@@ -120,6 +120,44 @@ void model_loader::load_hparams(std::unordered_map<std::string, std::int64_t>& h
     }
 }
 
+void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
+{
+    // vocab.special_bos_id = 1;
+    // vocab.special_eos_id = 2;
+    // vocab.special_unk_id = 0;
+    // vocab.special_sep_id = -1;
+    // vocab.special_pad_id = -1;
+
+    std::int64_t vocab_size = 0;
+    fin.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
+    GGML_ASSERT(fin.gcount() == 8);
+
+    vocab.token_to_id.reserve(vocab_size);
+    vocab.id_to_token.reserve(vocab_size);
+
+    std::string packed_vocab = get_name(fin);
+    std::int64_t ctx_size = vocab_size * sizeof(float) + vocab_size + 2 * ggml_tensor_overhead();
+    ggml_context* ctx = ggml_init(ggml_init_params{ctx_size, nullptr, false});
+    ggml_tensor* lengths_tensor = load_tensor_value(fin, ctx);
+    std::int8_t* lengths = (std::int8_t*)lengths_tensor->data;
+    ggml_tensor* scores_tensor = load_tensor_value(fin, ctx);
+    float* scores = ggml_get_data_f32(scores_tensor);
+
+    int64_t offset = 0;
+    for (int i = 0; i < vocab_size; ++i) {
+        // TODO: we should use string view instead of copying each word in a new string
+        std::string word = packed_vocab.substr(offset, lengths[i]);
+        vocab.token_to_id[word] = i;
+        vocab.id_to_token.push_back({word, scores[i], LLAMA_TOKEN_TYPE_NORMAL});
+        offset += lengths[i] + 1;
+    }
+    // Since we copied lengths and scores, we don't need the context anymore.
+    ggml_free(ctx);
+
+    // vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
+    // TODO: special tokens stuff ?
+}
+
 ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
 {
     int32_t n_dims = 0;
@@ -162,6 +200,7 @@ extern "C" int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname)
     auto fin = open_ggml_file(fname);
     loader.load_hparams(model.hparams, fin);
     loader.load_hparams(model.layer_config, fin);
+    loader.load_vocab(model.vocab, fin);
     loader.load_model_weights(model, fin);
     return 0;
 }

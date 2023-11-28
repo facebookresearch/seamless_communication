@@ -55,8 +55,10 @@ def _py_type_to_ctype(t: type) -> type:
         return ctypes.c_float
     if t is bool:
         return ctypes.c_bool
-    if t is str:
+    if t is bytes:
         return ctypes.c_char_p
+    if t is str:
+        raise ValueError("str type is't supported by ctypes ?")
 
     if getattr(t, "__origin__", None) is Ptr:
         pointee = _py_type_to_ctype(t.__args__[0])  # type: ignore

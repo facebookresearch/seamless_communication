@@ -18,7 +18,7 @@ from fairseq2.assets import AssetCard
 from fairseq2.models.transformer.frontend import TransformerEmbeddingFrontend
 from fairseq2.nn import SinusoidalPositionEncoder
 from fairseq2.nn.transformer import RelativePositionalEncoding
-from seamless_communication.models.unity import load_unity_config, load_unity_model
+from seamless_communication.models import unity
 
 import ggml
 
@@ -29,6 +29,7 @@ def convert_model(
     model_name: Union[str, torch.nn.Module],
     out: Optional[Path] = None,
     hparams: Optional[Dict[str, Any]] = None,
+    vocab: Optional[List[Tuple[str, float]]] = None,
 ) -> None:
     if isinstance(model_name, str):
         # Load the corresponding fairseq2 model
@@ -38,12 +39,15 @@ def convert_model(
         # The type of model depends on the name
         if "unity" in model_name or "seamlessM4T" in model_name:
             if hparams is None:
-                model_config = load_unity_config(model_name)
+                model_config = unity.load_unity_config(model_name)
                 hparams = flatten_config(
                     dataclasses.asdict(model_config), separator="__"
                 )
                 print(hparams)
-            model = load_unity_model(model_name)
+            model = unity.load_unity_model(model_name)
+            if vocab is None:
+                tokenizer = unity.load_unity_text_tokenizer(model_name)
+                vocab = read_vocab(tokenizer)
         else:
             raise ValueError(f"Unsupported model type: {model_name}")
     else:
@@ -57,9 +61,9 @@ def convert_model(
     state_dict = model.state_dict()
     fixup_model(model, state_dict)
     layer_config = read_layer_config(model)
+    vocab = vocab or []
 
-    with out.open("wb") as o:
-        write_ggml_file(o, hparams, layer_config, state_dict)
+    write_ggml_file(out, hparams, layer_config, vocab, state_dict)
 
 
 def _nested_getattr(model: Any, name: str) -> Any:
@@ -120,16 +124,28 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> 
         state_dict["speech_encoder.pos_enc"] = rel_pos_enc.freqs
 
 
+def read_vocab(tokenizer: Any) -> List[Tuple[str, float]]:
+    vocab_info = tokenizer.vocab_info
+    vocab = [
+        (tokenizer.model.index_to_token(i).replace("▁", " "), -i)
+        for i in range(vocab_info.size)
+    ]
+    return vocab  # type: ignore[return-value]
+
+
 def write_ggml_file(
-    out: BufferedWriter,
+    out: Path,
     hparams: Dict[str, Any],
     layer_config: Dict[str, Any],
+    vocab: List[Tuple[str, float]],
     state_dict: Dict[str, torch.Tensor],
 ) -> None:
-    write_ggml_header(out)
-    write_hparams(out, hparams)
-    write_hparams(out, layer_config)
-    write_state_dict(out, state_dict)
+    with out.open("wb") as o:
+        write_ggml_header(o)
+        write_hparams(o, hparams)
+        write_hparams(o, layer_config)
+        write_vocab(o, vocab)
+        write_state_dict(o, state_dict)
 
 
 def write_ggml_header(out: BufferedWriter) -> None:
@@ -160,6 +176,24 @@ def write_hparams(out: BufferedWriter, hparams: Dict[str, Any]) -> None:
         out.write(b)
 
     logging.info(f"Saved {len(simple_vals)} params.")
+
+
+def write_vocab(out: BufferedWriter, vocab: List[Tuple[str, float]]) -> None:
+    out.write(struct.pack("<q", len(vocab)))
+
+    # Write all words concatenated in a buffer
+    words = [bytes(w, "utf8") for w, score in vocab]
+    packed_words = b"\0".join(words)
+    # We use i32 to allow reusing the string loading codes
+    packed_len = struct.pack("<i", len(packed_words))
+    out.write(packed_len)
+    out.write(packed_words)
+
+    lengths = torch.tensor([len(w) for w in words], dtype=torch.int8)
+    write_tensor(out, lengths)
+
+    scores = torch.tensor([score for w, score in vocab], dtype=torch.float32)
+    write_tensor(out, scores)
 
 
 def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -> None:
@@ -234,13 +268,15 @@ def write_tensor(out: BufferedWriter, value: torch.Tensor) -> None:
     data.tofile(out)
 
 
-def torch_to_ggml_type(dtype: type) -> int:
+def torch_to_ggml_type(dtype: torch.dtype) -> int:
     if dtype is torch.float32:
         return ggml.GGML_TYPE_F32
     elif dtype is torch.float16:
         return ggml.GGML_TYPE_F16
     elif dtype is torch.int32:
         return ggml.GGML_TYPE_I32
+    elif dtype is torch.int8:
+        return ggml.GGML_TYPE_I8
     else:
         raise NotImplementedError(f"{dtype} is not mapped to a GGML_TYPE")
 
@@ -293,7 +329,7 @@ def read_layer_config(model: torch.nn.Module) -> Dict[str, Any]:
             if k.startswith("_"):
                 continue
             # All modules have a "training" flag
-            if k == "training":
+            if k in ("training", "init_fn"):
                 continue
             if v is None:
                 continue

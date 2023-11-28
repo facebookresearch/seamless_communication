@@ -363,8 +363,6 @@ extern "C" {
         GGML_OP_REPEAT,
         GGML_OP_REPEAT_BACK,
         GGML_OP_CONCAT,
-        GGML_OP_REMOVE_HEAD_ROW,
-        GGML_OP_GET_FIRST_COLS_BY_ROWS,
         GGML_OP_SILU_BACK,
         GGML_OP_NORM, // normalize
         GGML_OP_BATCH_NORM, 
@@ -562,7 +560,7 @@ extern "C" {
 
     struct ggml_init_params {
         // memory pool
-        size_t mem_size;   // bytes
+        int64_t mem_size;   // bytes
         void * mem_buffer; // if NULL, memory will be allocated internally
         bool   no_alloc;   // don't allocate memory for the tensor data
     };
@@ -645,7 +643,7 @@ extern "C" {
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
 
     GGML_API void *  ggml_get_mem_buffer     (const struct ggml_context * ctx);
-    GGML_API size_t  ggml_get_mem_size       (const struct ggml_context * ctx);
+    GGML_API int64_t  ggml_get_mem_size       (const struct ggml_context * ctx);
     GGML_API size_t  ggml_get_max_tensor_size(const struct ggml_context * ctx);
 
     GGML_API struct ggml_tensor * ggml_new_tensor(
@@ -851,14 +849,6 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
-
-    GGML_API struct ggml_tensor * ggml_remove_head_row(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a);
-
-    GGML_API struct ggml_tensor * ggml_get_first_cols_by_rows(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a);
 
     GGML_API struct ggml_tensor * ggml_abs(
             struct ggml_context * ctx,

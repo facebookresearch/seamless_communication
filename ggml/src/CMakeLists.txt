@@ -261,8 +261,12 @@ target_include_directories(${TARGET} PUBLIC
     ../include
     ../include/ggml
     ../examples/
+    ../tracy/public/
     ${GGML_EXTRA_INCS}
     )
+if (TRACY_ENABLE)
+    target_link_libraries (${TARGET} PUBLIC Tracy::TracyClient )
+endif()
 
 if (MSVC)
     target_link_libraries(${TARGET} PUBLIC ${GGML_EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT} kaldi-native-fbank)

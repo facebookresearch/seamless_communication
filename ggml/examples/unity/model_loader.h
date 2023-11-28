@@ -6,22 +6,23 @@
 
 #pragma once
 
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
 
 #include "ggml/ggml.h"
 #include "ggml/ggml-alloc.h"
 
-#include "common.h"
-#include "common-ggml.h"
 #include "fairseq2.h"
 
-#include <iostream>
-#include <stdexcept>
 
 class model_loader {
 public:
     std::int64_t load_model_weights(fairseq2_model &model, std::ifstream &fin);
 
     void load_hparams(std::unordered_map<std::string, std::int64_t>& hparams, std::ifstream &fin);
+
+    void load_vocab(llama_vocab& vocab, std::ifstream &fin);
 
 private:
     ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);

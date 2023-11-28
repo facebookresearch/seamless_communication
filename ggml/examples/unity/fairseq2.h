@@ -6,6 +6,68 @@
 #include "ggml.h"
 #include "kaldi-native-fbank/csrc/feature-fbank.h"
 
+typedef int32_t llama_token;
+
+extern "C" enum llama_token_type {
+    LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
+    LLAMA_TOKEN_TYPE_NORMAL       = 1,
+    LLAMA_TOKEN_TYPE_UNKNOWN      = 2,
+    LLAMA_TOKEN_TYPE_CONTROL      = 3,
+    LLAMA_TOKEN_TYPE_USER_DEFINED = 4,
+    LLAMA_TOKEN_TYPE_UNUSED       = 5,
+    LLAMA_TOKEN_TYPE_BYTE         = 6,
+};
+
+
+struct llama_vocab {
+    using id    = int32_t;
+    using token = std::string;
+    using ttype = llama_token_type;
+
+    struct token_data {
+        token text;
+        float score;
+        ttype type;
+    };
+
+    std::unordered_map<token, id> token_to_id;
+    std::vector<token_data>       id_to_token;
+
+    std::unordered_map<token, id> special_tokens_cache;
+    std::map<std::pair<std::string, std::string>, int> bpe_ranks;
+
+    // default LLaMA special tokens
+    id special_bos_id = 1;
+    id special_eos_id = 2;
+    id special_unk_id = 0;
+    id special_sep_id = -1;
+    id special_pad_id = -1;
+
+    int special_add_bos = -1; // -1 unknown, 1 add, 0 don't add.
+    int special_add_eos = -1; // -1 unknown, 1 add, 0 don't add.
+
+    id linefeed_id       = 13;
+    id special_prefix_id = 32007;
+    id special_middle_id = 32009;
+    id special_suffix_id = 32008;
+    id special_eot_id    = 32010;
+
+    int find_bpe_rank(std::string token_left, std::string token_right) const {
+        GGML_ASSERT(token_left.find(" ") == std::string::npos);
+        GGML_ASSERT(token_left.find("\n") == std::string::npos);
+        GGML_ASSERT(token_right.find(" ") == std::string::npos);
+        GGML_ASSERT(token_right.find("\n") == std::string::npos);
+
+        auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
+        if (it == bpe_ranks.end()) {
+            return -1;
+        }
+
+        return it->second;
+    }
+};
+
+
 struct KeyValueTensor {
     ggml_tensor* full_k;
     ggml_tensor* full_v;
@@ -27,6 +89,8 @@ struct fairseq2_model {
     // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
     std::unordered_map<std::string, std::int64_t> layer_config;
 
+    llama_vocab vocab;
+
     // KV cache for attention layers
     mutable std::unordered_map<std::string, KeyValueTensor> kv_cache;
 
@@ -42,6 +106,8 @@ extern "C" fairseq2_model* fairseq2_model_alloc();
 // free the models and all its owned tensors
 extern "C" void fairseq2_model_free(fairseq2_model* model);
 extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx);
+extern "C" void fairseq2_kv_cache_reset(const fairseq2_model& model);
+ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer);
 
 extern "C" std::string* std_string_alloc(char* c_str);
 extern "C" void std_string_free(std::string* str);
@@ -233,3 +299,6 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* encoder_padding_mask,
     ggml_context* result_ctx
 );
+
+extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);
+extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out);

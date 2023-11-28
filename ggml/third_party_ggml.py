@@ -774,7 +774,7 @@ class ggml_init_params(ctypes.Structure):
     """
 
     _fields_ = [
-        ("mem_size", ctypes.c_size_t),
+        ("mem_size", ctypes.c_int64),
         ("mem_buffer", ctypes.c_void_p),
         ("no_alloc", ctypes.c_bool),
     ]
@@ -1257,7 +1257,7 @@ def ggml_get_mem_size(ctx: ggml_context_p) -> int:
 
 
 lib.ggml_get_mem_size.argtypes = [ggml_context_p]
-lib.ggml_get_mem_size.restype = ctypes.c_size_t
+lib.ggml_get_mem_size.restype = ctypes.c_int64
 
 
 # GGML_API size_t  ggml_get_max_tensor_size(const struct ggml_context * ctx);
