@@ -16,7 +16,8 @@ import torchaudio
 import torchaudio.compliance.kaldi as ta_kaldi
 from datasets import Dataset
 from datasets.distributed import split_dataset_by_node
-from fairseq2.models.nllb.tokenizer import NllbTokenizer, TextTokenEncoder
+from fairseq2.data.text import TextTokenEncoder
+from fairseq2.models.nllb import NllbTokenizer
 from torch import Tensor
 from torch.nn.functional import pad as pad_tensor
 from torch.utils.data import DataLoader
