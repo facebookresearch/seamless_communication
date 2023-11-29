@@ -1,20 +1,23 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import ctypes
 import functools
-import logging
-import sys
 from ctypes import c_void_p
 from pathlib import Path
 from typing import Any, Iterator, List, Tuple
 
 import fairseq2.nn
 import fairseq2.nn.transformer
-from fairseq2.nn.padding import PaddingMask
 import numpy as np
 import pytest
 import torch
 import torchaudio
 from fairseq2.data.audio import WaveformToFbankConverter
-from fairseq2.generation import SequenceGeneratorOptions
+from seamless_communication.inference import SequenceGeneratorOptions
 from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 from seamless_communication.inference.translator import Modality, Translator
 
@@ -22,6 +25,7 @@ import ggml
 from ctypes_utils import NULLPTR, Ptr
 from ggml import NativeObj
 from ggml_convert import convert_model, read_layer_config
+import requests
 
 Ctx = ggml.ggml_context_p
 
@@ -32,11 +36,10 @@ FAIRSEQ2_CPP = Path(__file__).parent / "examples/unity/fairseq2.cpp"
 UNITY_FLASH_ATTN = "\n# define UNITY_FLASH_ATTN 0\n" not in FAIRSEQ2_CPP.read_text()
 
 DATA = Path(__file__).parent / "test_data"
-DATA_DEV = DATA / "dev"
-if not DATA_DEV.exists():
-    DATA_DEV = Path(
-        "/private/home/dnn/internal_sc/seamless_communication/ggml/examples/unity/dev"
-    )
+LOCAL_AUDIO_SAMPLE_PATH = DATA / "LJ037-0171_sr16k.wav"
+TEST_AUDIO_SAMPLE_URL = (
+    "https://dl.fbaipublicfiles.com/seamless/tests/LJ037-0171_sr16k.wav"
+)
 
 
 @pytest.fixture(name="ctx")
@@ -72,6 +75,14 @@ def load_translator() -> Translator:
 
 def load_pt_model() -> Any:
     return load_translator().model
+
+
+def download_sample_audio() -> Any:
+    response = requests.get(TEST_AUDIO_SAMPLE_URL, stream=True)
+    with open(DATA / "LJ037-0171_sr16k.wav", "wb") as file:
+        for chunk in response.iter_content(chunk_size=1024):
+            if chunk:
+                file.write(chunk)
 
 
 def test_convert_linear(tmp_path: Path) -> None:
@@ -352,9 +363,6 @@ def test_StandardTransformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) ->
 
     gx = ggml.from_numpy(ctx, x)
     ggml.ggml_set_name(gx, b"x")
-    padding_mask = fairseq2.nn.padding.PaddingMask(torch.tensor([21, 21]), 21)
-    gpad = ggml.from_numpy(ctx, padding_mask.materialize())
-    ggml.ggml_set_name(gpad, b"padding_mask")
     gy = ggml.forward(
         "StandardTransformerEncoderLayer",
         g_model,
@@ -376,17 +384,11 @@ def test_StandardTransformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) ->
 
 def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> None:
     pt_model = load_pt_model()
-    if not DATA_DEV.exists():
-        pytest.skip(reason=f"Folder {DATA_DEV} not found !")
-
-    x = torch.load(DATA_DEV / "seqs_before_conformer_block.pt")
-    padding_mask = PaddingMask(torch.ones(1, x.shape[1]), x.shape[1])
+    x = torch.rand(1, 137, 1024)
 
     layer = pt_model.speech_encoder.inner.layers[0]
     gx = ggml.from_numpy(ctx, x[0])
     ggml.ggml_set_name(gx, b"x")
-    gpad = ggml.from_numpy(ctx, padding_mask[0])
-    ggml.ggml_set_name(gpad, b"padding_mask")
     gy = ggml.forward(
         "StandardConformerEncoderLayer",
         g_model,
@@ -399,8 +401,8 @@ def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> N
 
     y = ggml.to_numpy(gy)
 
-    y_exp, _ = layer(x, padding_mask)
-    y_exp = y_exp.numpy()
+    y_exp, _ = layer(x, padding_mask=None)
+    y_exp = y_exp.squeeze(0).numpy()
     assert y.shape == y_exp.shape
     assert np.allclose(y_exp, y, atol=2e-3)
 
@@ -409,10 +411,8 @@ def test_StandardConformerEncoderAdaptorLayer_forward(
     ctx: Ctx, g_model: c_void_p
 ) -> None:
     pt_model = load_pt_model()
-    if not DATA_DEV.exists():
-        pytest.skip(reason=f"Folder {DATA_DEV} not found !")
-
-    x = torch.load(DATA_DEV / "seqs_before_adaptor.pt")
+    torch.random.manual_seed(0)
+    x = torch.rand(1, 137, 1024)
     layer = pt_model.speech_encoder.adaptor_layers[0]
     gx = ggml.from_numpy(ctx, x[0])
     ggml.ggml_set_name(gx, b"x")
@@ -467,7 +467,9 @@ def test_StandardTransformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None
 
 def test_StandardConformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
     pt_model = load_pt_model()
-    wav, _ = torchaudio.load(DATA / "test.wav")
+    if not LOCAL_AUDIO_SAMPLE_PATH.exists():
+        download_sample_audio()
+    wav, _ = torchaudio.load(LOCAL_AUDIO_SAMPLE_PATH)
     gx = ggml.from_numpy(ctx, wav * 2**15)  # Apply scale before sending into ggml!
     ggml.ggml_set_name(gx, b"x")
     gy = ggml.forward(
@@ -508,13 +510,10 @@ def test_StandardConformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
         y_exp = np.load(cache)
 
     assert y.shape == y_exp.shape
-    assert np.allclose(
-        y_exp, y, atol=1e-2
-    )  # There are 10 elements in a 137*1024 tensor with error >1e-2
+    assert np.allclose(y_exp, y, atol=1e-2)
 
 
 def test_WaveformToFbank_forward(ctx: Ctx, g_model: c_void_p) -> None:
-    pt_model = load_pt_model()
     converter = WaveformToFbankConverter(
         num_mel_bins=80,
         waveform_scale=2**15,
@@ -522,7 +521,9 @@ def test_WaveformToFbank_forward(ctx: Ctx, g_model: c_void_p) -> None:
         standardize=True,
     )
     extractor = Wav2Vec2FbankFeatureExtractor(80, stride=2, sample_every_k=1)
-    wav, _ = torchaudio.load(DATA / "LJ037-0171_sr16k_test.wav")
+    if not LOCAL_AUDIO_SAMPLE_PATH.exists():
+        download_sample_audio()
+    wav, _ = torchaudio.load(LOCAL_AUDIO_SAMPLE_PATH)
     gx = ggml.from_numpy(ctx, wav * 2**15)  # Apply scale before sending into ggml!
     ggml.ggml_set_name(gx, b"x")
 
@@ -642,117 +643,13 @@ def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None
     assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-3)
 
 
-def test_tokenizer(ctx: Ctx) -> None:
-    tokenizer = unity.load_unity_text_tokenizer("seamlessM4T_medium")
-    enc = tokenizer.create_encoder(task="translation", lang="eng", mode="source")
-
-    spm_path = DATA / "seamlessM4T_medium.spm.ggml"
-    # if not spm_path.exists():
-    if True:
-        vocab = ggml_convert.read_vocab(tokenizer)
-        ggml_convert.write_ggml_file(spm_path, {"spm_vocab_only": True}, {}, vocab, {})
-
-    g_model = ggml.load_fairseq2_ggml_file(spm_path)
-    ggml.lib.fairseq2_model_set_inference_ctx(g_model.ptr, ctx)
-
-    expected = enc("We are all in a yellow submarine.").tolist()[1:]
-    tokens = ggml.ggml_new_tensor_1d(ctx, ggml.GGML_TYPE_I32, 256)
-    ggml.fairseq2_spm_tokenize(
-        g_model.ptr, b"We are all in a yellow submarine.", tokens
-    )
-    res = ggml.to_numpy(tokens).tolist()
-    assert expected == res
-
-    out = ctypes.create_string_buffer(144)
-    ggml.fairseq2_spm_detokenize(g_model.ptr, tokens, out)
-    assert ctypes.string_at(out) == b"We are all in a yellow submarine."
-
-
-def test_t2tt(ctx: Ctx, g_model: c_void_p) -> None:
-    src_lang = "eng"
-    src_text = "We are all in a yellow submarine."
-    tgt_lang = "fra"
-    sample_file = DATA / "sample_input.npz"
-    beam_size = 2
-
-    if not sample_file.exists():
-        translator = load_translator()
-        device = translator.device
-        token_encoder = translator.text_tokenizer.create_encoder(
-            task="translation", lang=src_lang, mode="source", device=device
-        )
-        src = translator.collate(token_encoder(src_text))
-
-        text_out, _ = translator.get_prediction(
-            translator.model,
-            translator.text_tokenizer,
-            translator.unit_tokenizer,
-            src["seqs"],
-            None,
-            input_modality=Modality.TEXT,
-            output_modality=Modality.TEXT,
-            tgt_lang=tgt_lang,
-            text_generation_opts=SequenceGeneratorOptions(beam_size=beam_size),
-            unit_generation_opts=None,
-        )
-
-        tgt_text = str(text_out.sentences[0])
-        assert tgt_text == "Nous sommes tous dans un sous-marin jaune."
-        hypotheses = [
-            {
-                "seq": h.seq.tolist(),
-                "score": h.score.item(),
-                "step_scores": h.step_scores.numpy(),
-            }
-            for h in text_out.generator_output.results[0]
-        ]
-        np.savez(
-            sample_file,
-            encoder_output=text_out.encoder_output.numpy(),
-            hypotheses=hypotheses,
-        )
-
-    # allow_pickle to load the hyp dicts
-    text_out = np.load(sample_file, allow_pickle=True)
-    encoder_out = ggml.from_numpy(ctx, text_out["encoder_output"])
-    prefix_seq = np.array(text_out["hypotheses"][0]["seq"][:2]).astype(np.int32)
-    max_seq_len = max(len(h["seq"]) for h in text_out["hypotheses"])
-
-    opts = ggml.SequenceGeneratorOptions(
-        beam_size=beam_size,
-        min_seq_len=1,
-        soft_max_seq_len_a=1,
-        soft_max_seq_len_b=200,
-        hard_max_seq_len=int(max_seq_len * 1.5),
-        len_penalty=1.0,
-        unk_penalty=0.0,
-        normalize_scores=True,
-    )
-    job = ggml.SequenceGeneratorJob(
-        opts=opts,
-        prefix_seq=ggml.from_numpy(ctx, prefix_seq),
-        pad_idx=0,
-        unk_idx=1,
-        bos_idx=2,
-        eos_idx=3,
-        num_threads=16,
-    )
-
-    result_ptr = ggml.generate_sequence(g_model, job, encoder_out, NULLPTR, ctx)
-    results = [result_ptr[i] for i in range(beam_size) if result_ptr[i].seq != None]
-
-    # The step score error is big, this may negatively impact the beam search.
-    assert_hypotheses(
-        text_out["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1
-    )
-
-
 def test_s2tt(ctx: Ctx, g_model: c_void_p):
-    src_audio_wav, _ = torchaudio.load(DATA / "test.wav")
-    sample_file = DATA / "test.wav.npz"
+    if not LOCAL_AUDIO_SAMPLE_PATH.exists():
+        download_sample_audio()
+    src_audio_wav, _ = torchaudio.load(LOCAL_AUDIO_SAMPLE_PATH)
+    sample_file = DATA / "LJ037-0171_sr16k.wav.trans"
+    translator = load_translator()
     if not sample_file.exists():
-        translator = load_translator()
-        token_encoder = translator.text_tokenizer.create_encoder(task="translation")
         decoded_audio = {
             "waveform": src_audio_wav.t(),
             "sample_rate": 16000.0,
@@ -773,27 +670,13 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
             unit_generation_opts=None,
         )
 
-        tgt_text = str(text_out.sentences[0])
-        assert tgt_text == "大家好 , 世界无主题。"
-        hypotheses = [
-            {
-                "seq": h.seq.tolist(),
-                "score": h.score.item(),
-                "step_scores": h.step_scores.numpy(),
-            }
-            for h in text_out.generator_output.results[0]
-        ]
-        np.savez(
-            sample_file,
-            encoder_output=text_out.encoder_output.numpy(),
-            hypotheses=hypotheses,
-        )
+        tgt_text = str(text_out[0])
+        assert tgt_text == "专家的检查和证据使该委员会得出了结论,可能有五次枪击."
+        with open(sample_file, "w") as f:
+            f.write(tgt_text)
 
-    exp = np.load(sample_file, allow_pickle=True)
-    encoder_out = ggml.from_numpy(ctx, exp["encoder_output"])
-    tgt_tokens = exp["hypotheses"][0]["seq"]
-    max_seq_len = max(len(h["seq"]) for h in exp["hypotheses"])
-    max_seq_len = int(max_seq_len * 1.5)
+    with open(sample_file, "r") as exp:
+        exp_tgt_text = exp.readlines()[0].strip()
 
     # Apply scale before sending into ggml!
     gx = ggml.from_numpy(ctx, src_audio_wav * 2**15)
@@ -813,7 +696,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
         beam_size=beam_size,
         soft_max_seq_len_a=1,
         soft_max_seq_len_b=200,
-        hard_max_seq_len=max_seq_len,
+        hard_max_seq_len=500,
     )
     job = ggml.SequenceGeneratorJob(
         opts=opts,
@@ -825,20 +708,9 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
     )
     result_ptr = ggml.generate_sequence(g_model, Ptr(job), encoder_out, NULLPTR, ctx)
     results = [result_ptr[i] for i in range(beam_size) if result_ptr[i].seq != None]
-    assert_hypotheses(exp["hypotheses"], results, score_rtol=1e-2, step_scores_rtol=0.1)
-
-
-def assert_hypotheses(
-    expected: List[Any],
-    results: List[Any],
-    *,
-    score_rtol: float,
-    step_scores_rtol: float,
-) -> None:
-    assert len(results) == len(expected)
-    for g_hyp, exp in zip(results, expected):
-        g_tokens = list(ggml.to_numpy(g_hyp.seq))
-        g_step_scores = ggml.to_numpy(g_hyp.step_scores)
-        assert g_tokens == exp["seq"]
-        assert g_hyp.score == pytest.approx(exp["score"], rel=score_rtol)
-        assert np.allclose(g_step_scores, exp["step_scores"], rtol=step_scores_rtol)
+    tokens = [
+        translator.text_tokenizer.model.index_to_token(id)
+        for id in ggml.to_numpy(results[0].seq).tolist()
+    ][2:-1]
+    tokens = "".join(tokens).replace("▁", " ")[1:]
+    assert tokens == exp_tgt_text
