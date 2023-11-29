@@ -68,11 +68,11 @@ pip install .
 Here’s an example of using the CLI from the root directory to run inference.
 S2ST task:
 ```bash
-m4t_predict --input <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio>
+m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio>
 ```
 T2TT task:
 ```bash
-m4t_predict --input <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
+m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
 ```
 Please refer to the [inference README](src/seamless_communication/cli/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
