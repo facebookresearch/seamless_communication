@@ -7,8 +7,8 @@
 name: seamlessM4T_v2_large
 base: unity_nllb-100
 model_arch: base_v2
-char_tokenizer: "file:///checkpoint/krs/unity2/spm_char_lang38_tc.model"
-checkpoint: "file:///large_experiments/seamless/ust/krs/fairseq2_checkpoints/seamlessM4T_v2_large.pt"
+char_tokenizer: "https://dl.fbaipublicfiles.com/seamless/models/spm_char_lang38_tc.model"
+checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_v2_large.pt"
 num_units: 10000
 unit_langs:
   - arb

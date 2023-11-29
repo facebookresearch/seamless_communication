@@ -7,7 +7,7 @@
 name: vocoder_pretssel
 model_type: vocoder_pretssel
 model_arch: 24khz
-checkpoint: "file:///large_experiments/seamless/workstream/expressivity/oss/checkpoints/pretssel_melhifigan_wm-final.pt"
+checkpoint: "https://github.com/facebookresearch/seamless_communication;gated=true"
 sample_rate: 24000
 model_config:
   langs:

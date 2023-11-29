@@ -7,8 +7,8 @@
 name: seamless_expressivity
 base: unity_nllb-100
 model_arch: expressivity_v2
-char_tokenizer: "file:///checkpoint/krs/unity2/spm_char_lang38_tc.model"
-checkpoint: "file:///large_experiments/seamless/workstream/expressivity/oss/checkpoints/m2m_expressive_unity.pt"
+char_tokenizer: "https://dl.fbaipublicfiles.com/seamless/models/spm_char_lang38_tc.model"
+checkpoint: "https://github.com/facebookresearch/seamless_communication;gated=true"
 num_units: 10000
 unit_langs:
   - arb
