@@ -1,126 +1,52 @@
-# ggml
+# unity.cpp
 
-[Roadmap](https://github.com/users/ggerganov/projects/7) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205)
+## Introduction
+[GGML](https://github.com/ggerganov/ggml) is an open source library in C to enable large model inference on various hardware platforms. We implemented unity.cpp in ggml. Now it supports SeamlessM4T model for X2T tasks - Speech-to-text translation (S2TT), Acoustic speech recognition (ASR), Text-to-text translation (T2TT).  
 
-Tensor library for machine learning
+The project is still active in development. Contributions are welcome!
 
-***Note that this project is under active development. \
-Some of the development is currently happening in the [llama.cpp](https://github.com/ggerganov/llama.cpp) and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) repos***
-
-## Features
-
-- Written in C
-- 16-bit float support
-- Integer quantization support (4-bit, 5-bit, 8-bit, etc.)
-- Automatic differentiation
-- ADAM and L-BFGS optimizers
-- Optimized for Apple Silicon
-- On x86 architectures utilizes AVX / AVX2 intrinsics
-- On ppc64 architectures utilizes VSX intrinsics
-- No third-party dependencies
-- Zero memory allocations during runtime
-
-## Updates
-
-- [X] Example of GPT-2 inference [examples/gpt-2](https://github.com/ggerganov/ggml/tree/master/examples/gpt-2)
-- [X] Example of GPT-J inference [examples/gpt-j](https://github.com/ggerganov/ggml/tree/master/examples/gpt-j)
-- [X] Example of Whisper inference [examples/whisper](https://github.com/ggerganov/ggml/tree/master/examples/whisper)
-- [X] Support 4-bit integer quantization https://github.com/ggerganov/ggml/pull/27
-- [X] Example of Cerebras-GPT inference [examples/gpt-2](https://github.com/ggerganov/ggml/tree/master/examples/gpt-2)
-- [ ] Example of FLAN-T5 inference https://github.com/ggerganov/ggml/pull/12
-- [X] Example of LLaMA inference [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp)
-- [X] Example of LLaMA training [ggerganov/llama.cpp/examples/baby-llama](https://github.com/ggerganov/llama.cpp/tree/master/examples/baby-llama)
-- [X] Example of Falcon inference [cmp-nct/ggllm.cpp](https://github.com/cmp-nct/ggllm.cpp)
-- [X] Example of BLOOM inference [NouamaneTazi/bloomz.cpp](https://github.com/NouamaneTazi/bloomz.cpp)
-- [X] Example of RWKV inference [saharNooby/rwkv.cpp](https://github.com/saharNooby/rwkv.cpp)
-- [X] Example of SAM inference [examples/sam](https://github.com/ggerganov/ggml/tree/master/examples/sam)
-- [X] Idea for GPU support: https://github.com/ggerganov/llama.cpp/discussions/915
-- [X] Example of StableLM (GPT-NeoX) inference [examples/gpt-neox](https://github.com/ggerganov/ggml/tree/master/examples/gpt-neox)
-- [X] Example of BERT inference [skeskinen/bert.cpp](https://github.com/skeskinen/bert.cpp)
-- [X] Example of 💫 StarCoder inference [examples/starcoder](https://github.com/ggerganov/ggml/tree/master/examples/starcoder)
-- [X] Example of MPT inference [examples/mpt](https://github.com/ggerganov/ggml/tree/master/examples/mpt)
-- [X] Example of Replit inference [examples/replit](https://github.com/ggerganov/ggml/tree/master/examples/replit)
-- [X] Example of BioGPT inference [PABannier/biogpt.cpp](https://github.com/PABannier/biogpt.cpp)
-- [X] Example of Encodec inference [PABannier/encodec.cpp](https://github.com/PABannier/encodec.cpp)
-- [X] Example of CLIP inference [monatis/clip.cpp](https://github.com/monatis/clip.cpp)
-- [X] Example of MiniGPT4 inference [Maknee/minigpt4.cpp](https://github.com/Maknee/minigpt4.cpp)
-- [X] Example of ChatGLM inference [li-plus/chatglm.cpp](https://github.com/li-plus/chatglm.cpp)
-- [X] Example of Stable Diffusion inference [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)
-
-## Whisper inference (example)
-
-With ggml you can efficiently run [Whisper](examples/whisper) inference on the CPU.
-
-Memory requirements:
-
-| Model  | Disk   | Mem     |
-| ---    | ---    | ---     |
-| tiny   |  75 MB | ~280 MB |
-| base   | 142 MB | ~430 MB |
-| small  | 466 MB | ~1.0 GB |
-| medium | 1.5 GB | ~2.6 GB |
-| large  | 2.9 GB | ~4.7 GB |
-
-## GPT inference (example)
-
-With ggml you can efficiently run [GPT-2](examples/gpt-2) and [GPT-J](examples/gpt-j) inference on the CPU.
-
-Here is how to run the example programs:
-
-```bash
-# Build ggml + examples
-git clone https://github.com/ggerganov/ggml
-cd ggml
-mkdir build && cd build
-cmake ..
-make -j4 gpt-2 gpt-j
-
-# Run the GPT-2 small 117M model
-../examples/gpt-2/download-ggml-model.sh 117M
-./bin/gpt-2 -m models/gpt-2-117M/ggml-model.bin -p "This is an example"
-
-# Run the GPT-J 6B model (requires 12GB disk space and 16GB CPU RAM)
-../examples/gpt-j/download-ggml-model.sh 6B
-./bin/gpt-j -m models/gpt-j-6B/ggml-model.bin -p "This is an example"
-
-# Install Python dependencies
-python3 -m pip install -r ../requirements.txt
-
-# Run the Cerebras-GPT 111M model
-# Download from: https://huggingface.co/cerebras
-python3 ../examples/gpt-2/convert-cerebras-to-ggml.py /path/to/Cerebras-GPT-111M/
-./bin/gpt-2 -m /path/to/Cerebras-GPT-111M/ggml-model-f16.bin -p "This is an example"
+## Build
+To build the interactive console for S2TT & ASR, 
 ```
 
-The inference speeds that I get for the different models on my 32GB MacBook M1 Pro are as follows:
+cd seamless_communication/ggml
+mkdir build; cd build
+cmake -DGGML_OPENBLAS=ON \
+    -DBUILD_SHARED_LIBS=On \
+	  -DCMAKE_BUILD_TYPE=Release \
+	  -DCMAKE_CXX_FLAGS="-g2 -fno-omit-frame-pointer" \
+    ..
+make -j4 unity # Interactive Console
 
-| Model | Size  | Time / Token |
-| ---   | ---   | ---    |
-| GPT-2 |  117M |   5 ms |
-| GPT-2 |  345M |  12 ms |
-| GPT-2 |  774M |  23 ms |
-| GPT-2 | 1558M |  42 ms |
-| ---   | ---   | ---    |
-| GPT-J |    6B | 125 ms |
-
-For more information, checkout the corresponding programs in the [examples](examples) folder.
-
-## Using cuBLAS
-
-```bash
-# fix the path to point to your CUDA compiler
-cmake -DGGML_CUBLAS=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc ..
 ```
+For more build commands see [Makefile](Makefile). 
 
-## Using clBLAST
-
-```bash
-cmake -DGGML_CLBLAST=ON ..
+## CLI usage
+Command to launch an interactive console for S2TT & ASR, note that the model already includes vocabulary needed to detokenize. 
 ```
+OPENBLAS_NUM_THREADS=8 ./bin/unity --model seamlessM4T_medium.ggml
+```
+In the console, enter the path of local waveform file and target language, separated by space. Note that the first run would include some “warm up” time so could be slow. 
 
-## Resources
+Converted ggml models could be downloaded from 
+|SeamlessM4T_large | SeamlessM4T_medium | 
+|-------- | -------- | 
+| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
 
-- [GGML - Large Language Models for Everyone](https://github.com/rustformers/llm/blob/main/crates/ggml/README.md): a description of the GGML format provided by the maintainers of the `llm` Rust crate, which provides Rust bindings for GGML
-- [marella/ctransformers](https://github.com/marella/ctransformers): Python bindings for GGML models.
-- [go-skynet/go-ggml-transformers.cpp](https://github.com/go-skynet/go-ggml-transformers.cpp): Golang bindings for GGML models
-- [smspillaz/ggml-gobject](https://github.com/smspillaz/ggml-gobject): GObject-introspectable wrapper for use of GGML on the GNOME platform.
+## Fairseq2 model conversion 
+Models from fairseq2 checkpoints could be converted to ggml automatically with [ggml_convert.py](ggml_convert.py). 
+```
+python ggml_convert.py -m MODEL_NAME
+```
+where MODEL_NAME corresponds to asset cards in fairseq2 / seamless_communication, e.g. seamlessM4T_medium, seamlessM4T_large
+
+## Python bindings
+We also utilize ggml python bindings for better dev experience. For examples of running unity.cpp in python, refer to tests in [test_unity_cpp.py](test_unity_cpp.py). 
+
+## [Optional]Dependencies
+### OpenBLAS
+We strongly suggest building with OpenBLAS, as we've seen 8x speedup on test machine. 
+
+### libsndfile
+This is needed only for the console to load waveform, but not the library.
+
