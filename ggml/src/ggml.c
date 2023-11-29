@@ -25,7 +25,6 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <signal.h>
-#include "tracy/TracyC.h"
 
 
 #ifdef GGML_USE_METAL
@@ -11692,17 +11691,11 @@ static void ggml_compute_forward_mul_mat(
                     x = wdata;
                 }
 
-                TracyCPlot("cblas_sgemm_B", ne13 * ne12);
-                TracyCPlot("cblas_sgemm_M", ne11);
-                TracyCPlot("cblas_sgemm_N", ne01);
-                TracyCPlot("cblas_sgemm_K", ne10);
-                TracyCZoneN(_tracy_sgemm, "cblas_sgemm", true);
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                         ne11, ne01, ne10,
                         1.0f,    y, ne10,
                                  x, ne00,
                         0.0f,    d, ne01);
-                TracyCZoneEnd(_tracy_sgemm);
             }
         }
 
@@ -16735,472 +16728,324 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_DUP", true);
                 ggml_compute_forward_dup(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ADD:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ADD", true);
                 ggml_compute_forward_add(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ADD1:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ADD1", true);
                 ggml_compute_forward_add1(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ACC:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ACC", true);
                 ggml_compute_forward_acc(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SUB:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SUB", true);
                 ggml_compute_forward_sub(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_MUL:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MUL", true);
                 ggml_compute_forward_mul(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_DIV:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_DIV", true);
                 ggml_compute_forward_div(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SQR:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SQR", true);
                 ggml_compute_forward_sqr(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SQRT:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SQRT", true);
                 ggml_compute_forward_sqrt(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_LOG:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_LOG", true);
                 ggml_compute_forward_log(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SUM:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SUM", true);
                 ggml_compute_forward_sum(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SUM_ROWS:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SUM_ROWS", true);
                 ggml_compute_forward_sum_rows(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_MEAN:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MEAN", true);
                 ggml_compute_forward_mean(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ARGMAX:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ARGMAX", true);
                 ggml_compute_forward_argmax(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_REPEAT:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_REPEAT", true);
                 ggml_compute_forward_repeat(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_REPEAT_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_REPEAT_BACK", true);
                 ggml_compute_forward_repeat_back(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONCAT:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONCAT", true);
                 ggml_compute_forward_concat(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SILU_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SILU_BACK", true);
                 ggml_compute_forward_silu_back(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_NORM:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_NORM", true);
                 ggml_compute_forward_norm(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_BATCH_NORM:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_BATCH_NORM", true);
                 ggml_compute_forward_batch_norm(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3], tensor->src[4], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_RMS_NORM:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_RMS_NORM", true);
                 ggml_compute_forward_rms_norm(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_RMS_NORM_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_RMS_NORM_BACK", true);
                 ggml_compute_forward_rms_norm_back(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_GROUP_NORM:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_GROUP_NORM", true);
                 ggml_compute_forward_group_norm(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_MUL_MAT:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MUL_MAT", true);
                 ggml_compute_forward_mul_mat(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_OUT_PROD:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_OUT_PROD", true);
                 ggml_compute_forward_out_prod(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SCALE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SCALE", true);
                 ggml_compute_forward_scale(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SET:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SET", true);
                 ggml_compute_forward_set(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CPY:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CPY", true);
                 ggml_compute_forward_cpy(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONT:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONT", true);
                 ggml_compute_forward_cont(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_RESHAPE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_RESHAPE", true);
                 ggml_compute_forward_reshape(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_VIEW:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_VIEW", true);
                 ggml_compute_forward_view(params, tensor->src[0]);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_PERMUTE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_PERMUTE", true);
                 ggml_compute_forward_permute(params, tensor->src[0]);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_TRANSPOSE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_TRANSPOSE", true);
                 ggml_compute_forward_transpose(params, tensor->src[0]);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_GET_ROWS:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_GET_ROWS", true);
                 ggml_compute_forward_get_rows(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_GET_ROWS_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_GET_ROWS_BACK", true);
                 ggml_compute_forward_get_rows_back(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_DIAG:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_DIAG", true);
                 ggml_compute_forward_diag(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_DIAG_MASK_INF:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_DIAG_MASK_INF", true);
                 ggml_compute_forward_diag_mask_inf(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_DIAG_MASK_ZERO:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_DIAG_MASK_ZERO", true);
                 ggml_compute_forward_diag_mask_zero(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SOFT_MAX", true);
                 ggml_compute_forward_soft_max(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_SOFT_MAX_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_SOFT_MAX_BACK", true);
                 ggml_compute_forward_soft_max_back(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ROPE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ROPE", true);
                 ggml_compute_forward_rope(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ROPE_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ROPE_BACK", true);
                 ggml_compute_forward_rope_back(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ALIBI:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ALIBI", true);
                 ggml_compute_forward_alibi(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CLAMP:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CLAMP", true);
                 ggml_compute_forward_clamp(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D", true);
                 ggml_compute_forward_conv_1d(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_STAGE_0:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_STAGE_0", true);
                 ggml_compute_forward_conv_1d_stage_0(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_STAGE_1:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_STAGE_1", true);
                 ggml_compute_forward_conv_1d_stage_1(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_STAGE_2:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_STAGE_2", true);
                 ggml_compute_forward_conv_1d_stage_2(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_GENERIC:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_GENERIC", true);
                 ggml_compute_forward_conv_1d_generic(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_GENERIC_STAGE_0:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_GENERIC_STAGE_0", true);
                 ggml_compute_forward_conv_1d_generic_stage_0(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_1D_GENERIC_STAGE_1:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_1D_GENERIC_STAGE_1", true);
                 ggml_compute_forward_conv_1d_generic_stage_1(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_2D:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_2D", true);
                 ggml_compute_forward_conv_2d(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_CONV_TRANSPOSE_2D:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CONV_TRANSPOSE_2D", true);
                 ggml_compute_forward_conv_transpose_2d(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_POOL_1D:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_POOL_1D", true);
                 ggml_compute_forward_pool_1d(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_POOL_2D:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_POOL_2D", true);
                 ggml_compute_forward_pool_2d(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_UPSCALE:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_UPSCALE", true);
                 ggml_compute_forward_upscale(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_FLASH_ATTN:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_FLASH_ATTN", true);
                 const int32_t t = ggml_get_op_params_i32(tensor, 0);
                 GGML_ASSERT(t == 0 || t == 1);
                 const bool masked = t != 0;
                 ggml_compute_forward_flash_attn(params, tensor->src[0], tensor->src[1], tensor->src[2], masked, tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_FLASH_FF:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_FLASH_FF", true);
                 ggml_compute_forward_flash_ff(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3], tensor->src[4], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_FLASH_ATTN_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_FLASH_ATTN_BACK", true);
                 int32_t t = ggml_get_op_params_i32(tensor, 0);
                 GGML_ASSERT(t == 0 || t == 1);
                 bool masked = t != 0;
                 ggml_compute_forward_flash_attn_back(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3], masked, tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_WIN_PART:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_WIN_PART", true);
                 ggml_compute_forward_win_part(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_WIN_UNPART:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_WIN_UNPART", true);
                 ggml_compute_forward_win_unpart(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_UNARY:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_UNARY", true);
                 ggml_compute_forward_unary(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_GET_REL_POS:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_GET_REL_POS", true);
                 ggml_compute_forward_get_rel_pos(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_ADD_REL_POS:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_ADD_REL_POS", true);
                 ggml_compute_forward_add_rel_pos(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             } break;
         case GGML_OP_MAP_UNARY:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_UNARY", true);
                 ggml_unary_op_f32_t fun;
                 memcpy(&fun, tensor->op_params, sizeof(fun));
                 ggml_compute_forward_map_unary(params, tensor->src[0], tensor, fun);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_BINARY:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_BINARY", true);
                 ggml_binary_op_f32_t fun;
                 memcpy(&fun, tensor->op_params, sizeof(fun));
                 ggml_compute_forward_map_binary(params, tensor->src[0], tensor->src[1], tensor, fun);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM1_F32:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM1_F32", true);
                 ggml_custom1_op_f32_t fun;
                 memcpy(&fun, tensor->op_params, sizeof(fun));
                 ggml_compute_forward_map_custom1_f32(params, tensor->src[0], tensor, fun);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM2_F32:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM2_F32", true);
                 ggml_custom2_op_f32_t fun;
                 memcpy(&fun, tensor->op_params, sizeof(fun));
                 ggml_compute_forward_map_custom2_f32(params, tensor->src[0], tensor->src[1], tensor, fun);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM3_F32:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM3_F32", true);
                 ggml_custom3_op_f32_t fun;
                 memcpy(&fun, tensor->op_params, sizeof(fun));
                 ggml_compute_forward_map_custom3_f32(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor, fun);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM1:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM1", true);
                 ggml_compute_forward_map_custom1(params, tensor->src[0], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM2:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM2", true);
                 ggml_compute_forward_map_custom2(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_MAP_CUSTOM3:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_MAP_CUSTOM3", true);
                 ggml_compute_forward_map_custom3(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_CROSS_ENTROPY_LOSS:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CROSS_ENTROPY_LOSS", true);
                 ggml_compute_forward_cross_entropy_loss(params, tensor->src[0], tensor->src[1], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
             {
-                TracyCZoneN(__tracy_ctx, "GGML_OP_CROSS_ENTROPY_LOSS_BACK", true);
                 ggml_compute_forward_cross_entropy_loss_back(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
-                TracyCZoneEnd(__tracy_ctx);
             }
             break;
         case GGML_OP_NONE:
@@ -19063,17 +18908,13 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
 }
 
 void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
-    TracyCZoneN(_tracy_graph, "ggml_graph_plan", true);
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads);
-    TracyCZoneEnd(_tracy_graph);
 
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
 
     cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
 
-    TracyCZoneN(_tracy_compute, "ggml_graph_compute", true);
     ggml_graph_compute(cgraph, &cplan);
-    TracyCZoneEnd(_tracy_compute);
 }
 
 struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name) {

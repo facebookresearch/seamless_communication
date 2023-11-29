@@ -135,7 +135,7 @@ int main(int argc, char ** argv) {
     }
 
     char result_str[4096];
-    static std::vector<uint8_t> encoder_buf(4 * 1024LL * 1024LL * 1024LL);
+    static std::vector<uint8_t> encoder_buf(20 * 1024LL * 1024LL * 1024LL);
 
     std::string input;
     bool interactive = params.files.size() == 0;
@@ -189,13 +189,14 @@ int main(int argc, char ** argv) {
 
         // Beam search decoding
         const Hypothesis* result = unity_decode(model, params.opts, tgt_lang_idx, encoder_output, params.n_threads);
-
+    
         // Drop language and bos token.
         ggml_tensor* tokens = ggml_slice(model.ctx, result[0].seq, 0, 2, 0);
 
         // Collect result string
         int n = fairseq2_spm_detokenize(&model, tokens, (char*)&result_str);
         std::cout << std::string((char*)&result_str, n) << std::endl;
+        ggml_free(model.ctx);
     }
 
     return 0;

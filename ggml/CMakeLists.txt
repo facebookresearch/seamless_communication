@@ -160,9 +160,6 @@ target_include_directories(kaldi-native-fbank PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/examples/kaldi-native-fbank/csrc
 )
 
-option( TRACY_ENABLE "" ON)
-option( TRACY_ON_DEMAND "" ON)
-add_subdirectory (tracy)
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)

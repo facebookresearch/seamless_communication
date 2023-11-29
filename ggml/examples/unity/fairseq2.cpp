@@ -7,8 +7,6 @@
 
 #include "kaldi-native-fbank/csrc/feature-fbank.h"
 #include "kaldi-native-fbank/csrc/feature-window.h"
-#include "tracy/Tracy.hpp"
-
 #include "fairseq2.h"
 #include "ggml.h"
 
@@ -18,7 +16,7 @@ ggml_tensor* ggml_detach(ggml_tensor* a) {
     return a;
 }
 
-#define DEBUG_MEM_USAGE 1
+#define DEBUG_MEM_USAGE 0
 
 void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
@@ -1147,7 +1145,6 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask
 ) {
-    ZoneScoped;
     int prefix_seq_len = job.prefix_seq->ne[0];
     int max_seq_len = scores->ne[0];
     int beam_size = scores->ne[1];
@@ -1188,6 +1185,7 @@ extern "C" void _bootstrap_seqs_and_scores(
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
     ggml_graph_compute_with_ctx(ctx, &gf, 1);
+    ggml_free(ctx);
     full_seqs->type = GGML_TYPE_I32;
     job.prefix_seq->type = GGML_TYPE_I32;
 
@@ -1210,8 +1208,7 @@ int topk(
     std::int64_t k,
     ggml_tensor* candidate_indices
 ) {
-    ZoneNamed(topk, true);
-    // Take the best 2 x `beam_size` predictions. We'll choose the first
+        // Take the best 2 x `beam_size` predictions. We'll choose the first
     // `beam_size` of these which don't predict EOS to continue with.
     // (N, 2 x B)
     // `vocab_size` - 1 to never select PAD.
@@ -1227,8 +1224,7 @@ int topk(
 }
 
 void _tweak_lprobs(const SequenceGeneratorJob& job, ggml_tensor* lprobs, int step_nr, int max_seq_len, std::size_t vocab_size) {
-    ZoneNamed(tweak_lprobs, true);
-    std::size_t beam_size = job.opts.beam_size;
+        std::size_t beam_size = job.opts.beam_size;
     std::size_t eos_idx = job.eos_idx;
 
     // Do not allow EOS before reaching the minimum sequence length.
@@ -1279,8 +1275,7 @@ void _finalize_hypothesis(
     ggml_tensor* scores, // (beam_size, seq_len)
     Hypothesis* hypothesis
 ) {
-    ZoneNamed(_finalize_hypothesis, true);
-    ggml_tensor* seq = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
+        ggml_tensor* seq = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
     hypothesis->seq = seq;
     ggml_tensor* step_scores = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, step_nr + 2);
     hypothesis->step_scores = step_scores;
@@ -1331,11 +1326,10 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* encoder_padding_mask,
     ggml_context* result_ctx
 ) {
-    ZoneScoped;
     std::vector<uint8_t> local_bufs[3] = {
-        std::vector<uint8_t>(256 * 1024 * 1024),  // step_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // next_step_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024)  // search_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024),  // step_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024),  // next_step_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024)  // search_ctx
     };
     ggml_context* search_ctx = ctx_from_buffer(local_bufs[2]);
 
@@ -1441,7 +1435,6 @@ extern "C" Hypothesis* generate_sequence(
 
         std::size_t ongoing_beams = 0;
         for (std::int32_t i = 0; i < K; ++i) {
-            ZoneNamed(beam_search_step, true);
             int c = ggml_get_f32_1d(candidate_indices, i);
             std::int32_t beam = c / vocab_size;
             std::int32_t token = c % vocab_size;
@@ -1476,15 +1469,15 @@ extern "C" Hypothesis* generate_sequence(
             new_scores = ggml_get_rows(search_ctx, scores, beam_indices);
             ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
             ggml_build_forward_expand(&gf_reorder, new_scores);
-            next_step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2]);
-            reorder_kv_cache(model, next_step_ctx, &gf_reorder, beam_indices);
-
-            ggml_graph_compute_with_ctx(next_step_ctx, &gf_reorder, 1);
+            reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
+            ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
             ggml_detach(new_seqs);
             ggml_detach(new_scores);
             new_seqs->type = GGML_TYPE_I32;
             printf_mem_usage(search_ctx, "search_ctx");
+            next_step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2]);
             SWAP(step_ctx, next_step_ctx);
+            ggml_free(next_step_ctx);
         }
 
         // new_seqs[:, step_nr + 1] = next_tokens
