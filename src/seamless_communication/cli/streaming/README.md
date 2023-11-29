@@ -42,4 +42,6 @@ The Seamless model is an unified model for streaming expressive speech-to-speech
 streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_lang_code> --expressive
 ```
 
-Note: In the current version of our paper, we use vocoder_pretssel_16khz for the evaluation , so in order to reproduce those results please add this arg to the above command: `--vocoder-name vocoder_pretssel_16khz`
+The Seamless model uses `vocoder_pretssel` which is a 24KHz version (`vocoder_pretssel`) by default. In the current version of our paper, we use 16KHz version (`vocoder_pretssel_16khz`) for the evaluation , so in order to reproduce those results please add this arg to the above command: `--vocoder-name vocoder_pretssel_16khz`.
+
+Also, to acquire `vocoder_pretssel` or `vocoder_pretssel_16khz` checkpoints, please check out [this section](../../README.md#seamlessexpressive-models).

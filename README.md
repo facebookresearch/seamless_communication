@@ -134,6 +134,9 @@ Please note that SeamlessExpressive is made available under its own [License]() 
 | ------------------ | ------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | SeamlessStreaming  | 2.5B    | [🤗 Model card](https://huggingface.co/facebook/SeamlessStreaming) - [monotonic decoder checkpoint](https://huggingface.co/facebook/SeamlessStreaming/resolve/main/seamless_streaming_monotonic_decoder.pt) - [streaming UnitY2 checkpoint](https://huggingface.co/facebook/SeamlessStreaming/resolve/main/seamless_streaming_unity.pt)  | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/streaming/seamless_streaming.zip)  |
 
+### Seamless models
+Seamless model is simply the SeamlessStreaming model with the non-expressive `vocoder_v2` swapped out with the expressive `vocoder_pretssel`.
+Please check out above [section](#seamlessexpressive-models) on how to acquire `vocoder_pretssel` checkpoint.
 
 ## Evaluation
 
