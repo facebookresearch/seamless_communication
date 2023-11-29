@@ -132,7 +132,7 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ign
         parser.add_argument(
             "--vocoder-name",
             type=str,
-            help="Vocoder name.",
+            help="Vocoder name - vocoder_pretssel or vocoder_pretssel_16khz",
             default="vocoder_pretssel",
         )
         parser.add_argument(

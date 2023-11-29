@@ -7,7 +7,7 @@ Evaluation can be run with the `streaming_evaluate` CLI.
 
 We use the `seamless_streaming_unity` for loading the speech encoder and T2U models, and `seamless_streaming_monotonic_decoder` for loading the text decoder for streaming evaluation. This is already set as defaults for the `streaming_evaluate` CLI, but can be overridden using the `--unity-model-name` and  `--monotonic-decoder-model-name` args if required.
 
-Note that the numbers in the paper use single precision floating point format (fp32) for evaluation by setting `--dtype fp32`.
+Note that the numbers in our paper use single precision floating point format (fp32) for evaluation by setting `--dtype fp32`. Also note that the results from running these evaluations might be slightly different from the results reported in our paper (which will be updated soon with the new results).
 
 ### S2TT:
 Set the task to `s2tt` for evaluating the speech-to-text translation part of the SeamlessStreaming model.
