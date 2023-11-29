@@ -22,7 +22,7 @@ Note: The `--ref-field` can be used to specify the name of the reference column 
 Set the task to `asr` for evaluating the automatic speech recognition part of the SeamlessStreaming model. Make sure to pass the source language as the `--tgt-lang` arg.
 
 ```bash
-streaming_evaluate --task s2tt --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_source_lang_code> 
+streaming_evaluate --task asr --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_source_lang_code> 
 ```
 
 ### S2ST:
