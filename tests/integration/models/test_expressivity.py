@@ -13,12 +13,10 @@ from torch import tensor
 from seamless_communication.inference import Translator
 from seamless_communication.inference.pretssel_generator import PretsselGenerator
 from seamless_communication.models.unit_extractor import UnitExtractor
-from seamless_communication.models.unity import load_gcmvn_stats
 from tests.common import (
     assert_unit_close,
     convert_to_collated_fbank,
     device,
-    get_default_dtype,
 )
 
 # fmt: off

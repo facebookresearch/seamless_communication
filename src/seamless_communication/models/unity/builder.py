@@ -199,8 +199,6 @@ def _expressivity_v2() -> UnitYConfig:
 
     mt_model_config.vocab_info.size = 256102  # NLLB-100
 
-    mt_model_config.vocab_info.pad_idx = 1
-
     mt_model_config.max_seq_len = 10000
 
     t2u_config = unity_t2u_archs.get_config("expressivity_nar")

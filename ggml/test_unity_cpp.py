@@ -380,7 +380,7 @@ def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> N
         pytest.skip(reason=f"Folder {DATA_DEV} not found !")
 
     x = torch.load(DATA_DEV / "seqs_before_conformer_block.pt")
-    padding_mask = PaddingMask(torch.ones(1, x.shape[1]),x.shape[1])
+    padding_mask = PaddingMask(torch.ones(1, x.shape[1]), x.shape[1])
 
     layer = pt_model.speech_encoder.inner.layers[0]
     gx = ggml.from_numpy(ctx, x[0])
@@ -545,9 +545,8 @@ def test_WaveformToFbank_forward(ctx: Ctx, g_model: c_void_p) -> None:
 
 def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
     seq = torch.zeros((4, 20, 1024), dtype=torch.float32)
-    # this _legacy_pad_idx is suspicious. Shouldn't the model use 1 ? But
-    # this is consistent with pt_model.text_decoder_frontend.pos_encoder._sin_offset
-    pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=0)
+
+    pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=1)
     y_exp = pos_encoder(seq, None)[0].numpy()
 
     gseq = ggml.from_numpy(ctx, seq[0].clone().numpy())
@@ -565,7 +564,7 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
 
 def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> None:
     seq = torch.zeros((4, 20, 1024), dtype=torch.float32)
-    pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=0)
+    pos_encoder = fairseq2.nn.SinusoidalPositionEncoder(1024, 55, _legacy_pad_idx=1)
     pos_encoder.eval()
     state_bag = fairseq2.nn.IncrementalStateBag(100)
 

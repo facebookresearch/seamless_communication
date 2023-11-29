@@ -154,7 +154,7 @@ def _base_t2u() -> UnitYT2UConfig:
         ffn_inner_dim=1024 * 8,
         dropout_p=0.1,
         use_gelu=False,
-        char_pad_idx=0,
+        char_pad_idx=1,
         use_prosody_proj=False,
         prosody_encoder_dim=0,
     )
@@ -177,7 +177,7 @@ def _medium_t2u() -> UnitYT2UConfig:
         ffn_inner_dim=1024 * 8,
         dropout_p=0.1,
         use_gelu=False,
-        char_pad_idx=0,
+        char_pad_idx=1,
         use_prosody_proj=False,
         prosody_encoder_dim=0,
     )
@@ -226,7 +226,7 @@ def _base_nar() -> UnitYT2UConfig:
         ffn_inner_dim=1024 * 8,
         dropout_p=0.0,
         use_gelu=False,
-        char_pad_idx=0,
+        char_pad_idx=1,
         use_prosody_proj=False,
         prosody_encoder_dim=0,
     )
@@ -602,10 +602,12 @@ class UnitYNART2UBuilder:
             self.config.nar_decoder_config.model_name_or_card
         )
 
+        # The legacy pad idx should be the same as that of the unit_pos_encoder,
+        # since in fairseq1 the pos encoder is shared between both char, units.
         char_pos_encoder = SinusoidalPositionEncoder(
             self.config.model_dim,
             self.config.nar_decoder_config.char_max_seq_len,
-            _legacy_pad_idx=self.config.char_pad_idx,
+            _legacy_pad_idx=self.config.target_vocab_info.pad_idx,
             device=self.device,
         )
 

@@ -90,7 +90,7 @@ def _dense_1b() -> MonotonicDecoderConfig:
         model_dim=1024,
         max_seq_len=4096,
         vocab_info=VocabularyInfo(
-            size=256102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=1
+            size=256102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=0
         ),
         num_decoder_layers=24,
         num_decoder_attn_heads=16,
@@ -164,7 +164,7 @@ class MonotonicDecoderBuilder:
         pos_encoder = SinusoidalPositionEncoder(
             self.config.model_dim,
             self.config.max_seq_len,
-            _legacy_pad_idx=self.config.vocab_info.pad_idx,
+            _legacy_pad_idx=1,
             device=self.device,
         )
 

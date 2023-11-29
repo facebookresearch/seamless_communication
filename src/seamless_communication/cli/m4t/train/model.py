@@ -370,7 +370,7 @@ class ModelBuilder:
             ),
             t2u_config=UnitYT2UConfig(
                 use_gelu=False,
-                char_pad_idx=0,
+                char_pad_idx=1,
                 use_prosody_proj=False,
                 prosody_encoder_dim=0,
                 model_dim=config.model_embed_dim,

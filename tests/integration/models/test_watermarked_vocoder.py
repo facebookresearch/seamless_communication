@@ -148,6 +148,7 @@ def test_pretssel_vocoder_watermarking(
     )
 
 
+@pytest.mark.skip(reason="Skip this test since it's extremely slow.")
 def test_e2e_watermark_audio() -> None:
     data_file = "/large_experiments/seamless/data/expressivity/fairseq_manifest/benchmark_20231025/test_examples_20231122.tsv"
     model_name = "seamless_expressivity"

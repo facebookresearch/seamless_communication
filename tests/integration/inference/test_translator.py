@@ -55,8 +55,8 @@ def test_seamless_m4t_v2_large_t2tt() -> None:
 def test_seamless_m4t_v2_large_multiple_tasks() -> None:
     model_name = "seamlessM4T_v2_large"
     english_text = "Hello! I hope you're all doing well."
-    ref_spanish_text = "Hola, espero que todos estéis haciendo bien."
-    ref_spanish_asr_text = "Hola, espero que todos estéis haciendo bien."
+    ref_spanish_text = "Hola, espero que todo se esté haciendo bien."
+    ref_spanish_asr_text = "Hola, espero que todo se esté haciendo bien."
 
     dtype = get_default_dtype()
 
