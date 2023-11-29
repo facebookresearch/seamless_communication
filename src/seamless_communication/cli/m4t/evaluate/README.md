@@ -1,5 +1,8 @@
 # Evaluating SeamlessM4T models
-Refer to the [inference tutorial](../predict/README.md) for the supported tasks and language directions to run inference with SeamlessM4T models.
+
+Refer to the [SeamlessM4T README](../../../../../docs/m4t) for an overview of the M4T models.
+
+Refer to the [inference README](../predict/README.md) for how to run inference with SeamlessM4T models.
 
 ## Quick start:
 We use SACREBLEU library for computing BLEU scores and [JiWER library](https://github.com/jitsi/jiwer) is used to compute these CER and WER scores. 

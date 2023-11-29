@@ -23,10 +23,12 @@ setup(
     install_requires=[
         "datasets",
         "fairseq2==0.2.*",
+        "fire",
         "librosa",
         "openai-whisper",
         "simuleval~=1.1.2",
         "soundfile",
+        "scipy",
         "torchaudio",
         "tqdm",
     ],

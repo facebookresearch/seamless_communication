@@ -20,6 +20,7 @@ from fairseq2.data.audio import (
     WaveformToFbankOutput,
 )
 from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
+
 from fairseq2.typing import DataType, Device
 from sacrebleu.metrics import BLEU  # type: ignore[attr-defined]
 from torch import Tensor
