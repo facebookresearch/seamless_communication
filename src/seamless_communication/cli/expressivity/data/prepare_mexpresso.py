@@ -41,7 +41,7 @@ def multiprocess_map(
     if n_workers is None:
         n_workers = mp.cpu_count()
     n_workers = min(n_workers, mp.cpu_count())
-    with mp.Pool(processes=n_workers) as pool:
+    with mp.get_context("spawn").Pool(processes=n_workers) as pool:
         results = list(
             tqdm(
                 pool.imap(func, a_list, chunksize=chunksize),
@@ -132,7 +132,7 @@ def build_en_manifest_from_oss(oss_root: Path, output_folder: Path) -> pd.DataFr
         for i, row in df.iterrows()
     ]
     logger.info("converting from 48khz to mono 16khz")
-    multiprocess_map(input_output_audios, convert_to_16khz_wav)
+    multiprocess_map(input_output_audios, convert_to_16khz_wav, chunksize=50)
     df.loc[:, "audio"] = [output_audio for _, output_audio in input_output_audios]
     audio_exists = df["audio"].apply(lambda x: os.path.isfile(x))
     assert all(audio_exists), df[~audio_exists].iloc[0]["audio"]
@@ -168,12 +168,11 @@ def main() -> None:
     mexpresso_path = mexpresso_root_path / "mexpresso_text"
 
     # downsample all English speech
-    en_expresso_folder = f"{args.output_folder}/En_Expresso"
     if args.existing_expresso_root is not None:
         logger.info(
             f"Re-use user manually downloaded Expresso from {args.existing_expresso_root}"
         )
-        en_expresso_folder = Path(args.existing_expresso_root)
+        en_expresso_path = Path(args.existing_expresso_root)
     else:
         en_expresso_card = asset_store.retrieve_card("expresso")
         en_expresso_root_path = download_manager.download_dataset(
@@ -184,6 +183,7 @@ def main() -> None:
             f"The English Expresso dataset is downloaded to {en_expresso_root_path}"
         )
         en_expresso_path = en_expresso_root_path / "expresso"
+    en_expresso_folder = f"{args.output_folder}/En_Expresso"
     en_expresso_df = build_en_manifest_from_oss(
         Path(en_expresso_path), Path(en_expresso_folder)
     )
