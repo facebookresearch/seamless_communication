@@ -5,23 +5,19 @@
 # LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
-import pandas
-from fairseq2.typing import Device
-from pathlib import Path
-from typing import Optional
+
 import json
 from argparse import ArgumentParser, Namespace
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Optional
 
-from simuleval.evaluator.scorers.quality_scorer import (
-    register_quality_scorer,
-    QualityScorer,
-)
-
+import pandas
+from fairseq2.typing import Device
+from seamless_communication.cli.eval_utils import compute_quality_metrics
 from simuleval.evaluator.instance import LogInstance
-
-from seamless_communication.cli.eval_utils import (
-    compute_quality_metrics,
+from simuleval.evaluator.scorers.quality_scorer import (
+    QualityScorer,
+    register_quality_scorer,
 )
 
 
@@ -90,19 +86,13 @@ class SeamlessQualityScorer(QualityScorer):  # type: ignore
 
     @staticmethod
     def add_args(parser: ArgumentParser) -> None:
-        try:
-            parser.add_argument(
-                "--task", type=str, help="Task to evaluate", required=True
-            )
-            parser.add_argument(
-                "--tgt-lang",
-                type=str,
-                help="Target language to translate/transcribe into.",
-                required=True,
-            )
-        except:
-            pass
-
+        parser.add_argument("--task", type=str, help="Task to evaluate", required=True)
+        parser.add_argument(
+            "--tgt-lang",
+            type=str,
+            help="Target language to translate/transcribe into.",
+            required=True,
+        )
         parser.add_argument(
             "--whisper-model-name", type=str, help="Whisper model name", default="large"
         )

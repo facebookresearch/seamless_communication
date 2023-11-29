@@ -4,22 +4,22 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import logging
+from pathlib import Path
+from typing import Optional, Tuple, Union
+
 import pandas as pd
 import whisper
-
 from fairseq2.typing import Device
 from jiwer import cer, wer
-from pathlib import Path
 from sacrebleu.metrics.base import Score, Signature
 from sacrebleu.metrics.bleu import BLEU
 from sacrebleu.metrics.chrf import CHRF
 from seamless_communication.cli.eval_utils.lang_mapping import LANG3_LANG2
 from tqdm import tqdm
-from typing import Optional, Tuple, Union
 from whisper import Whisper
 from whisper.normalizers import BasicTextNormalizer, EnglishTextNormalizer
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -190,7 +190,7 @@ def compute_asr_error_rate(
     ref_text_series: pd.Series,
     lang: str,
     whisper_normalize_text: bool = True,
-) -> Tuple[Score, str]:
+) -> Tuple[float, str]:
     """Wraps normalization functions and computes ASR WER/CER score
     Args:
         hyp_text_series (pd.Series): each line contains s2t model prediction or first pass prediction
@@ -348,17 +348,24 @@ def compute_quality_metrics(
         logger.info(f"{task} ASR Normalized BLEU:\n{asr_bleu_normalized_json}")
 
     if task == "ASR":
-        _, asr_error_rate_signature = compute_asr_error_rate(
+        asr_error_rate, asr_error_rate_signature = compute_asr_error_rate(
             hyp_text_series=df[pred_text_col_name],
             ref_text_series=df[ref_text_col_name],
             lang=tgt_lang,
             whisper_normalize_text=whisper_normalize_text_output,
         )
+        d = {
+            "name": "WER",
+            "score": asr_error_rate,
+            "signature": asr_error_rate_signature,
+        }
+        asr_error_rate_json = json.dumps(d, indent=1, ensure_ascii=False)
+
         filename = "asr_error_rate.json"
 
         with open(output_path / filename, "w") as f:
-            f.write(asr_error_rate_signature)
+            f.write(asr_error_rate_json)
 
-        logger.info(f"ASR : {asr_error_rate_signature}")
+        logger.info(f"ASR : {asr_error_rate_json}")
 
     return filename

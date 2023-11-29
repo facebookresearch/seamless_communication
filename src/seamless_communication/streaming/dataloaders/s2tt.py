@@ -55,7 +55,13 @@ class SileroVADSilenceRemover:
             onnx=False,
         )
 
-    def __call__(self, sample_list: List[float]) -> List[float]:
+    def __call__(self, sample: torch.Tensor, is_standardized: bool) -> List[float]:
+        if not is_standardized:
+            # Standardizing here just for getting silence boundaries
+            standarized_sample_list = F.layer_norm(sample, sample.shape).tolist()
+        else:
+            standarized_sample_list = sample.tolist()
+
         (
             get_speech_timestamps,
             save_audio,
@@ -64,8 +70,10 @@ class SileroVADSilenceRemover:
             collect_chunks,
         ) = self.utils
         speech_timestamps = get_speech_timestamps(
-            sample_list, self.model, sampling_rate=self.sample_rate
+            standarized_sample_list, self.model, sampling_rate=self.sample_rate
         )
+
+        sample_list: List[float] = sample.tolist()
         if len(speech_timestamps) == 0:
             return sample_list
         speech_start_time = speech_timestamps[0]["start"]
@@ -75,7 +83,9 @@ class SileroVADSilenceRemover:
 
 @register_dataloader("fairseq2_s2tt")
 class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader):  # type: ignore
-    def __init__(self, data_pipeline: DataPipeline, args: Namespace) -> None:
+    def __init__(
+        self, data_pipeline: DataPipeline, is_standardized: bool, args: Namespace
+    ) -> None:
         self.args = args
         self.data_file: Path = Path(getattr(self.args, "data_file", ""))
         if not self.data_file.exists():
@@ -83,10 +93,12 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
         self.start_index: int = getattr(self.args, "start_index", 0)
         self.end_index: int = getattr(self.args, "end_index", -1)
         self.data_pipeline = data_pipeline
+        self.is_standardized = is_standardized
         self.data_itr = iter(self.data_pipeline)
         self.cur_index = self.start_index - 1
+        self.no_strip_silence = self.args.no_strip_silence
         self.silence_remover = None
-        if self.args.strip_silence:
+        if not self.no_strip_silence:
             logger.warn(
                 "Stripping silence in the beginning and the end of audio with SileroVAD."
             )
@@ -113,12 +125,12 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
         return self.end_index - self.start_index
 
     def get_source(self, index: Optional[int] = None) -> List[float]:
-        source: List[float] = (
-            self.item["audio"]["data"]["waveform"]["seqs"].squeeze().tolist()
-        )
+        squeezed_item = self.item["audio"]["data"]["waveform"]["seqs"].squeeze()
 
-        if self.silence_remover is not None:
-            source = self.silence_remover(source)
+        if not self.no_strip_silence and self.silence_remover is not None:
+            source = self.silence_remover(squeezed_item, self.is_standardized)
+        else:
+            source = squeezed_item.tolist()
 
         return source
 
@@ -168,10 +180,13 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
             selector="audio.data",
         )
 
-        pipeline_builder.map(
-            lambda x: F.layer_norm(x, x.shape),
-            selector="audio.data.waveform",
-        )
+        is_standardized = False
+        if args.standardize_audio:
+            pipeline_builder.map(
+                lambda x: F.layer_norm(x, x.shape),
+                selector="audio.data.waveform",
+            )
+            is_standardized = True
 
         collate = Collater(pad_value=0, pad_to_multiple=1)
 
@@ -181,7 +196,7 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
 
         data_pipeline = pipeline_builder.and_return()
 
-        return cls(data_pipeline, args)
+        return cls(data_pipeline, is_standardized, args)
 
     @staticmethod
     def add_args(parser: ArgumentParser) -> None:
@@ -222,8 +237,13 @@ class SimulEvalSpeechToTextDataloader(SpeechToTextDataloader, IterableDataloader
             help="Output directory. Required if using iterable dataloader.",
         )
         parser.add_argument(
-            "--strip-silence",
+            "--no-strip-silence",
             action="store_true",
             default=False,
             help="Strip silence in the beginning and the end of audio.",
+        )
+        parser.add_argument(
+            "--standardize-audio",
+            action="store_true",
+            help="Standardize audio.",
         )

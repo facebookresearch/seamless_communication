@@ -5,18 +5,28 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import logging
 
 from fairseq2.assets import asset_store, download_manager
-from seamless_communication.streaming.agents.mma_m4t_s2st import (
-    MonotonicM4TS2STAgent,
-    SeamlessS2STAgent,
-)
 from seamless_communication.cli.streaming.scorers.seamless_quality_scorer import (
     SeamlessQualityScorer,
 )
-from seamless_communication.streaming.agents.mma_m4t_s2t import MonotonicM4TS2TAgent
+from seamless_communication.streaming.agents.seamless_s2st import SeamlessS2STAgent
+from seamless_communication.streaming.agents.seamless_streaming_s2st import (
+    SeamlessStreamingS2STAgent,
+)
+from seamless_communication.streaming.agents.seamless_streaming_s2t import (
+    SeamlessStreamingS2TAgent,
+)
 from simuleval.evaluator import build_evaluator
 from simuleval.utils.agent import EVALUATION_SYSTEM_LIST, build_system_args
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -28,7 +38,7 @@ def main() -> None:
 
     parser.add_argument(
         "--task",
-        choices=["s2st", "s2tt"],
+        choices=["s2st", "s2tt", "asr"],
         required=True,
         type=str,
         help="Target language to translate/transcribe into.",
@@ -39,46 +49,33 @@ def main() -> None:
         default=False,
         help="Expressive streaming S2ST inference",
     )
-    parser.add_argument(
-        "--dtype",
-        default="fp16",
-        type=str,
-    )
 
     args, _ = parser.parse_known_args()
 
     model_configs = dict(
         source_segment_size=320,
         device="cuda:0",
-        dtype=args.dtype,
+        dtype="fp16",
         min_starting_wait_w2vbert=192,
         decision_threshold=0.5,
         no_early_stop=True,
-        max_len_a=1,
-        max_len_b=200,
+        max_len_a=0,
+        max_len_b=100,
     )
-
-    if args.dtype == "fp16":
-        model_configs.update(dict(fp16=True))
 
     EVALUATION_SYSTEM_LIST.clear()
     eval_configs = dict(quality_metrics="SEAMLESS_QUALITY_SCORER")
     if args.task == "s2st":
-        model_configs.update(
-            dict(
-                min_unit_chunk_size=50,
-            )
-        )
+        model_configs["min_unit_chunk_size"] = 50
         eval_configs["latency_metrics"] = "StartOffset EndOffset"
 
         if args.expressive:
             EVALUATION_SYSTEM_LIST.append(SeamlessS2STAgent)
-            model_configs.update(dict(vocoder_name="vocoder_pretssel"))
         else:
-            EVALUATION_SYSTEM_LIST.append(MonotonicM4TS2STAgent)
-    elif args.task == "s2tt":
+            EVALUATION_SYSTEM_LIST.append(SeamlessStreamingS2STAgent)
+    elif args.task in ["s2tt", "asr"]:
         assert args.expressive is False, "S2TT inference cannot be expressive."
-        EVALUATION_SYSTEM_LIST.append(MonotonicM4TS2TAgent)
+        EVALUATION_SYSTEM_LIST.append(SeamlessStreamingS2TAgent)
         parser.add_argument(
             "--unity-model-name",
             type=str,
@@ -103,6 +100,9 @@ def main() -> None:
     system, args = build_system_args(
         {**base_config, **model_configs, **eval_configs}, parser
     )
+
+    if args.fp16:
+        logger.warn("--fp16 arg will be ignorned, use --dtype instead")
 
     evaluator = build_evaluator(args)
     evaluator(system)

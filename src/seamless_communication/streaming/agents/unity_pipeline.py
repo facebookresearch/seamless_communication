@@ -74,12 +74,7 @@ class UnitYPipelineMixin:
             help="Monotonic decoder model name.",
             default="seamless_streaming_monotonic_decoder",
         )
-        parser.add_argument(
-            "--vocoder-name",
-            type=str,
-            help="Vocoder name.",
-            default="vocoder_v2",
-        )
+
         parser.add_argument(
             "--sample-rate",
             default=16000,
@@ -147,22 +142,6 @@ class UnitYPipelineMixin:
         )
         monotonic_decoder_model.eval()
 
-        vocoder: Optional[Union[PretsselVocoder, Vocoder]] = None
-        if args.vocoder_name is not None and output_modality == Modality.SPEECH:
-            logger.info(
-                f"Loading the Vocoder model: {args.vocoder_name} on device={args.device}, dtype={args.dtype}"
-            )
-            if "pretssel" in args.vocoder_name:
-                vocoder = load_pretssel_vocoder_model(
-                    args.vocoder_name, device=args.device, dtype=args.dtype
-                )
-            else:
-                vocoder = load_vocoder_model(
-                    args.vocoder_name, device=args.device, dtype=args.dtype
-                )
-            assert vocoder is not None
-            vocoder.eval()
-
         return {
             "unity_model": unity_model,
             "unity_config": unity_config,
@@ -170,7 +149,6 @@ class UnitYPipelineMixin:
             "monotonic_decoder_config": monotonic_decoder_config,
             "text_tokenizer": text_tokenizer,
             "unit_tokenizer": unit_tokenizer,
-            "vocoder": vocoder,
         }
 
 

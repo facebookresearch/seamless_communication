@@ -5,27 +5,46 @@
 # LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
+import logging
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List
 
 import torch
+from fairseq2.assets import asset_store
 from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
-from seamless_communication.models.generator.vocoder import PretsselVocoder
+from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 from seamless_communication.models.unity import load_gcmvn_stats
-from seamless_communication.models.vocoder.vocoder import Vocoder
 from seamless_communication.streaming.agents.common import NoUpdateTargetMixin
 from simuleval.agents import AgentStates, TextToSpeechAgent
 from simuleval.agents.actions import ReadAction, WriteAction
 from simuleval.data.segments import SpeechSegment
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 
 class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ignore
-    def __init__(self, vocoder: Vocoder, args: Namespace) -> None:
+    def __init__(self, args: Namespace) -> None:
         super().__init__(args)
-        self.vocoder = vocoder
+
+        logger.info(
+            f"Loading the Vocoder model: {args.vocoder_name} on device={args.device}, dtype={args.dtype}"
+        )
+        assert "pretssel" in args.vocoder_name
+        self.vocoder = load_pretssel_vocoder_model(
+            args.vocoder_name, device=args.device, dtype=args.dtype
+        )
+        self.vocoder.eval()
+
+        vocoder_model_card = asset_store.retrieve_card(args.vocoder_name)
+        self.vocoder_sample_rate = vocoder_model_card.field("sample_rate").as_(int)
+
         self.upstream_idx = args.upstream_idx
         self.sample_rate = args.sample_rate  # input sample rate
-        self.vocoder_sample_rate = args.vocoder_sample_rate  # output sample rate
         self.tgt_lang = args.tgt_lang
         self.convert_to_fbank = WaveformToFbankConverter(
             num_mel_bins=80,
@@ -111,22 +130,20 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ign
     @classmethod
     def add_args(cls, parser: ArgumentParser) -> None:
         parser.add_argument(
+            "--vocoder-name",
+            type=str,
+            help="Vocoder name.",
+            default="vocoder_pretssel",
+        )
+        parser.add_argument(
             "--upstream-idx",
             type=int,
             default=0,
             help="index of encoder states where states.source contains input audio",
-        )
-        parser.add_argument(
-            "--vocoder-sample-rate",
-            type=int,
-            default=16000,
-            help="sample rate out of the vocoder",
         )
 
     @classmethod
     def from_args(
         cls, args: Namespace, **kwargs: Dict[str, Any]
     ) -> PretsselVocoderAgent:
-        vocoder = kwargs.get("vocoder", None)
-        assert isinstance(vocoder, PretsselVocoder)
-        return cls(vocoder, args)
+        return cls(args)

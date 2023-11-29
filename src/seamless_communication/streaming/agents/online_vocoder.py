@@ -5,21 +5,37 @@
 # LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
+import logging
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
-import torch
 
-from seamless_communication.models.vocoder.vocoder import Vocoder
+import torch
+from seamless_communication.models.vocoder.loader import load_vocoder_model
 from simuleval.agents import AgentStates, TextToSpeechAgent
 from simuleval.agents.actions import ReadAction, WriteAction
 from simuleval.data.segments import SpeechSegment
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 
 class VocoderAgent(TextToSpeechAgent):  # type: ignore
-    def __init__(self, vocoder: Vocoder, args: Namespace) -> None:
+    def __init__(self, args: Namespace) -> None:
         super().__init__(args)
+
+        logger.info(
+            f"Loading the Vocoder model: {args.vocoder_name} on device={args.device}, dtype={args.dtype}"
+        )
+        self.vocoder = load_vocoder_model(
+            args.vocoder_name, device=args.device, dtype=args.dtype
+        )
+        self.vocoder.eval()
+
         self.sample_rate = args.sample_rate
-        self.vocoder = vocoder
         self.tgt_lang = args.tgt_lang
         self.speaker_id = args.vocoder_speaker_id
 
@@ -55,6 +71,12 @@ class VocoderAgent(TextToSpeechAgent):  # type: ignore
     @classmethod
     def add_args(cls, parser: ArgumentParser) -> None:
         parser.add_argument(
+            "--vocoder-name",
+            type=str,
+            help="Vocoder name.",
+            default="vocoder_v2",
+        )
+        parser.add_argument(
             "--vocoder-speaker-id",
             type=int,
             required=False,
@@ -64,6 +86,4 @@ class VocoderAgent(TextToSpeechAgent):  # type: ignore
 
     @classmethod
     def from_args(cls, args: Namespace, **kwargs: Dict[str, Any]) -> VocoderAgent:
-        vocoder = kwargs.get("vocoder", None)
-        assert isinstance(vocoder, Vocoder)
-        return cls(vocoder, args)
+        return cls(args)
