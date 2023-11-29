@@ -9,7 +9,7 @@ Evaluation can be run with the CLI, from the root directory of the repository.
 The model can be specified with `--model_name`: `seamlessM4T_v2_large` or `seamlessM4T_large` or `seamlessM4T_medium` 
 
 ```bash
-m4t_evaluate <path_to_data_tsv_file> <task_name> <tgt_lang> --output_path <path_to_save_evaluation_output> --ref_field <ref_field_name> --audio_root_dir <path_to_audio_root_directory>
+m4t_evaluate --data_file <path_to_data_tsv_file> --task <task_name> --tgt_lang <tgt_lang> --output_path <path_to_save_evaluation_output> --ref_field <ref_field_name> --audio_root_dir <path_to_audio_root_directory>
 ```
 ## Note
 1. We use raw (unnormalized) references to compute BLEU scores for S2TT, T2TT tasks.

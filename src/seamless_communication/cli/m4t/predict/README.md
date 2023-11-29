@@ -14,27 +14,27 @@ The model can be specified with `--model_name` `seamlessM4T_large` or `seamlessM
 
 **S2ST**:
 ```bash
-m4t_predict <path_to_input_audio> s2st <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
+m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
 ```
 
 **S2TT**:
 ```bash
-m4t_predict <path_to_input_audio> s2tt <tgt_lang>
+m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang>
 ```
 
 **T2TT**:
 ```bash
-m4t_predict <input_text> t2tt <tgt_lang> --src_lang <src_lang>
+m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
 ```
 
 **T2ST**:
 ```bash
-m4t_predict <input_text> t2st <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
+m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
 ```
 
 **ASR**:
 ```bash
-m4t_predict <path_to_input_audio> asr <tgt_lang>
+m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang>
 ```
 Please set --ngram-filtering to True to get the same translation performance as the [demo](https://seamless.metademolab.com/).
 
