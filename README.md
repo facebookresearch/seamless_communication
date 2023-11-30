@@ -12,13 +12,13 @@ SeamlessM4T models support the tasks of:
 
 :star2: We are releasing SemalessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
 
-To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md)
+To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large)
 
 ## SeamlessExpressive
 
 SeamlessExpressive is a speech-to-speech translation model that captures certain underexplored aspects of prosody such as speech rate and pauses, while preserving the style of one's voice and high content translation quality.
 
-To learn more about SeamlessExpressive models, visit the [SeamlessExpressive README](docs/expressive/README.md)
+To learn more about SeamlessExpressive models, visit the [SeamlessExpressive README](docs/expressive/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-expressive)
 
 
 ## SeamlessStreaming
@@ -30,7 +30,7 @@ The SeamlessStreaming model supports the following tasks:
 - Speech-to-text translation (S2TT)
 - Automatic speech recognition (ASR)
 
-To learn more about SeamlessStreaming models, visit the [SeamlessStreaming README](docs/streaming/README.md)
+To learn more about SeamlessStreaming models, visit the [SeamlessStreaming README](docs/streaming/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-streaming)
 
 ## Seamless
 
