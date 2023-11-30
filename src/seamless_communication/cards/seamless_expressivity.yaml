@@ -7,7 +7,7 @@
 name: seamless_expressivity
 base: unity_nllb-100
 model_arch: expressivity_v2
-char_tokenizer: "https://dl.fbaipublicfiles.com/seamless/models/spm_char_lang38_tc.model"
+char_tokenizer: "https://huggingface.co/facebook/seamless-streaming/resolve/main/spm_char_lang38_tc.model"
 checkpoint: "https://github.com/facebookresearch/seamless_communication;gated=true"
 num_units: 10000
 unit_langs:
