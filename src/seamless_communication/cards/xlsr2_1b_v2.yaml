@@ -1,0 +1,10 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# MIT_LICENSE file in the root directory of this source tree.
+
+name: xlsr2_1b_v2
+model_type: wav2vec2
+model_arch: xlsr2_1b_v2
+checkpoint: "https://dl.fbaipublicfiles.com/seamlessM4T/models/unit_extraction/xlsr2_1b_v2.pt"

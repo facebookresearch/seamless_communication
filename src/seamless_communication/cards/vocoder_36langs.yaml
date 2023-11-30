@@ -1,0 +1,198 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# MIT_LICENSE file in the root directory of this source tree.
+
+name: vocoder_36langs
+model_type: vocoder_code_hifigan
+model_arch: base
+checkpoint: "https://huggingface.co/facebook/seamless-m4t-vocoder/resolve/main/vocoder_36langs.pt"
+model_config: {
+    "lang_spkr_idx_map": {
+        "multilingual": {
+            "arb": 0,
+            "ben": 1,
+            "cat": 2,
+            "ces": 3,
+            "cmn": 4,
+            "cym": 5,
+            "dan": 6,
+            "deu": 7,
+            "eng": 8,
+            "est": 9,
+            "fin": 10,
+            "fra": 11,
+            "hin": 12,
+            "ind": 13,
+            "ita": 14,
+            "jpn": 15,
+            "kor": 16,
+            "mlt": 17,
+            "nld": 18,
+            "pes": 19,
+            "pol": 20,
+            "por": 21,
+            "ron": 22,
+            "rus": 23,
+            "slk": 24,
+            "spa": 25,
+            "swe": 26,
+            "swh": 27,
+            "tel": 28,
+            "tgl": 29,
+            "tha": 30,
+            "tur": 31,
+            "ukr": 32,
+            "urd": 33,
+            "uzn": 34,
+            "vie": 35
+        },
+        "multispkr": {
+            "arb": [
+                0
+            ],
+            "ben": [
+                2,
+                1
+            ],
+            "cat": [
+                3
+            ],
+            "ces": [
+                4
+            ],
+            "cmn": [
+                5
+            ],
+            "cym": [
+                6
+            ],
+            "dan": [
+                7,
+                8
+            ],
+            "deu": [
+                9
+            ],
+            "eng": [
+                10
+            ],
+            "est": [
+                11,
+                12,
+                13
+            ],
+            "fin": [
+                14
+            ],
+            "fra": [
+                15
+            ],
+            "hin": [
+                16
+            ],
+            "ind": [
+                17,
+                24,
+                18,
+                20,
+                19,
+                21,
+                23,
+                27,
+                26,
+                22,
+                25
+            ],
+            "ita": [
+                29,
+                28
+            ],
+            "jpn": [
+                30
+            ],
+            "kor": [
+                31
+            ],
+            "mlt": [
+                32,
+                33,
+                34
+            ],
+            "nld": [
+                35
+            ],
+            "pes": [
+                36
+            ],
+            "pol": [
+                37
+            ],
+            "por": [
+                38
+            ],
+            "ron": [
+                39
+            ],
+            "rus": [
+                40
+            ],
+            "slk": [
+                41
+            ],
+            "spa": [
+                42
+            ],
+            "swe": [
+                43,
+                45,
+                44
+            ],
+            "swh": [
+                46,
+                48,
+                47
+            ],
+            "tel": [
+                49
+            ],
+            "tgl": [
+                50
+            ],
+            "tha": [
+                51,
+                54,
+                55,
+                52,
+                53
+            ],
+            "tur": [
+                58,
+                57,
+                56
+            ],
+            "ukr": [
+                59
+            ],
+            "urd": [
+                60,
+                61,
+                62
+            ],
+            "uzn": [
+                63,
+                64,
+                65
+            ],
+            "vie": [
+                66,
+                67,
+                70,
+                71,
+                68,
+                69
+            ]
+        }
+    }
+}

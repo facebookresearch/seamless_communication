@@ -1,0 +1,51 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# MIT_LICENSE file in the root directory of this source tree.
+
+name: mintox
+model_name: MinTox
+etox_dataset: https://dl.fbaipublicfiles.com/nllb/NLLB-200_TWL/nllb-200_twl.zip
+etox_lang_variants:
+  - kas_Arab
+  - kas_Deva
+  - knc_Arab
+  - knc_Latn
+  - min_Arab
+  - min_Latn
+  - zho_Hans
+  - zho_Hant
+
+sp_model: https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/tokenizer.model
+
+# For some languages, we use the SentencePiece model.
+sp_langs:
+  - asm
+  - ben
+  - cmn
+  - guj
+  - mya
+  - hin
+  - gom
+  - ibo
+  - jpn
+  - kan
+  - khm
+  - kor
+  - lao
+  - mai
+  - mal
+  - mar
+  - mni
+  - npi
+  - oan
+  - ory
+  - pan
+  - rwr
+  - sat
+  - tam
+  - tel
+  - tha
+  - wuu
+  - yue

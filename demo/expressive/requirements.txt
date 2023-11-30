@@ -1,0 +1,5 @@
+gradio~=4.5.0
+omegaconf~=2.3.0
+torch~=2.1.0
+torchaudio~=2.1.0
+fairseq2~=0.2.0

@@ -1,8 +1,8 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 from typing import Iterable, Optional, Tuple, final
 
@@ -10,18 +10,17 @@ import torch
 from fairseq2.models.conformer import ConformerBlock
 from fairseq2.nn.module_list import ModuleList
 from fairseq2.nn.normalization import LayerNorm
+from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.projection import Linear
 from fairseq2.nn.transformer import (
-    EncoderLayerOutputHook,
+    AttentionMask,
     FeedForwardNetwork,
     LayerNormFactory,
     MultiheadAttention,
     TransformerEncoder,
     TransformerEncoderLayer,
-    create_default_layer_norm,
+    create_standard_layer_norm,
 )
-from fairseq2.nn.utils.mask import to_padding_mask
-from fairseq2.nn.utils.module import check_model_dim
 from fairseq2.typing import DataType, Device
 from overrides import final as finaloverride
 from torch import Tensor
@@ -45,8 +44,9 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         self,
         inner: TransformerEncoder,
         adaptor_layers: Iterable[TransformerEncoderLayer],
+        *,
         inner_layer_norm: bool = False,
-        layer_norm_fn: Optional[LayerNormFactory] = None,
+        layer_norm_factory: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -57,20 +57,22 @@ class UnitYEncoderAdaptor(TransformerEncoder):
             The adaptor layers to stack on top of ``inner``.
         :param inner_layer_norm:
             If ``True``, applies Layer Normalization to outputs of ``inner``.
-        :param layer_norm_fn:
+        :param layer_norm_factory:
             The factory to use to construct the Layer Normalization modules.
         """
         model_dim = inner.model_dim
 
         super().__init__(model_dim)
 
-        if layer_norm_fn is None:
-            layer_norm_fn = create_default_layer_norm
+        if layer_norm_factory is None:
+            layer_norm_factory = create_standard_layer_norm
 
         self.inner = inner
 
         if inner_layer_norm:
-            self.inner_layer_norm = layer_norm_fn(model_dim, device, dtype)
+            self.inner_layer_norm = layer_norm_factory(
+                model_dim, device=device, dtype=dtype
+            )
         else:
             self.register_module("inner_layer_norm", None)
 
@@ -90,18 +92,15 @@ class UnitYEncoderAdaptor(TransformerEncoder):
 
         self.adaptor_layers = layer_list
 
-        self.layer_norm = layer_norm_fn(model_dim, device, dtype)
-
-        check_model_dim(self)
+        self.layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
 
     @finaloverride
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[Tensor],
-        layer_output_hook: Optional[EncoderLayerOutputHook] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        seqs, padding_mask = self.inner(seqs, padding_mask, layer_output_hook)
+        padding_mask: Optional[PaddingMask],
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
+        seqs, padding_mask = self.inner(seqs, padding_mask)
 
         if self.inner_layer_norm is not None:
             seqs = self.inner_layer_norm(seqs)
@@ -153,10 +152,11 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         self,
         self_attn: MultiheadAttention,
         ffn: FeedForwardNetwork,
-        kernel_size: int = 8,
-        stride: int = 8,
+        kernel_size: int,
+        stride: int,
+        *,
         dropout_p: float = 0.1,
-        layer_norm_fn: Optional[LayerNormFactory] = None,
+        layer_norm_factory: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -172,20 +172,22 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         :param dropout_p:
             The dropout probability on outputs of the self attention layer and
             the feed-forward network.
-        :param layer_norm_fn:
+        :param layer_norm_factory:
             The factory to use to construct the Layer Normalization modules.
         """
         model_dim = self_attn.model_dim
 
         super().__init__(model_dim)
 
-        if layer_norm_fn is None:
-            layer_norm_fn = create_default_layer_norm
+        if layer_norm_factory is None:
+            layer_norm_factory = create_standard_layer_norm
 
         self.kernel_size = kernel_size
         self.stride = stride
 
-        self.residual_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.residual_layer_norm = layer_norm_factory(
+            model_dim, device=device, dtype=dtype
+        )
 
         self.residual_conv = Conv1d(
             model_dim,
@@ -199,7 +201,9 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
 
         self.residual_activation = GLU(dim=1)
 
-        self.self_attn_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.self_attn_layer_norm = layer_norm_factory(
+            model_dim, device=device, dtype=dtype
+        )
 
         self.self_attn_conv = Conv1d(
             model_dim,
@@ -220,7 +224,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         else:
             self.register_module("self_attn_dropout", None)
 
-        self.ffn_layer_norm = layer_norm_fn(model_dim, device, dtype)
+        self.ffn_layer_norm = layer_norm_factory(model_dim, device=device, dtype=dtype)
 
         self.ffn = ffn
 
@@ -229,21 +233,25 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         else:
             self.register_module("ffn_dropout", None)
 
-        check_model_dim(self)
-
     @finaloverride
     def forward(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        seqs, padding_mask = self._forward_self_attn(seqs, padding_mask)
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[PaddingMask],
+        self_attn_mask: Optional[AttentionMask] = None,
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
+        seqs, padding_mask = self._forward_self_attn(seqs, padding_mask, self_attn_mask)
 
         seqs = self._forward_ffn(seqs)
 
         return seqs, padding_mask
 
     def _forward_self_attn(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[PaddingMask],
+        self_attn_mask: Optional[AttentionMask],
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
         residual = self.residual_layer_norm(seqs)
 
         # Apply pooling to the residual to match the sequence length of the
@@ -281,8 +289,9 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
             seqs,
             padding_mask,
             keys=seqs,
-            values=seqs,
             key_padding_mask=padding_mask,
+            values=seqs,
+            attn_mask=self_attn_mask,
         )
 
         if self.self_attn_dropout is not None:
@@ -331,10 +340,11 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
     def __init__(
         self,
         block: ConformerBlock,
-        kernel_size: int = 8,
-        stride: int = 8,
+        kernel_size: int,
+        stride: int,
+        *,
         layer_norm: bool = False,
-        layer_norm_fn: Optional[LayerNormFactory] = None,
+        layer_norm_factory: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -347,19 +357,21 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
             The stride for 1D pooling convolutions.
         :param layer_norm:
             If ``True``, applies Layer Normalization to inputs before pooling.
-        :param layer_norm_fn:
+        :param layer_norm_factory:
             The factory to use to construct the Layer Normalization modules.
         """
         super().__init__(block.model_dim)
 
-        if layer_norm_fn is None:
-            layer_norm_fn = create_default_layer_norm
+        if layer_norm_factory is None:
+            layer_norm_factory = create_standard_layer_norm
 
         self.kernel_size = kernel_size
         self.stride = stride
 
         if layer_norm:
-            self.layer_norm = layer_norm_fn(self.model_dim, device, dtype)
+            self.layer_norm = layer_norm_factory(
+                self.model_dim, device=device, dtype=dtype
+            )
         else:
             self.register_module("layer_norm", None)
 
@@ -379,8 +391,11 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
 
     @finaloverride
     def forward(
-        self, seqs: Tensor, padding_mask: Optional[Tensor]
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+        self,
+        seqs: Tensor,
+        padding_mask: Optional[PaddingMask],
+        self_attn_mask: Optional[AttentionMask] = None,
+    ) -> Tuple[Tensor, Optional[PaddingMask]]:
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)
 
@@ -399,7 +414,7 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
             seqs, padding_mask, self.kernel_size, self.stride
         )
 
-        return self.block(seqs, padding_mask)  # type: ignore[no-any-return]
+        return self.block(seqs, padding_mask, self_attn_mask)  # type: ignore[no-any-return]
 
     def extra_repr(self) -> str:
         """:meta private:"""
@@ -409,15 +424,15 @@ class UnitYConformerAdaptorLayer(TransformerEncoderLayer):
 
 
 def _compute_new_padding_mask(
-    seqs: Tensor, padding_mask: Optional[Tensor], kernel_size: int, stride: int
-) -> Optional[Tensor]:
+    seqs: Tensor, padding_mask: Optional[PaddingMask], kernel_size: int, stride: int
+) -> Optional[PaddingMask]:
     if padding_mask is None:
         return padding_mask
 
     pad = kernel_size // 2
 
-    seq_lens = padding_mask.size(1) - torch.nan_to_num(padding_mask, neginf=1.0).sum(1)
+    seq_lens = ((padding_mask.seq_lens + 2 * pad - kernel_size) / stride) + 1
 
-    seq_lens = ((seq_lens + 2 * pad - kernel_size) / stride) + 1
+    seq_lens = seq_lens.floor().to(torch.int64)
 
-    return to_padding_mask(seqs, seq_lens.floor())
+    return PaddingMask(seq_lens, batch_seq_len=seqs.size(1))
