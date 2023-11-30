@@ -44,4 +44,4 @@ streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-
 
 The Seamless model uses `vocoder_pretssel` which is a 24KHz version (`vocoder_pretssel`) by default. In the current version of our paper, we use 16KHz version (`vocoder_pretssel_16khz`) for the evaluation , so in order to reproduce those results please add this arg to the above command: `--vocoder-name vocoder_pretssel_16khz`.
 
-Also, to acquire `vocoder_pretssel` or `vocoder_pretssel_16khz` checkpoints, please check out [this section](../../README.md#seamlessexpressive-models).
+`vocoder_pretssel` or `vocoder_pretssel_16khz` checkpoints are gated, please check out [this section](/README.md#seamlessexpressive-models) to acquire these checkpoints. Also, make sure to add `--gated-model-dir <path_to_vocoder_checkpoints_dir>`

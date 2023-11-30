@@ -79,17 +79,21 @@ Please refer to the [inference README](src/seamless_communication/cli/m4t/predic
 For running S2TT/ASR natively (without Python) using GGML, please refer to unity.cpp section below.
 
 ### SeamlessExpressive Inference
-Below are the script for efficient batched inference.
+> [!NOTE]
+> Please check the [section](#seamlessexpressive-models) on how to download the model.
+
+Below is the script for efficient batched inference.
 
 ```bash
+export MODEL_DIR="/path/to/SeamlessExpressive/model"
 export TEST_SET_TSV="input.tsv" # Your dataset in a TSV file, with headers "id", "audio"
 export TGT_LANG="spa" # Target language to translate into, options including "fra", "deu", "eng" ("cmn" and "ita" are experimental)
 export OUTPUT_DIR="tmp/" # Output directory for generated text/unit/waveform
 export TGT_TEXT_COL="tgt_text" # The column in your ${TEST_SET_TSV} for reference target text to calcuate BLEU score. You can skip this argument.
 export DFACTOR="1.0" # Duration factor for model inference to tune predicted duration (preddur=DFACTOR*preddur) per each position which affects output speech rate. Greater value means slower speech rate (default to 1.0). See expressive evaluation README for details on duration factor we used.
 python src/seamless_communication/cli/expressivity/evaluate/pretssel_inference.py \
-  ${TEST_SET_TSV} --task s2st --tgt_lang ${TGT_LANG} --audio_root_dir "" \
-  --output_path ${OUTPUT_DIR} --ref_field ${TGT_TEXT_COL} \
+  ${TEST_SET_TSV} --model-dir ${MODEL_DIR} --task s2st --tgt_lang ${TGT_LANG}\
+  --audio_root_dir "" --output_path ${OUTPUT_DIR} --ref_field ${TGT_TEXT_COL} \
   --model_name seamless_expressivity --vocoder_name vocoder_pretssel \
   --unit_generation_beam_size 1 --duration_factor ${DFACTOR}
 ```

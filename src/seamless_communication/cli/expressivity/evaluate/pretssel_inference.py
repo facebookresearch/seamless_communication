@@ -42,6 +42,7 @@ from seamless_communication.models.unity import (
     load_gcmvn_stats,
     load_unity_unit_tokenizer,
 )
+from seamless_communication.store import add_gated_assets
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,12 +110,18 @@ def build_data_pipeline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Running PretsselModel inference")
+    parser = argparse.ArgumentParser(description="Running SeamlessExpressive inference")
     parser.add_argument(
         "data_file", type=Path, help="Data file (.tsv) to be evaluated."
     )
 
     parser = add_inference_arguments(parser)
+    param = parser.add_argument(
+        "--gated-model-dir",
+        type=Path,
+        required=False,
+        help="SeamlessExpressive model directory.",
+    )
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -146,6 +153,9 @@ def main() -> None:
         default=True,
     )
     args = parser.parse_args()
+
+    if args.gated_model_dir:
+        add_gated_assets(args.gated_model_dir)
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")

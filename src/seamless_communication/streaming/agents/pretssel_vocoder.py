@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from argparse import ArgumentParser, Namespace
+from pathlib import Path
 from typing import Any, Dict, List
 
 import torch
@@ -14,6 +15,7 @@ from fairseq2.assets import asset_store
 from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 from seamless_communication.models.unity import load_gcmvn_stats
+from seamless_communication.store import add_gated_assets
 from seamless_communication.streaming.agents.common import NoUpdateTargetMixin
 from simuleval.agents import AgentStates, TextToSpeechAgent
 from simuleval.agents.actions import ReadAction, WriteAction
@@ -30,6 +32,9 @@ logger = logging.getLogger(__name__)
 class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ignore
     def __init__(self, args: Namespace) -> None:
         super().__init__(args)
+
+        if args.gated_model_dir:
+            add_gated_assets(args.gated_model_dir)
 
         logger.info(
             f"Loading the Vocoder model: {args.vocoder_name} on device={args.device}, dtype={args.dtype}"
@@ -129,6 +134,12 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ign
 
     @classmethod
     def add_args(cls, parser: ArgumentParser) -> None:
+        param = parser.add_argument(
+            "--gated-model-dir",
+            type=Path,
+            required=False,
+            help="SeamlessExpressive model directory.",
+        )
         parser.add_argument(
             "--vocoder-name",
             type=str,
