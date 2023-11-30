@@ -43,7 +43,7 @@ torchaudio.save(<path_to_resampled_audio>, resampled_waveform, resample_rate)
 ## Inference breakdown
 
 Inference calls for the `Translator` object instantiated with a multitask UnitY or UnitY2 model with the options:
-- [`seamlessM4T_v2_large`](https://huggingface.co/facebook/seamless-m4t-v2-large) (FIXME)
+- [`seamlessM4T_v2_large`](https://huggingface.co/facebook/seamless-m4t-v2-large)
 - [`seamlessM4T_large`](https://huggingface.co/facebook/seamless-m4t-large)
 - [`seamlessM4T_medium`](https://huggingface.co/facebook/seamless-m4t-medium)
 

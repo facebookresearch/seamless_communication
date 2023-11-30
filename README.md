@@ -66,6 +66,7 @@ pip install .
 
 ### SeamlessM4T Inference
 Here’s an example of using the CLI from the root directory to run inference.
+
 S2ST task:
 ```bash
 m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio>
@@ -76,7 +77,7 @@ m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
 ```
 Please refer to the [inference README](src/seamless_communication/cli/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
-For running S2TT/ASR natively (without Python) using GGML, please refer to unity.cpp section below.
+For running S2TT/ASR natively (without Python) using GGML, please refer to [the unity.cpp section](#unitycpp).
 
 ### SeamlessExpressive Inference
 > [!NOTE]
@@ -124,7 +125,7 @@ python app.py
 ### SeamlessM4T models
 | Model Name         | #params | checkpoint                                                                              | metrics                                                                              |
 | ------------------ | ------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| SeamlessM4T-Large v2  | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/??) - [checkpoint](?)   | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large_v2.zip)  |
+| SeamlessM4T-Large v2  | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-v2-large) - [checkpoint](?)   | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large_v2.zip)  |
 | SeamlessM4T-Large (v1) | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-large) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-large/resolve/main/multitask_unity_large.pt)   | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large.zip)  |
 | SeamlessM4T-Medium (v1) | 1.2B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-medium) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/multitask_unity_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_medium.zip) |
 
