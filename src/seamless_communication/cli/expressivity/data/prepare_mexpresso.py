@@ -13,6 +13,7 @@ import logging
 import multiprocessing as mp
 import os
 import pandas as pd
+import pathlib
 import re
 import seamless_communication  # need this to load dataset cards
 import torchaudio
@@ -148,8 +149,9 @@ def main() -> None:
     )
     parser.add_argument(
         "output_folder",
-        type=str,
-        help="Output folder for the downsampled Expresso En audios and combined manifest.",
+        type=lambda p: pathlib.Path(p).resolve(),  # always convert to absolute path
+        help="Output folder for the downsampled Expresso En audios and combined manifest. "
+        "The output folder path will be expanded to absolute path.",
     )
     parser.add_argument(
         "--existing-expresso-root",
@@ -183,9 +185,9 @@ def main() -> None:
             f"The English Expresso dataset is downloaded to {en_expresso_root_path}"
         )
         en_expresso_path = en_expresso_root_path / "expresso"
-    en_expresso_folder = f"{args.output_folder}/En_Expresso"
+    en_expresso_folder = args.output_folder / "En_Expresso"
     en_expresso_df = build_en_manifest_from_oss(
-        Path(en_expresso_path), Path(en_expresso_folder)
+        Path(en_expresso_path), en_expresso_folder
     )
 
     for subset in ["dev", "test"]:
@@ -212,9 +214,7 @@ def main() -> None:
             df["tgt_lang"] = lang
             # Check all the audio files exist
             assert all(os.path.isfile(audio) for audio in df["src_audio"].tolist())
-            output_manifest_path = (
-                f"{args.output_folder}/{subset}_mexpresso_eng_{lang}.tsv"
-            )
+            output_manifest_path = args.output_folder / f"{subset}_mexpresso_eng_{lang}.tsv"
             df[
                 [
                     "id",
