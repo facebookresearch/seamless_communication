@@ -61,7 +61,9 @@ def build_data_pipeline(
 ) -> DataPipeline:
     with open(args.data_file, "r") as f:
         header = f.readline().strip("\n").split("\t")
-        assert args.audio_field in header, f"Input file does not contain {args.audio_field} field"
+        assert (
+            args.audio_field in header
+        ), f"Input file does not contain {args.audio_field} field"
 
     n_parallel = 4
 
@@ -73,7 +75,9 @@ def build_data_pipeline(
 
     map_file = FileMapper(root_dir=args.audio_root_dir, cached_fd_count=10)
 
-    pipeline_builder.map(map_file, selector=args.audio_field, num_parallel_calls=n_parallel)
+    pipeline_builder.map(
+        map_file, selector=args.audio_field, num_parallel_calls=n_parallel
+    )
 
     decode_audio = AudioDecoder(dtype=torch.float32, device=device)
 
@@ -150,8 +154,8 @@ def main() -> None:
     parser.add_argument(
         "--duration_factor",
         type=float,
-        help="The duration factor for NAR T2U model. Expressivity model uses 1.1",
-        default=1.1,
+        help="The duration factor for NAR T2U model.",
+        default=1.0,
     )
     parser.add_argument(
         "--output_result_tsv",
@@ -212,6 +216,7 @@ def main() -> None:
 
     hyps = []
     refs = []
+    audio_hyps = []
 
     with contextlib.ExitStack() as stack:
         hyp_file = stack.enter_context(
@@ -286,6 +291,7 @@ def main() -> None:
                     speech_output.audio_wavs[i][0].to(torch.float32).cpu(),
                     sample_rate=speech_output.sample_rate,
                 )
+                audio_hyps.append((waveforms_dir / f"{idx}_pred.wav").as_posix())
 
                 sample_id += 1
                 progress_bar.update(1)
@@ -306,24 +312,11 @@ def main() -> None:
             for line in file:
                 unit_out.append(line.strip())
 
+        output_tsv["hypo_audio"] = audio_hyps
         output_tsv["s2t_out"] = text_out
         output_tsv["orig_unit"] = unit_out
         output_tsv.to_csv(output_tsv_file, quoting=3, sep="\t", index=False)
         logger.info(f"Output results in {output_tsv_file}")
-
-    if len(hyps) == len(refs):
-        logger.info(f"Calculating S2T BLEU using {args.ref_field} column")
-        if args.tgt_lang in ("cmn", "jpn", "lao", "mya", "tha"):
-            tokenizer = "char"
-        else:
-            tokenizer = "13a"
-
-        bleu = BLEU(tokenize=tokenizer)
-        score = bleu.corpus_score(hyps, [refs])
-        bleu_filename = output_path / f"{args.data_file.stem}_text_output_bleu.json"
-        with open(bleu_filename, "w") as f:
-            f.write(score.format(signature=str(bleu.get_signature()), is_json=True))
-        logger.info(score.format(signature=bleu.get_signature()))
 
 
 if __name__ == "__main__":

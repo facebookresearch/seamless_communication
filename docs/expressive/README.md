@@ -111,6 +111,7 @@ export SPLIT="dev_mexpresso_eng_spa" # example, change for your split
 export TGT_LANG="spa"
 export SRC_LANG="eng"
 export GENERATED_DIR="path_to_generated_output_for_given_data_split"
+export GENERATED_TSV="generate-${SPLIT}.tsv"
 export STOPES_ROOT="path_to_stopes_code_repo"
 export SC_ROOT="path_to_this_repo"
 ```
@@ -124,7 +125,6 @@ python ${SC_ROOT}/src/seamless_communication/cli/expressivity/evaluate/run_asr_b
     --tgt_lang=${TGT_LANG}
 ```
 * `generate-${SPLIT}.tsv` is an expected output from inference described in pre-requisite
-* `run_asr_bleu.py` creates an additional manifest called `output_manifest.tsv` inside `--generation_dir_path` which includes all relevant columns needed for this evaluation
 
 After completion resulting ASR-BLEU score is written in `${GENERATED_DIR}/s2st_asr_bleu_normalized.json`.
 
@@ -137,10 +137,10 @@ python -m stopes.modules +vocal_style_similarity=base \
     launcher.cluster=local \
     vocal_style_similarity.model_type=valle \
     +vocal_style_similarity.model_path=${SPEECH_ENCODER_MODEL_PATH} \
-    +vocal_style_similarity.input_file=${GENERATED_DIR}/output_manifest.tsv \
+    +vocal_style_similarity.input_file=${GENERATED_DIR}/${GENERATED_TSV} \
     +vocal_style_similarity.output_file=${GENERATED_DIR}/vocal_style_sim_result.txt \
     vocal_style_similarity.named_columns=true \
-    vocal_style_similarity.src_audio_column=audio \
+    vocal_style_similarity.src_audio_column=src_audio \
     vocal_style_similarity.tgt_audio_column=hypo_audio
 ```
 * We report average number from all utterance scores written in `${GENERATED_DIR}/vocal_style_sim_result.txt`.
@@ -150,8 +150,8 @@ python -m stopes.modules +vocal_style_similarity=base \
 ```bash
 python -m stopes.modules +compare_audios=AutoPCP_multilingual_v2 \
     launcher.cluster=local \
-    +compare_audios.input_file=${GENERATED_DIR}/output_manifest.tsv \
-    compare_audios.src_audio_column=audio \
+    +compare_audios.input_file=${GENERATED_DIR}/${GENERATED_TSV} \
+    compare_audios.src_audio_column=src_audio \
     compare_audios.tgt_audio_column=hypo_audio \
     +compare_audios.named_columns=true \
     +compare_audios.output_file=${GENERATED_DIR}/autopcp_result.txt
@@ -165,10 +165,10 @@ This stage includes 3 steps: (1) src lang annotation, (2) tgt lang annotation, (
 ```bash
 # src lang pause&rate annotation
 python ${STOPES_ROOT}/stopes/eval/local_prosody/annotate_utterances.py \
-    +data_path=${GENERATED_DIR}/output_manifest.tsv \
+    +data_path=${GENERATED_DIR}/${GENERATED_TSV} \
     +result_path=${GENERATED_DIR}/${SRC_LANG}_speech_rate_pause_annotation.tsv \
-    +audio_column=audio \
-    +text_column=raw_src_text \
+    +audio_column=src_audio \
+    +text_column=src_text \
     +speech_units=[syllable] \
     +vad=true \
     +net=true \
@@ -177,7 +177,7 @@ python ${STOPES_ROOT}/stopes/eval/local_prosody/annotate_utterances.py \
 
 # tgt lang pause&rate annotation
 python ${STOPES_ROOT}/stopes/eval/local_prosody/annotate_utterances.py \
-    +data_path=${GENERATED_DIR}/output_manifest.tsv \
+    +data_path=${GENERATED_DIR}/${GENERATED_TSV} \
     +result_path=${GENERATED_DIR}/${TGT_LANG}_speech_rate_pause_annotation.tsv \
     +audio_column=hypo_audio \
     +text_column=s2t_out \
