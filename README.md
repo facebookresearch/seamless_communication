@@ -32,7 +32,7 @@ The SeamlessStreaming model supports the following tasks:
 
 ## Seamless
 
-The Seamless model is the unified model for expressive streaming speech-to-speech translations. 
+The Seamless model is the unified model for expressive streaming speech-to-speech translations.
 
 ## Links
 [Blog]
@@ -76,7 +76,7 @@ m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
 ```
 Please refer to the [inference README](src/seamless_communication/cli/m4t/predict) for detailed instruction on how to run inference and the list of supported languages on the source, target sides for speech, text modalities.
 
-For running S2TT/ASR natively (without Python) using GGML, please refer to unity.cpp section below. 
+For running S2TT/ASR natively (without Python) using GGML, please refer to unity.cpp section below.
 
 ### SeamlessExpressive Inference
 Below are the script for efficient batched inference.
@@ -107,7 +107,7 @@ You can also run the demo locally, by cloning the space from [here](https://hugg
 
 ## Running SeamlessM4T & SeamlessExpressive [Gradio](https://github.com/gradio-app/gradio) demos locally
 
-To launch the same space demo we host on HuggingFace locally, 
+To launch the same space demo we host on HuggingFace locally,
 
 ```bash
 cd demo
@@ -141,7 +141,7 @@ Please check out above [section](#seamlessexpressive-models) on how to acquire `
 ## Evaluation
 
 ### SeamlessM4T Evaluation
-To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out the [README here](docs/m4t/eval_README.md).
+To reproduce our results, or to evaluate using the same metrics over your own test sets, please check out the [README here](src/seamless_communication/cli/m4t/evaluate).
 ### SeamlessExpressive Evaluation
 Please check out this [README section](docs/expressive/README.md#automatic-evaluation)
 
@@ -150,7 +150,7 @@ Please check out this [README section](docs/expressive/README.md#automatic-evalu
 [Streaming Evaluation README](src/seamless_communication/cli/streaming) has detailed instructions for running evaluations on the SeamlessStreaming and Seamless models.
 
 ## Unity.cpp
-To enable Seamless Communication Everywhere, we implemented unity.cpp so users could run SeamlessM4T models in GGML - a C tensor library allowing easier integration on verbose platforms. 
+To enable Seamless Communication Everywhere, we implemented unity.cpp so users could run SeamlessM4T models in GGML - a C tensor library allowing easier integration on verbose platforms.
 
 To transcribe/translte a given audio,
 
@@ -165,7 +165,7 @@ For details of build and more usage please checkout [unity.cpp](ggml)
 We created two expressive speech-to-speech translation datasets, mExpresso and mDRAL, between English and five other languages -- French, German, Italian, Mandarin and Spanish. We currently open source the speech-to-text of mExpresso for out-of-English directions, and we will open source the remaining part of the datasets soon. For details, please checkout [README](docs/expressive/README.md#benchmark-datasets)
 
 ## Converting raw audio to units
-Please check out the [README here](src/seamless_communication/cli/m4t/audio_to_units/README.md). Note that SeamlessM4T v1 model uses reduced units and other models use non-reduced units. 
+Please check out the [README here](src/seamless_communication/cli/m4t/audio_to_units). Note that SeamlessM4T v1 model uses reduced units and other models use non-reduced units.
 
 # Libraries
 
@@ -187,7 +187,7 @@ SimulEval is a library used for evaluating simulaneous translation models. Simul
 
 ## [Legacy] SeamlessM4T v1 instructions
 #### Finetuning SeamlessM4T v1 models
-Please check out the [README here](src/seamless_communication/cli/m4t/finetune/README.md).
+Please check out the [README here](src/seamless_communication/cli/m4t/finetune).
 
 #### On-device models
 Apart from Seamless-M4T large (2.3B) and medium (1.2B) models, we are also releasing a small model (281M) targeted for on-device inference. To learn more about the usage and model details check out the [README here](docs/m4t/on_device_README.md).
