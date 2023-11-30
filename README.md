@@ -96,7 +96,7 @@ python src/seamless_communication/cli/expressivity/evaluate/pretssel_inference.p
   ${TEST_SET_TSV} --gated-model-dir ${MODEL_DIR} --task s2st --tgt_lang ${TGT_LANG}\
   --audio_root_dir "" --output_path ${OUTPUT_DIR} --ref_field ${TGT_TEXT_COL} \
   --model_name seamless_expressivity --vocoder_name vocoder_pretssel \
-  --unit_generation_beam_size 1 --duration_factor ${DFACTOR}
+  --text_unk_blocking True --duration_factor ${DFACTOR}
 ```
 
 ### SeamlessStreaming and Seamless Inference
