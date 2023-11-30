@@ -7,8 +7,8 @@
 name: seamless_streaming_unity
 base: unity_nllb-100
 model_arch: base_v2
-char_tokenizer: "https://dl.fbaipublicfiles.com/seamless/models/spm_char_lang38_tc.model"
-checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/seamless_streaming_unity.pt"
+char_tokenizer: "https://huggingface.co/facebook/seamless-streaming/resolve/main/spm_char_lang38_tc.model"
+checkpoint: "https://huggingface.co/facebook/seamless-streaming/resolve/main/seamless_streaming_unity.pt"
 num_units: 10000
 unit_langs:
   - arb
