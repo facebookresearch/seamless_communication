@@ -1,8 +1,8 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 from typing import Dict, Optional, Sequence
 
@@ -19,12 +19,14 @@ class UnitTokenizer:
     langs: Sequence[str]
     lang_map: Dict[str, int]
 
-    def __init__(self, num_units: int, langs: Sequence[str]) -> None:
+    def __init__(self, num_units: int, langs: Sequence[str], model_arch: str) -> None:
         """
         :param num_units:
             The number of speech units.
         :param langs:
             The list of supported languages.
+        :param model_arch:
+            The type of UnitY model architecture.
         """
         self.num_units = num_units
 
@@ -32,9 +34,17 @@ class UnitTokenizer:
 
         self.lang_map = {lang: idx for idx, lang in enumerate(langs)}
 
-        # For legacy reasons, we have to repeat the language symbols twice,
-        # along with a placeholder `<mask>` token.
-        vocab_size = num_units + (2 * (len(langs) + 1)) + 4
+        # The "_v2" unity architectures have a non-autoregressive decoder.
+        if model_arch.split("_")[-1] == "v2":
+            self.is_nar_decoder = True
+            self.lang_symbol_repititions = 1
+        else:
+            self.is_nar_decoder = False
+            # For legacy reasons, we have to repeat the language symbols twice,
+            # along with a placeholder `<mask>` token for UnitY autoregressive models.
+            self.lang_symbol_repititions = 2
+
+        vocab_size = num_units + self.lang_symbol_repititions * (len(langs) + 1) + 4
 
         # We use fairseq's control symbol order.
         self.vocab_info = VocabularyInfo(
@@ -45,7 +55,12 @@ class UnitTokenizer:
         """Return the symbol index of the specified language."""
         # +4 for PAD/EOS/BOS/UNK, and +1 for the `<mask>` token.
         try:
-            return self.num_units + len(self.langs) + self.lang_map[lang] + 5
+            return (
+                self.num_units
+                + (self.lang_symbol_repititions - 1) * (len(self.langs) + 1)
+                + self.lang_map[lang]
+                + 4
+            )
         except KeyError:
             langs = ", ".join(self.langs)
 
@@ -55,7 +70,12 @@ class UnitTokenizer:
 
     def index_to_lang(self, idx: int) -> str:
         """Return the language of the specified language symbol index."""
-        relative_idx = idx - self.num_units - len(self.langs) - 5
+        relative_idx = (
+            idx
+            - self.num_units
+            - (self.lang_symbol_repititions - 1) * (len(self.langs) + 1)
+            - 4
+        )
 
         if relative_idx < 0 or relative_idx >= len(self.langs):
             raise ValueError(
@@ -72,11 +92,11 @@ class UnitTokenizer:
         :param lang:
             The language of generated token indices.
         """
-        return UnitTokenEncoder(self, lang, device)
+        return UnitTokenEncoder(self, lang, self.is_nar_decoder, device=device)
 
     def create_decoder(self) -> "UnitTokenDecoder":
         """Create a token decoder."""
-        return UnitTokenDecoder(self)
+        return UnitTokenDecoder(self, self.is_nar_decoder)
 
 
 class UnitTokenEncoder:
@@ -86,10 +106,14 @@ class UnitTokenEncoder:
     eos_idx: int
     unk_idx: int
     lang_idx: int
-    prefix_indices: Tensor
+    prefix_indices: Optional[Tensor]
 
     def __init__(
-        self, tokenizer: UnitTokenizer, lang: str, device: Optional[Device] = None
+        self,
+        tokenizer: UnitTokenizer,
+        lang: str,
+        is_nar_decoder: bool,
+        device: Optional[Device] = None,
     ) -> None:
         """
         :param tokenizer:
@@ -105,6 +129,7 @@ class UnitTokenEncoder:
             )
 
         self.tokenizer = tokenizer
+        self.is_nar_decoder = is_nar_decoder
 
         assert tokenizer.vocab_info.eos_idx is not None
         assert tokenizer.vocab_info.unk_idx is not None
@@ -117,10 +142,13 @@ class UnitTokenEncoder:
         if device is None:
             device = Device("cpu")
 
-        # We always start sequences with EOS, followed by the language token.
-        self.prefix_indices = torch.tensor(
-            [self.eos_idx, self.lang_idx], device=device, dtype=torch.int64
-        )
+        if not self.is_nar_decoder:
+            # We always start sequences with EOS, followed by the language token.
+            self.prefix_indices = torch.tensor(
+                [self.eos_idx, self.lang_idx], device=device, dtype=torch.int64
+            )
+        else:
+            self.prefix_indices = None
 
     def __call__(self, units: Tensor) -> Tensor:
         """Encode ``units`` to token indices.
@@ -136,13 +164,18 @@ class UnitTokenEncoder:
         """
         batch_size = units.size(0)
 
-        token_indices = torch.cat(
-            [self.prefix_indices.clone().expand(batch_size, -1), units.detach()], dim=1
-        )
+        if self.prefix_indices is not None:
+            token_indices = torch.cat(
+                [self.prefix_indices.clone().expand(batch_size, -1), units.detach()],
+                dim=1,
+            )
 
-        # Ensure that non-symbol indices larger than `num_units` are replaced
-        # with UNK.
-        seqs = token_indices[:, 2:]
+            # Ensure that non-symbol indices larger than `num_units` are replaced
+            # with UNK.
+            seqs = token_indices[:, 2:]
+        else:
+            token_indices = units.clone().detach()
+            seqs = token_indices
 
         # Add offset for control symbols.
         seqs += 4
@@ -158,16 +191,20 @@ class UnitTokenDecoder:
     eos_idx: int
     pad_idx: int
 
-    def __init__(self, tokenizer: UnitTokenizer) -> None:
+    def __init__(self, tokenizer: UnitTokenizer, is_nar_decoder: bool) -> None:
         """
         :param tokenizer:
             The unit tokenizer to use.
+        :param is_nar_decoder:
+            If True, the unit decoder is non-autoregressive.
         """
         assert tokenizer.vocab_info.eos_idx is not None
         assert tokenizer.vocab_info.pad_idx is not None
 
         self.eos_idx = tokenizer.vocab_info.eos_idx
         self.pad_idx = tokenizer.vocab_info.pad_idx
+
+        self.is_nar_decoder = is_nar_decoder
 
     def __call__(self, token_indices: Tensor) -> Tensor:
         """Decode ``token_indices`` to speech units.
@@ -184,16 +221,23 @@ class UnitTokenDecoder:
         if token_indices.size(1) == 0:
             return token_indices
 
-        # Remove the prefix EOS symbol. The language symbol is still expected to
-        # be part of the decoded output.
-        units = token_indices[:, 1:].clone().detach()
+        units = token_indices.clone().detach()
+
+        # Remove the prefix EOS symbol from the decoded output for
+        # autoregressive UnitY.
+        if not self.is_nar_decoder:
+            units = units[:, 1:]
 
         # Also, replace EOS with PAD at sequence ends.
         units[units == self.eos_idx] = self.pad_idx
 
         units[units == self.pad_idx] = self.pad_idx + 4
 
-        # Remove offset of control symbols (exclude language symbol).
-        units[:, 1:] -= 4
+        # Remove offset of control symbols.
+        if self.is_nar_decoder:
+            units -= 4
+        else:
+            # Exclude language symbol for autoregressive UnitY.
+            units[:, 1:] -= 4
 
         return units

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["packaging~=23.1", "setuptools~=67.8", "wheel~=0.40"]
+build-backend = "setuptools.build_meta"
+
+[tool.flake8]
+extend_ignore = ["E", "Y"]  # Black
+per-file-ignores = [
+    "__init__.py:F401",
+]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+disable_error_code = "type-abstract,typeddict-unknown-key"
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+ignore_missing_imports = true
+python_version = 3.8
+show_error_codes = true
+show_error_context = true
+strict = true
+warn_unused_configs = false
+warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+minversion = "7.1"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Deprecated call to `pkg_resources",
+    "ignore:Please use `line_search_wolfe",
+    "ignore:Please use `spmatrix",
+    "ignore:TypedStorage is deprecated",
+    "ignore:distutils Version classes are deprecated",
+    "ignore:pkg_resources is deprecated",
+    "ignore:torch.nn.utils.weight_norm is deprecated in favor of",
+]

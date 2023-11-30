@@ -2,10 +2,10 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.typing import DataType, Device
@@ -31,13 +31,12 @@ class VocoderConfig:
     num_langs: int
     spkr_embedding_dim: int
     num_spkrs: int
-    lang_spkr_idx_map: dict
+    lang_spkr_idx_map: Dict[str, Any]
 
 
 vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_code_hifigan")
 
-
-vocoder_arch = vocoder_archs.marker
+vocoder_arch = vocoder_archs.decorator
 
 
 @vocoder_arch("base")
@@ -80,6 +79,7 @@ class VocoderBuilder:
     def __init__(
         self,
         config: VocoderConfig,
+        *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -92,8 +92,7 @@ class VocoderBuilder:
             The data type of module parameters and buffers.
         """
         self.config = config
-        self.device = device
-        self.dtype = dtype
+        self.device, self.dtype = device, dtype
 
     def build_model(self) -> Vocoder:
         """Build a model."""
@@ -113,8 +112,8 @@ class VocoderBuilder:
             self.config.spkr_embedding_dim,
             self.config.num_spkrs,
         )
+        code_generator.to(device=self.device, dtype=self.dtype)
         vocoder = Vocoder(code_generator, self.config.lang_spkr_idx_map)
-        vocoder.to(dtype=self.dtype)
         return vocoder
 
 
@@ -133,4 +132,4 @@ def create_vocoder_model(
         The data type of module parameters and buffers.
     """
 
-    return VocoderBuilder(config, device, dtype).build_model()
+    return VocoderBuilder(config, device=device, dtype=dtype).build_model()

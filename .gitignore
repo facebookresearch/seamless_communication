@@ -146,3 +146,4 @@ seamless_communication
 # ignore src/seamless_communication  
 !*/seamless_communication
 m4t_scripts
+/ggml/test_data/

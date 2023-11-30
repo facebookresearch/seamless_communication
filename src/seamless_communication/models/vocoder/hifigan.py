@@ -2,18 +2,26 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional
 
+import logging
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+
 from torch import Tensor
-from torch.nn import Conv1d, ConvTranspose1d
+from torch.nn import Conv1d, ConvTranspose1d, Module, ModuleList
 from torch.nn.utils.weight_norm import remove_weight_norm, weight_norm
 
 LRELU_SLOPE = 0.1
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 
 def init_weights(m, mean: float = 0.0, std: float = 0.01) -> None:  # type: ignore
@@ -26,12 +34,12 @@ def get_padding(kernel_size: int, dilation: int = 1) -> int:
     return (kernel_size * dilation - dilation) // 2
 
 
-class ResBlock(torch.nn.Module):
+class ResBlock(Module):
     def __init__(
         self, channels: int, kernel_size: int = 3, dilation: List[int] = [1, 3, 5]
     ):
         super(ResBlock, self).__init__()
-        self.convs1 = nn.ModuleList(
+        self.convs1 = ModuleList(
             [
                 weight_norm(
                     Conv1d(
@@ -67,7 +75,7 @@ class ResBlock(torch.nn.Module):
         )
         self.convs1.apply(init_weights)
 
-        self.convs2 = nn.ModuleList(
+        self.convs2 = ModuleList(
             [
                 weight_norm(
                     Conv1d(
@@ -119,7 +127,7 @@ class ResBlock(torch.nn.Module):
             remove_weight_norm(layer)
 
 
-class Generator(torch.nn.Module):
+class Generator(Module):
     def __init__(
         self,
         upsample_rates: List[int],
@@ -128,8 +136,9 @@ class Generator(torch.nn.Module):
         resblock_kernel_sizes: List[int],
         resblock_dilation_sizes: List[List[int]],
         model_in_dim: Optional[int],
+        add_ups_out_pad: bool = False,
     ):
-        super(Generator, self).__init__()
+        super().__init__()
         self.num_kernels = len(resblock_kernel_sizes)
         self.num_upsamples = len(upsample_rates)
         self.conv_pre = weight_norm(
@@ -142,8 +151,9 @@ class Generator(torch.nn.Module):
             )
         )
 
-        self.ups = nn.ModuleList()
+        self.ups = ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
+            out_pad = u % 2 if add_ups_out_pad else 0
             self.ups.append(
                 weight_norm(
                     ConvTranspose1d(
@@ -151,12 +161,13 @@ class Generator(torch.nn.Module):
                         upsample_initial_channel // (2 ** (i + 1)),
                         k,
                         u,
-                        padding=(k - u) // 2,
+                        padding=(k - u) // 2 + out_pad,
+                        output_padding=out_pad,
                     )
                 )
             )
 
-        self.resblocks = nn.ModuleList()
+        self.resblocks = ModuleList()
         for i in range(len(self.ups)):
             ch = upsample_initial_channel // (2 ** (i + 1))
             for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes):
@@ -185,7 +196,7 @@ class Generator(torch.nn.Module):
         return x
 
     def remove_weight_norm(self) -> None:
-        print("Removing weight norm...")
+        logger.info("Removing weight norm in Generator.")
         for layer in self.ups:
             remove_weight_norm(layer)
         for layer in self.resblocks:
