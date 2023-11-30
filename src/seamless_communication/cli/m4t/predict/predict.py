@@ -136,7 +136,7 @@ def add_inference_arguments(parser: argparse.ArgumentParser) -> argparse.Argumen
         default=False,
     )
     parser.add_argument(
-        "--text-unk-blocking",
+        "--text_unk_blocking",
         type=bool,
         help=(
             "If True, set penalty of UNK to inf in text generator "
