@@ -61,10 +61,14 @@ def build_data_pipeline(
 ) -> DataPipeline:
     with open(args.data_file, "r") as f:
         header = f.readline().strip("\n").split("\t")
+        assert args.audio_field in header, f"Input file does not contain {args.audio_field} field"
 
     n_parallel = 4
 
-    split_tsv = StrSplitter(names=header)
+    split_tsv = StrSplitter(
+        names=["id", "audio"],
+        indices=[header.index("id"), header.index(args.audio_field)],
+    )
 
     pipeline_builder = read_text(args.data_file, rtrim=True).skip(1).map(split_tsv)
 
@@ -133,6 +137,12 @@ def main() -> None:
         type=Path,
         help="Root directory for the audio filenames in the data file.",
         default="",
+    )
+    parser.add_argument(
+        "--audio_field",
+        type=str,
+        help="Field that includes the input audio file paths.",
+        default="src_audio",
     )
     parser.add_argument(
         "--ref_field",
