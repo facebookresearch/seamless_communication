@@ -62,6 +62,10 @@ The Seamless model is the unified model for expressive streaming speech-to-speec
 pip install .
 ```
 
+> [!NOTE]
+> Transcribing inference audio for computing metric uses [Whisper](https://github.com/openai/whisper#setup), which is automatically installed. Whisper in turn requires the command-line tool [`ffmpeg`](https://ffmpeg.org/) to be installed on your system, which is available from most package managers.
+
+
 ## Running inference
 
 ### SeamlessM4T Inference
