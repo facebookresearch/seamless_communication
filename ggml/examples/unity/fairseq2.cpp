@@ -9,6 +9,7 @@
 #include "kaldi-native-fbank/csrc/feature-window.h"
 #include "fairseq2.h"
 #include "ggml.h"
+#include "ggml-alloc.h"
 
 ggml_tensor* ggml_detach(ggml_tensor* a) {
     a->op = GGML_OP_NONE;
@@ -34,6 +35,9 @@ void printf_mem_usage(ggml_context* ctx, std::string name) {
     auto tmp_ ## x = x; x = y; y = tmp_ ## x;
 
 
+#define GGML_ASSERT_SHAPE(x, ne0, ne1, ne2, ne3) \
+    GGML_ASSERT((ne0 == -1 || x->ne[0] == ne0) && (ne1 == -1 || x->ne[1] == ne1) && (ne2 == -1 || x->ne[2] == ne2) && (ne3 == -1 || x->ne[3] == ne3));
+
 /// allocate the fairseq2 model and hyperparameters
 extern "C" fairseq2_model* fairseq2_model_alloc() {
     // pre-allocate some memory to write hyperparameters and tensors pointers
@@ -47,7 +51,6 @@ extern "C" void fairseq2_kv_cache_alloc(const fairseq2_model& model, int beam_si
     // For encoder attention since we compute it all at once,
     // the allocation is delayed to the first forward pass, to not over allocate.
     auto attn_glob = "text_decoder.*_attn.k_proj.weight";
-    auto self_attn_glob = "text_decoder.*self_attn.k_proj.weight";
     ggml_tensor* self_attn_mask = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, max_seq_len, max_seq_len);
     self_attn_mask = ggml_diag_mask_inf_inplace(model.ctx, self_attn_mask, 0);
     ggml_format_name(self_attn_mask, "self_attn_mask[%d]", max_seq_len);
@@ -61,20 +64,9 @@ extern "C" void fairseq2_kv_cache_alloc(const fairseq2_model& model, int beam_si
         KeyValueTensor& kv = model.kv_cache[shortname];
         kv.step_nr = 0;
 
-        if (::fnmatch(self_attn_glob, name.c_str(), 0) == FNM_NOMATCH) {
-            // enc_dec_attn
-            // the tensors will be allocated during the first forward
-            continue;
-        }
-
-        // self_attn
-        ggml_tensor* k_proj = named_tensor.second;
-        int model_dim = k_proj->ne[0];
-        kv.full_k = ggml_new_tensor_3d(model.ctx, k_proj->type, model_dim, max_seq_len, beam_size);
-        kv.full_v = ggml_new_tensor_3d(model.ctx, k_proj->type, model_dim, max_seq_len, beam_size);
+        kv.full_k = nullptr;
+        kv.full_v = nullptr;
         kv.self_attn_mask = self_attn_mask;
-        ggml_format_name(kv.full_k, "%s.k_cache", shortname.c_str());
-        ggml_format_name(kv.full_v, "%s.v_cache", shortname.c_str());
     }
 }
 
@@ -88,38 +80,64 @@ bool has_kv_cache(const fairseq2_model& model) {
     return model.kv_cache.size() > 0;
 }
 
+
+inline ggml_tensor* ggml_squeeze(ggml_context* ctx, ggml_tensor* x, int dim) {
+    int n_dims = x->n_dims;
+    GGML_ASSERT(dim >= 0);
+    GGML_ASSERT(dim < n_dims);
+    GGML_ASSERT(x->ne[dim] == 1);
+    return ggml_flatten_1d(ctx, x, dim);
+}
+
+inline ggml_tensor* ggml_unsqueeze(ggml_context* ctx, ggml_tensor* x, int dim) {
+    return ggml_unflatten_1d(ctx, x, dim, 1);
+}
+
+
 // copy k and v to kv cache
 // kv.full_k[step_nr] = k;
 // kv.full_v[step_nr] = v;
 void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, ggml_tensor** k, ggml_tensor** v, ggml_tensor** self_attn_mask) {
     KeyValueTensor& kv = model.kv_cache[prefix];
-    GGML_ASSERT(kv.full_k != nullptr); // key not found !
     int step_nr = kv.step_nr;
+    ggml_context* ctx = model.ctx;
+    int n_steps = (*k)->ne[1];
+    int k_proj, batch_size;
 
-    ggml_tensor* full_k = kv.full_k;
-    ggml_tensor* full_v = kv.full_v;
+    if (kv.full_k != nullptr) {
+        // (N, S_kv, K_proj)
+        k_proj = kv.full_k->ne[0];
+        batch_size = kv.full_k->ne[2];
+        ggml_detach(kv.full_k);
+        ggml_detach(kv.full_v);
+        kv.full_k = ggml_squeeze(ctx, ggml_concat(ctx, ggml_unsqueeze(ctx, kv.full_k, 1), ggml_unsqueeze(ctx, *k, 1)), 1);
+        kv.full_v = ggml_squeeze(ctx, ggml_concat(ctx, ggml_unsqueeze(ctx, kv.full_v, 1), ggml_unsqueeze(ctx, *v, 1)), 1);
+        *k = kv.full_k;
+        *v = kv.full_v;
+    } else {
+        GGML_ASSERT(step_nr == 0);
+        k_proj = (*k)->ne[0];
+        batch_size = (*v)->ne[2];
+        kv.full_k = *k;
+        kv.full_v = *v;
+    }
+    ggml_format_name(kv.full_k, "%s.k (step=%d)", prefix.c_str(), step_nr);
+    ggml_format_name(kv.full_v, "%s.v (step=%d)", prefix.c_str(), step_nr);
+    step_nr += n_steps;
 
-    // (N, S_kv, K_proj)
-    GGML_ASSERT((*k)->ne[1] == 1);  // TODO I think we could handle adding a full prefix sequence
-    ggml_tensor* updated_k = ggml_set_2d_inplace(model.ctx, full_k, *k, full_k->nb[2], full_k->nb[1] * step_nr);
-    ggml_tensor* updated_v = ggml_set_2d_inplace(model.ctx, full_v, *v, full_v->nb[2], full_v->nb[1] * step_nr);
-
-    *k = ggml_slice(model.ctx, updated_k, 1, 0, step_nr + 1);
-    *v = ggml_slice(model.ctx, updated_v, 1, 0, step_nr + 1);
-    ggml_format_name(*k, "%s (step=%d)", full_k->name, step_nr);
-    ggml_format_name(*v, "%s (step=%d)", full_v->name, step_nr);
+    GGML_ASSERT_SHAPE(kv.full_k, k_proj, step_nr, batch_size, 1);
 
     // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
     // we return the Sq slice of the (Sq, Sk) attention mask
     *self_attn_mask = ggml_slice(
         model.ctx,
-        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr + 1),
+        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr),
         1,
-        step_nr,
-        step_nr + 1
+        step_nr - 1,
+        step_nr
     );
 
-    kv.step_nr = step_nr + 1;
+    kv.step_nr = step_nr;
 }
 
 // variant of ggml_get_rows that allows for a with more than 2 dims.
@@ -141,14 +159,18 @@ ggml_tensor* ggml_get_rows2(ggml_context* ctx, ggml_tensor* a, ggml_tensor* b) {
 void _reorder_kv_cache(ggml_context* ctx, ggml_cgraph* gf, KeyValueTensor& kv, ggml_tensor* new_order) {
     if (kv.full_k != nullptr) {
         ggml_detach(kv.full_k);
+        const char* name = kv.full_k->name;
         kv.full_k = ggml_get_rows2(ctx, kv.full_k, new_order);
         ggml_build_forward_expand(gf, kv.full_k);
+        ggml_set_name(kv.full_k, name);
     }
 
     if (kv.full_v != nullptr) {
         ggml_detach(kv.full_v);
+        const char* name = kv.full_v->name;
         kv.full_v = ggml_get_rows2(ctx, kv.full_v, new_order);
         ggml_build_forward_expand(gf, kv.full_v);
+        ggml_set_name(kv.full_v, name);
     }
 }
 
@@ -373,8 +395,8 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
 
     ggml_context* ctx = model.ctx;
     ggml_tensor* q = Linear_forward(model, prefix + ".q_proj", queries); // (B, S, H * H_dim)
-    ggml_set_name(q, "q");
     q = _reshape_num_head(ctx, q, head_dim);  // (B * H, S, H_dim)
+    ggml_set_name(q, "q");
 
     ggml_tensor *k, *v;
     if (!has_kv_cache(model)) {
@@ -391,7 +413,9 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
             KeyValueTensor& kv_cache = model.kv_cache[prefix];
             if (kv_cache.step_nr == 0) {
                 k = Linear_forward(model, prefix + ".k_proj", keys);
+                ggml_set_name(k, "k");
                 v = Linear_forward(model, prefix + ".v_proj", values);
+                ggml_set_name(v, "v");
                 // TODO: encoder_padding_mask
                 // Note we are only storing a pointer to the buffer, not the full graph
                 kv_cache.full_k = ggml_detach(ggml_dup_inplace(ctx, k));
@@ -1315,6 +1339,11 @@ ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer) {
     });
 }
 
+ggml_allocr* new_arena_allocr(std::vector<uint8_t>& buffer) {
+    return ggml_allocr_new(buffer.data(), buffer.capacity(), 8);
+}
+
+
 
 /// Generates a translation for a single sequence
 // TODO: clean ups
@@ -1326,16 +1355,19 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* encoder_padding_mask,
     ggml_context* result_ctx
 ) {
-    std::vector<uint8_t> local_bufs[3] = {
+    std::vector<uint8_t> local_bufs[5] = {
         std::vector<uint8_t>(1024 * 1024 * 1024),  // step_ctx
         std::vector<uint8_t>(1024 * 1024 * 1024),  // next_step_ctx
-        std::vector<uint8_t>(1024 * 1024 * 1024)  // search_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024),  // search_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024),  // alloc_step_ctx
+        std::vector<uint8_t>(1024 * 1024 * 1024),  // alloc_next_step_ctx
     };
     ggml_context* search_ctx = ctx_from_buffer(local_bufs[2]);
 
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
     std::size_t beam_size = job.opts.beam_size;
+    ggml_detach(encoder_output);
     int source_seq_len = encoder_output->ne[1];
     int max_seq_len = _determine_max_seq_len(job, source_seq_len);
 
@@ -1360,6 +1392,9 @@ extern "C" Hypothesis* generate_sequence(
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
 
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[0]);
+    ggml_context* next_step_ctx = ctx_from_buffer(local_bufs[1]);
+    model.ctx = next_step_ctx;
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask
     );
@@ -1379,8 +1414,6 @@ extern "C" Hypothesis* generate_sequence(
 
     printf_mem_usage(search_ctx, "search_ctx");
 
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[0]);
-    ggml_context* next_step_ctx = nullptr;
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         model.ctx = step_ctx;
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
@@ -1402,7 +1435,7 @@ extern "C" Hypothesis* generate_sequence(
         // Compute lprobs here so we can modify it in place in the lprob tweaking phase
         // TODO: use ggml properly compute the tweaks
         ggml_cgraph gf = ggml_build_forward(lprobs);
-        // printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
+        printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
         ggml_graph_compute_with_ctx(step_ctx, &gf, 1);
         ggml_detach(lprobs);
 

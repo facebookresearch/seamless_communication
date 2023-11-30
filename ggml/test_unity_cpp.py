@@ -17,7 +17,7 @@ import pytest
 import torch
 import torchaudio
 from fairseq2.data.audio import WaveformToFbankConverter
-from seamless_communication.inference import SequenceGeneratorOptions
+from seamless_communication.inference.generator import SequenceGeneratorOptions
 from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 from seamless_communication.inference.translator import Modality, Translator
 
@@ -211,7 +211,7 @@ def test_MultiheadAttention_forward(
 
     pt_model = load_pt_model()
     self_attn = pt_model.text_encoder.layers[0].self_attn
-    q_exp = self_attn.q_proj(xq).numpy()
+    q_exp = self_attn._project_q(xq, None).numpy().reshape(2 * 16, qlen, 64)
 
     y = ggml.to_numpy(gy)
     nodes = ggml.nodes(gf)
@@ -261,8 +261,6 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
         # Incremental decoding
         for t in range(3):
             xq = x[:, t : t + 1]
-            y_exp = attn(xq, None, xq, None, xq, state_bag=state_bag).numpy()
-            assert y_exp.shape == (2, 1, 1024)
 
             gxq = ggml.from_numpy(ctx, xq.contiguous())
             ggml.ggml_set_name(gxq, b"xq")
@@ -277,18 +275,25 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
             )
             gf = ggml.ggml_build_forward(gy)
             ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
-
             nodes = ggml.nodes(gf)
+            gk_cache = ggml.to_numpy(
+                nodes[
+                    b"text_decoder.layers.0.self_attn.k (step=%d) (view) (permuted) (c"
+                    % t
+                ]
+            )
+            assert gk_cache.shape == (2 * 16, t + 1, 64)
+
+            y_exp = attn(xq, None, xq, None, xq, state_bag=state_bag).numpy()
+            assert y_exp.shape == (2, 1, 1024)
             state = state_bag.get_state(attn, fairseq2.nn.transformer.AttentionState)
             state_bag.increment_step_nr()
             assert state is not None
-            assert np.allclose(
-                state.get()[0].transpose(1, 2).reshape(2, t + 1, -1).numpy(),
-                ggml.to_numpy(
-                    nodes[b"text_decoder.layers.0.self_attn.k_cache (step=%d)" % t]
-                ),
-                atol=1e-3,
-            )
+
+            k_cache = state.get()[0].numpy()
+            assert k_cache.shape == (2, 16, t + 1, 64)
+            k_cache = k_cache.reshape(2 * 16, t + 1, -1)
+            assert np.allclose(gk_cache, k_cache, atol=1e-3)
 
             y = ggml.to_numpy(gy)
             assert np.allclose(y, y_exp, atol=1e-2)

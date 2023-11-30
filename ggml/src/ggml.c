@@ -10379,6 +10379,7 @@ static void ggml_compute_forward_repeat(
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_repeat_f32(params, src0, dst);
             } break;
@@ -10520,6 +10521,7 @@ static void ggml_compute_forward_concat(
     struct ggml_tensor* dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_concat_f32(params, src0, src1, dst);
             } break;
