@@ -223,4 +223,18 @@ If you use Seamless in your work or any models/datasets/artifacts published in S
 
 # License
 
-SeamlessExpressivity and Seamless models are under [SEAMLESS_LICENSE](SEAMLESS_LICENSE). Other models and code are CC-BY-NC 4.0 licensed, as found in [LICENSE](LICENSE) file
+We have three license categories.
+
+The following non-generative components are MIT licensed as found in [LICENSE](LICENSE):
+- Code
+- Text only part of the mExpresso dataset found in the [SeamlessExpressive README](docs/expressive/README.md).
+- UnitY2 forced alignment extractor found in the [UnitY2 Aligner README](docs/m4t/unity2_aligner_README.md).
+- Speech toxicity tool with the etox dataset found in the [Toxicity README](src/seamless_communication/cli/toxicity).
+
+The following models are CC-BY-NC 4.0 licensed as found in the [CC_BY_NC_LICENSE](CC_BY_NC_LICENSE):
+- SeamlessM4T models (v1 and v2).
+- SeamlessStreaming models.
+
+The following models are Seamless licensed as found in [SEAMLESS_LICENSE](SEAMLESS_LICENSE):
+- Seamless models.
+- SeamlessExpressive models.

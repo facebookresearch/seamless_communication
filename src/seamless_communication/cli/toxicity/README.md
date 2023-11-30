@@ -72,7 +72,3 @@ and
   year={2023}
 }
 ```
-
-# License
-
-seamless_communication is CC-BY-NC 4.0 licensed, as found in LICENSE file
