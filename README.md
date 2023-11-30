@@ -12,13 +12,13 @@ SeamlessM4T models support the tasks of:
 
 :star2: We are releasing SemalessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
 
-To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md)
+To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large)
 
 ## SeamlessExpressive
 
 SeamlessExpressive is a speech-to-speech translation model that captures certain underexplored aspects of prosody such as speech rate and pauses, while preserving the style of one's voice and high content translation quality.
 
-To learn more about SeamlessExpressive models, visit the [SeamlessExpressive README](docs/expressive/README.md)
+To learn more about SeamlessExpressive models, visit the [SeamlessExpressive README](docs/expressive/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-expressive)
 
 
 ## SeamlessStreaming
@@ -30,7 +30,7 @@ The SeamlessStreaming model supports the following tasks:
 - Speech-to-text translation (S2TT)
 - Automatic speech recognition (ASR)
 
-To learn more about SeamlessStreaming models, visit the [SeamlessStreaming README](docs/streaming/README.md)
+To learn more about SeamlessStreaming models, visit the [SeamlessStreaming README](docs/streaming/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-streaming)
 
 ## Seamless
 
@@ -137,7 +137,7 @@ python app.py
 ### SeamlessM4T models
 | Model Name              | #params | checkpoint                                                                                                                                                                     | metrics                                                                             |
 | ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| SeamlessM4T-Large v2    | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-v2-large) - [checkpoint](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_v2_large.pt)                   | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large_v2.zip) |
+| SeamlessM4T-Large v2    | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-v2-large) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-v2-large/resolve/main/seamlessM4T_v2_large.pt  )                   | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large_v2.zip) |
 | SeamlessM4T-Large (v1)  | 2.3B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-large) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-large/resolve/main/multitask_unity_large.pt)    | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_large.zip)    |
 | SeamlessM4T-Medium (v1) | 1.2B    | [🤗 Model card](https://huggingface.co/facebook/seamless-m4t-medium) - [checkpoint](https://huggingface.co/facebook/seamless-m4t-medium/resolve/main/multitask_unity_medium.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/seamlessM4T_medium.zip)   |
 
@@ -152,7 +152,7 @@ Please note that SeamlessExpressive is made available under its own [License](SE
 ### SeamlessStreaming models
 | Model Name        | #params | checkpoint                                                                                                                                                                                                                                                                                              | metrics                                                                                     |
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| SeamlessStreaming | 2.5B    | [🤗 Model card](https://huggingface.co/facebook/seamless-streaming) - [monotonic decoder checkpoint](https://dl.fbaipublicfiles.com/seamless/models/seamless_streaming_monotonic_decoder.pt) - [streaming UnitY2 checkpoint](https://dl.fbaipublicfiles.com/seamless/models/seamless_streaming_unity.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/streaming/seamless_streaming.zip) |
+| SeamlessStreaming | 2.5B    | [🤗 Model card](https://huggingface.co/facebook/seamless-streaming) - [monotonic decoder checkpoint](https://huggingface.co/facebook/seamless-streaming/resolve/main/seamless_streaming_monotonic_decoder.pt) - [streaming UnitY2 checkpoint](https://huggingface.co/facebook/seamless-streaming/resolve/main/seamless_streaming_unity.pt) | [metrics](https://dl.fbaipublicfiles.com/seamless/metrics/streaming/seamless_streaming.zip) |
 
 ### Seamless models
 Seamless model is simply the SeamlessStreaming model with the non-expressive `vocoder_v2` swapped out with the expressive `vocoder_pretssel`.
