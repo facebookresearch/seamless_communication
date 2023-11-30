@@ -20,7 +20,7 @@
 
 struct unity_params {
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
-    std::string model      = "/private/home/dnn/unity.cpp_inc/seamless_communication/ggml/seamlessM4T_medium.ggml"; // model path
+    std::string model      = "seamlessM4T_medium.ggml"; // model path
     std::string tgt_lang = "eng";
     std::vector<std::string> files = {};
     bool text = false;
