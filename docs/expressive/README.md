@@ -62,9 +62,10 @@ Python package dependencies (on top of seamless_communication, coming from stope
 * pkuseg
 * nltk
 * fire
+* inflect
 
 ```bash
-pip install Unidecode scipy phonemizer s3prl syllables ipapy pkuseg nltk fire
+pip install Unidecode scipy phonemizer s3prl syllables ipapy pkuseg nltk fire inflect
 ```
 
 As described in Section 4.3 we use following automatic metrics:
