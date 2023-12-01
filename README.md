@@ -139,7 +139,7 @@ python app.py
 
 SeamlessM4T is available in the 🤗 Transformers library, requiring minimal dependencies. Steps to get started:
 
-1. First install the :hugging_face: [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
+1. First install the 🤗 [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
 
 ```
 pip install git+https://github.com/huggingface/transformers.git sentencepiece
@@ -149,6 +149,7 @@ pip install git+https://github.com/huggingface/transformers.git sentencepiece
 
 ```py
 from transformers import AutoProcessor, SeamlessM4Tv2Model
+import torchaudio
 
 processor = AutoProcessor.from_pretrained("facebook/seamless-m4t-v2-large")
 model = SeamlessM4Tv2Model.from_pretrained("facebook/seamless-m4t-v2-large")
@@ -158,7 +159,8 @@ text_inputs = processor(text = "Hello, my dog is cute", src_lang="eng", return_t
 audio_array_from_text = model.generate(**text_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
 
 # from audio
-audio = ... # must be a 16 kHz waveform array (list or numpy array)
+audio, orig_freq =  torchaudio.load("https://www2.cs.uic.edu/~i101/SoundFiles/preamble10.wav")
+audio =  torchaudio.functional.resample(audio, orig_freq=orig_freq, new_freq=16_000) # must be a 16 kHz waveform array
 audio_inputs = processor(audios=audio, return_tensors="pt")
 audio_array_from_audio = model.generate(**audio_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
 ```
