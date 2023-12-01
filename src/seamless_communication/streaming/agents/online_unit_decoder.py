@@ -14,9 +14,9 @@ from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 from seamless_communication.streaming.agents.online_text_decoder import (
     UnitYTextDecoderOutput,
 )
+from seamless_communication.streaming.agents.common import AgentStates
 from simuleval.agents import GenericAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
-from simuleval.agents.states import AgentStates
 from simuleval.data.segments import Segment, TextSegment
 
 

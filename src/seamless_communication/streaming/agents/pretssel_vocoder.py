@@ -16,8 +16,11 @@ from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 from seamless_communication.models.unity import load_gcmvn_stats
 from seamless_communication.store import add_gated_assets
-from seamless_communication.streaming.agents.common import NoUpdateTargetMixin
-from simuleval.agents import AgentStates, TextToSpeechAgent
+from seamless_communication.streaming.agents.common import (
+    AgentStates,
+    NoUpdateTargetMixin,
+)
+from simuleval.agents import TextToSpeechAgent
 from simuleval.agents.actions import ReadAction, WriteAction
 from simuleval.data.segments import SpeechSegment
 

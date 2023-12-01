@@ -11,7 +11,8 @@ from typing import Any, Dict
 
 import torch
 from seamless_communication.models.vocoder.loader import load_vocoder_model
-from simuleval.agents import AgentStates, TextToSpeechAgent
+from seamless_communication.streaming.agents.common import AgentStates
+from simuleval.agents import TextToSpeechAgent
 from simuleval.agents.actions import ReadAction, WriteAction
 from simuleval.data.segments import SpeechSegment
 
