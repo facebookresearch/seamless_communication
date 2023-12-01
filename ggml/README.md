@@ -31,7 +31,7 @@ In the console, enter the path of local waveform file and target language, separ
 Converted ggml models could be downloaded from 
 |SeamlessM4T_large | SeamlessM4T_medium | 
 |-------- | -------- | 
-| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
+| [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
 
 ## Fairseq2 model conversion 
 Models from fairseq2 checkpoints could be converted to ggml automatically with [ggml_convert.py](ggml_convert.py). 
