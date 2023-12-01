@@ -34,4 +34,4 @@ outlined on that page and do not file a public issue.
 
 ## License
 By contributing to `seamless_communication`, you agree that your contributions will be licensed
-under the LICENSE file in the root directory of this source tree.
+under the MIT_LICENSE file in the root directory of this source tree.

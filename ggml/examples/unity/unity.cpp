@@ -133,9 +133,13 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
         return 1;
     }
+    int ctx_size_gb = 20;
+    if (model.hparams["w2v2_encoder_config__num_encoder_layers"] == 24) {
+        ctx_size_gb = 40;
+    } 
 
     char result_str[4096];
-    static std::vector<uint8_t> encoder_buf(20 * 1024LL * 1024LL * 1024LL);
+    static std::vector<uint8_t> encoder_buf(ctx_size_gb * 1024LL * 1024LL * 1024LL);
 
     std::string input;
     bool interactive = params.files.size() == 0;

@@ -2,7 +2,7 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 from seamless_communication.models.wav2vec2_chunk.builder import (
     Wav2Vec2ChunkEncoderBuilder as Wav2Vec2ChunkEncoderBuilder,

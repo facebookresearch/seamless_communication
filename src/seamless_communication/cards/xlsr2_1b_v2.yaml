@@ -2,7 +2,7 @@
 # All rights reserved.
 #
 # This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
+# MIT_LICENSE file in the root directory of this source tree.
 
 name: xlsr2_1b_v2
 model_type: wav2vec2

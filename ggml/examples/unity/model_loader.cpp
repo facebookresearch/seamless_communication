@@ -137,6 +137,7 @@ void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
 
     std::string packed_vocab = get_name(fin);
     std::int64_t ctx_size = vocab_size * sizeof(float) + vocab_size + 2 * ggml_tensor_overhead();
+    ctx_size *= 2;
     ggml_context* ctx = ggml_init(ggml_init_params{ctx_size, nullptr, false});
     ggml_tensor* lengths_tensor = load_tensor_value(fin, ctx);
     std::int8_t* lengths = (std::int8_t*)lengths_tensor->data;
