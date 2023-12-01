@@ -21,6 +21,9 @@ from seamless_communication.streaming.agents.online_unit_decoder import (
 from seamless_communication.streaming.agents.pretssel_vocoder import (
     PretsselVocoderAgent,
 )
+from seamless_communication.streaming.agents.dual_vocoder_agent import (
+    DualVocoderAgent,
+)
 from seamless_communication.streaming.agents.silero_vad import SileroVADAgent
 from seamless_communication.streaming.agents.unity_pipeline import (
     UnitYAgentPipeline,
@@ -47,4 +50,16 @@ class SeamlessS2STJointVADAgent(UnitYAgentTreePipeline):
         UnitYDetokenizerAgent: [],
         NARUnitYUnitDecoderAgent: [PretsselVocoderAgent],
         PretsselVocoderAgent: [],
+    }
+
+
+class SeamlessS2STDualVocoderVADAgent(UnitYAgentTreePipeline):
+    pipeline = {
+        SileroVADAgent: [OnlineFeatureExtractorAgent],
+        OnlineFeatureExtractorAgent: [OfflineWav2VecBertEncoderAgent],
+        OfflineWav2VecBertEncoderAgent: [UnitYMMATextDecoderAgent],
+        UnitYMMATextDecoderAgent: [UnitYDetokenizerAgent, NARUnitYUnitDecoderAgent],
+        UnitYDetokenizerAgent: [],
+        NARUnitYUnitDecoderAgent: [DualVocoderAgent],
+        DualVocoderAgent: [],
     }
