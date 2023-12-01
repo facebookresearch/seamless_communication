@@ -1,7 +1,7 @@
 ![](23-11_SEAMLESS_BlogHero_11.17.jpg)
 # Seamless Intro
 ## SeamlessM4T
-SeamlessM4T is our foundational all-in-one **M**assively **M**ultilingual and **M**ultimodal **M**achine **T**ranslation model delivering high-quality translation for speech and text in nearly 100 languages.
+**SeamlessM4T** is our foundational all-in-one **M**assively **M**ultilingual and **M**ultimodal **M**achine **T**ranslation model delivering high-quality translation for speech and text in nearly 100 languages.
 
 SeamlessM4T models support the tasks of:
 - Speech-to-speech translation (S2ST)
@@ -10,9 +10,12 @@ SeamlessM4T models support the tasks of:
 - Text-to-text translation (T2TT)
 - Automatic speech recognition (ASR)
 
-:star2: We are releasing SemalessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
+:star2: We are releasing SeamlessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
 
-To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large)
+To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large). 
+
+> [!NOTE]
+> SeamlessM4T v2 is also supported in the 🤗 Transformers library, more on it [in the dedicated section below](#transformers-usage).
 
 ## SeamlessExpressive
 
@@ -131,6 +134,58 @@ cd demo
 pip install -r requirements.txt
 python app.py
 ```
+
+# Transformers usage
+
+SeamlessM4T is available in the 🤗 Transformers library, requiring minimal dependencies. Steps to get started:
+
+1. First install the :hugging_face: [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
+
+```
+pip install git+https://github.com/huggingface/transformers.git sentencepiece
+```
+
+2. Run the following Python code to generate speech samples. Here the target language is Russian:
+
+```py
+from transformers import AutoProcessor, SeamlessM4Tv2Model
+
+processor = AutoProcessor.from_pretrained("facebook/seamless-m4t-v2-large")
+model = SeamlessM4Tv2Model.from_pretrained("facebook/seamless-m4t-v2-large")
+
+# from text
+text_inputs = processor(text = "Hello, my dog is cute", src_lang="eng", return_tensors="pt")
+audio_array_from_text = model.generate(**text_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+
+# from audio
+audio = ... # must be a 16 kHz waveform array (list or numpy array)
+audio_inputs = processor(audios=audio, return_tensors="pt")
+audio_array_from_audio = model.generate(**audio_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+```
+
+3. Listen to the audio samples either in an ipynb notebook:
+
+```py
+from IPython.display import Audio
+
+sample_rate = model.sampling_rate
+Audio(audio_array_from_text, rate=sample_rate)
+# Audio(audio_array_from_audio, rate=sample_rate)
+```
+
+Or save them as a `.wav` file using a third-party library, e.g. `scipy`:
+
+```py
+import scipy
+
+sample_rate = model.sampling_rate
+scipy.io.wavfile.write("out_from_text.wav", rate=sample_rate, data=audio_array_from_text)
+# scipy.io.wavfile.write("out_from_audio.wav", rate=sample_rate, data=audio_array_from_audio)
+```
+
+> [!NOTE]  
+> For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
+[SeamlessM4T v2 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/scripts_and_notebooks/blob/main/v2_seamless_m4t_hugging_face.ipynb).
 
 # Resources and usage
 ## Model
