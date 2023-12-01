@@ -135,7 +135,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-# Transformers usage
+## Transformers usage
 
 SeamlessM4T is available in the 🤗 Transformers library, requiring minimal dependencies. Steps to get started:
 
