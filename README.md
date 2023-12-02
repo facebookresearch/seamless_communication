@@ -63,8 +63,9 @@ The Seamless model is the unified model for expressive streaming speech-to-speec
 > [!NOTE]
 > One of the prerequisites is [fairseq2](https://github.com/facebookresearch/fairseq2) which has pre-built packages available only
 > for Linux x84-86 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
-> might not be installed on your machine. If you experience any installation issues, please refer to its
+> might not be installed on your machine. It does not have native support for Windows and there are no plans to support it in the foreseeable future. However, you can use fairseq2 via the Windows Subsystem for Linux (a.k.a. [WSL](https://learn.microsoft.com/en-us/windows/wsl/about) along with full CUDA support introduced in WSL 2. Please follow the instructions in the [Installing on Linux](https://github.com/facebookresearch/fairseq2#installing-on-linux) section for a WSL-based installation. If you experience any installation issues, please refer to its
 > [README](https://github.com/facebookresearch/fairseq2) for further instructions.
+
 
 ```
 pip install .
