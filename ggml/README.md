@@ -11,7 +11,8 @@ To build the interactive console for S2TT & ASR,
 
 cd seamless_communication/ggml
 mkdir build; cd build
-cmake -DGGML_OPENBLAS=ON \
+cmake \
+    -DGGML_OPENBLAS=ON \
     -DBUILD_SHARED_LIBS=On \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DCMAKE_CXX_FLAGS="-g2 -fno-omit-frame-pointer" \
@@ -19,6 +20,8 @@ cmake -DGGML_OPENBLAS=ON \
 make -j4 unity # Interactive Console
 
 ```
+Note that `-DGGML_OPENBLAS=ON` is not necessary on macOS.
+
 For more build commands see [Makefile](Makefile). 
 
 ## CLI usage
