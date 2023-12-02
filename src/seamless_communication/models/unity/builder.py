@@ -6,7 +6,7 @@
 
 from dataclasses import dataclass
 from typing import Optional, Union
-
+from fairseq2.data import VocabularyInfo
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
@@ -158,6 +158,160 @@ def _medium() -> UnitYConfig:
         adaptor_stride=8,
         adaptor_layer_norm=True,
         adaptor_dropout_p=0.1,
+    )
+
+
+@unity_arch("micro")
+def _micro() -> UnitYConfig:
+    return UnitYConfig(
+        model_dim=512,
+        w2v2_encoder_config=Wav2Vec2EncoderConfig(
+            model_dim=512,
+            max_seq_len=4096,
+            feature_dim=160,
+            use_fbank=True,
+            first_pass_dropout_p=0.0,
+            layer_norm_features=False,
+            feature_extractor_layer_descs=[],
+            feature_extractor_bias=False,
+            feature_extractor_layer_norm_convs=False,
+            feature_grad_scale=0,
+            num_fbank_channels=80,
+            fbank_stride=2,
+            sample_fbank_every_k=1,
+            pos_encoder_type="relative",
+            pos_encoder_depth=1,
+            pos_conv_kernel_size=128,
+            num_pos_conv_groups=16,
+            use_conformer=True,
+            num_encoder_layers=6,
+            num_encoder_attn_heads=16,
+            ffn_inner_dim=512 * 4,
+            dropout_p=0.0,
+            attn_dropout_p=0.0,
+            layer_drop_p=0.0,
+            norm_order=TransformerNormOrder.POST,
+            depthwise_conv_kernel_size=31,
+        ),
+        mt_model_config=NllbConfig(
+            model_dim=512,
+            max_seq_len=1024,
+            vocab_info=VocabularyInfo(
+                size=20010, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=1,
+            num_decoder_layers=3,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=512 * 8,
+            dropout_p=0.1,
+        ),
+        t2u_config=UnitYT2UConfig(
+            model_dim=512,
+            unit_max_seq_len=2048,
+            target_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=1,
+            num_decoder_layers=1,
+            nar_decoder_frontend_config=None,
+            nar_decoder_config=None,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=512 * 8,
+            dropout_p=0.1,
+            use_gelu=False,
+            char_pad_idx=False,
+            use_prosody_proj=False,
+            prosody_encoder_dim=False,
+        ),
+        use_text_encoder=True,
+        use_conformer_adaptor=False,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+        prosody_encoder_config=None,
+        use_text_decoder=True,
+        use_gelu=False,
+    )
+
+
+@unity_arch("nano")
+def _nano() -> UnitYConfig:
+    return UnitYConfig(
+        model_dim=256,
+        w2v2_encoder_config=Wav2Vec2EncoderConfig(
+            model_dim=256,
+            max_seq_len=4096,
+            feature_dim=160,
+            use_fbank=True,
+            first_pass_dropout_p=0.0,
+            layer_norm_features=False,
+            feature_extractor_layer_descs=[],
+            feature_extractor_bias=False,
+            feature_extractor_layer_norm_convs=False,
+            feature_grad_scale=0,
+            num_fbank_channels=80,
+            fbank_stride=2,
+            sample_fbank_every_k=1,
+            pos_encoder_type="relative",
+            pos_encoder_depth=1,
+            pos_conv_kernel_size=128,
+            num_pos_conv_groups=16,
+            use_conformer=True,
+            num_encoder_layers=6,
+            num_encoder_attn_heads=16,
+            ffn_inner_dim=256 * 4,
+            dropout_p=0.0,
+            attn_dropout_p=0.0,
+            layer_drop_p=0.0,
+            norm_order=TransformerNormOrder.POST,
+            depthwise_conv_kernel_size=31,
+        ),
+        mt_model_config=NllbConfig(
+            model_dim=256,
+            max_seq_len=1024,
+            vocab_info=VocabularyInfo(
+                size=20010, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=1,
+            num_decoder_layers=3,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=256 * 8,
+            dropout_p=0.1,
+        ),
+        t2u_config=UnitYT2UConfig(
+            model_dim=256,
+            unit_max_seq_len=2048,
+            target_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=1,
+            num_decoder_layers=1,
+            nar_decoder_frontend_config=None,
+            nar_decoder_config=None,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=256 * 8,
+            dropout_p=0.1,
+            use_gelu=False,
+            char_pad_idx=False,
+            use_prosody_proj=False,
+            prosody_encoder_dim=False,
+        ),
+        use_text_encoder=True,
+        use_conformer_adaptor=False,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+        prosody_encoder_config=None,
+        use_text_decoder=True,
+        use_gelu=False,
     )
 
 

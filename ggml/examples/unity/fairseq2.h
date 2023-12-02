@@ -297,7 +297,8 @@ extern "C" Hypothesis* generate_sequence(
     const SequenceGeneratorJob& opts,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_context* result_ctx
+    ggml_context* result_ctx,
+    int threads
 );
 
 extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);

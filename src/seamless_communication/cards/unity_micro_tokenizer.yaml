@@ -1,0 +1,18 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+name: unity_micro_tokenizer
+model_type: unity
+tokenizer: "file:///large_experiments/seamless/ust/dnn/ggml_models/5_5_20k.model"
+default_lang: eng
+langs:
+  - eng
+  - rus
+  - por
+  - hin
+  - spa
+
+

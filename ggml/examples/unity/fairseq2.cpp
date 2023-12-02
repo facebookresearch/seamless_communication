@@ -1143,7 +1143,8 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_tensor* full_seqs,
     ggml_tensor* scores,
     ggml_tensor* encoder_output,
-    ggml_tensor* encoder_padding_mask
+    ggml_tensor* encoder_padding_mask,
+    int n_threads
 ) {
     int prefix_seq_len = job.prefix_seq->ne[0];
     int max_seq_len = scores->ne[0];
@@ -1184,7 +1185,7 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_slice(ctx, logits, 1, 0, 1));
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
-    ggml_graph_compute_with_ctx(ctx, &gf, 1);
+    ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
     ggml_free(ctx);
     full_seqs->type = GGML_TYPE_I32;
     job.prefix_seq->type = GGML_TYPE_I32;
@@ -1324,7 +1325,8 @@ extern "C" Hypothesis* generate_sequence(
     const SequenceGeneratorJob& job,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_context* result_ctx
+    ggml_context* result_ctx, 
+    int n_threads
 ) {
     std::vector<uint8_t> local_bufs[3] = {
         std::vector<uint8_t>(1024 * 1024 * 1024),  // step_ctx
@@ -1361,7 +1363,7 @@ extern "C" Hypothesis* generate_sequence(
     ggml_set_f32(scores, 0.0);
 
     _bootstrap_seqs_and_scores(
-        model, job, seqs, scores, encoder_output, encoder_padding_mask
+        model, job, seqs, scores, encoder_output, encoder_padding_mask, n_threads
     );
     int prefix_seq_len = job.prefix_seq->ne[0];
     int start_step = prefix_seq_len - 1;
@@ -1403,7 +1405,7 @@ extern "C" Hypothesis* generate_sequence(
         // TODO: use ggml properly compute the tweaks
         ggml_cgraph gf = ggml_build_forward(lprobs);
         // printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, 1);
+        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
         ggml_detach(lprobs);
 
         _tweak_lprobs(job, lprobs, step_nr, max_seq_len, vocab_size);
@@ -1425,7 +1427,7 @@ extern "C" Hypothesis* generate_sequence(
         }
 
         gf = ggml_build_forward(lprobs);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, 1);
+        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
 
         // Determine (beam, token) candidates for the next step.
         // (N, 2 x B)
@@ -1470,7 +1472,7 @@ extern "C" Hypothesis* generate_sequence(
             ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
             ggml_build_forward_expand(&gf_reorder, new_scores);
             reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
-            ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
+            ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
             ggml_detach(new_seqs);
             ggml_detach(new_scores);
             new_seqs->type = GGML_TYPE_I32;
