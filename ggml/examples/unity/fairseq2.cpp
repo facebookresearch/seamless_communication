@@ -17,7 +17,7 @@ ggml_tensor* ggml_detach(ggml_tensor* a) {
     return a;
 }
 
-#define DEBUG_MEM_USAGE 0
+#define DEBUG_MEM_USAGE 1
 
 void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
@@ -157,26 +157,33 @@ ggml_tensor* ggml_get_rows2(ggml_context* ctx, ggml_tensor* a, ggml_tensor* b) {
 
 
 void _reorder_kv_cache(ggml_context* ctx, ggml_cgraph* gf, KeyValueTensor& kv, ggml_tensor* new_order) {
+    // GGML_ASSERT(ctx == kv.full_k->con);
     if (kv.full_k != nullptr) {
         ggml_detach(kv.full_k);
         const char* name = kv.full_k->name;
         kv.full_k = ggml_get_rows2(ctx, kv.full_k, new_order);
         ggml_build_forward_expand(gf, kv.full_k);
-        ggml_set_name(kv.full_k, name);
+        ggml_format_name(kv.full_k, "%s (sorted)", name);
     }
+    GGML_ASSERT(ggml_check_lifespan(kv.full_k));
+
 
     if (kv.full_v != nullptr) {
         ggml_detach(kv.full_v);
         const char* name = kv.full_v->name;
         kv.full_v = ggml_get_rows2(ctx, kv.full_v, new_order);
         ggml_build_forward_expand(gf, kv.full_v);
-        ggml_set_name(kv.full_v, name);
+        ggml_format_name(kv.full_v, "%s (sorted)", name);
     }
 }
 
 
 void reorder_kv_cache(const fairseq2_model& model, ggml_context* ctx, ggml_cgraph* gf, ggml_tensor* new_order) {
+    auto self_attn_glob = "*.self_attn";
     for (auto& named_kv : model.kv_cache) {
+        if (::fnmatch(self_attn_glob, named_kv.first.c_str(), 0) == FNM_NOMATCH)
+            continue;
+
         _reorder_kv_cache(ctx, gf, named_kv.second, new_order);
     }
 }
@@ -1351,13 +1358,12 @@ extern "C" Hypothesis* generate_sequence(
     ggml_context* result_ctx
 ) {
     std::vector<uint8_t> local_bufs[5] = {
-        std::vector<uint8_t>(1024 * 1024 * 1024),  // step_ctx
-        std::vector<uint8_t>(1024 * 1024 * 1024),  // next_step_ctx
-        std::vector<uint8_t>(1024 * 1024 * 1024),  // search_ctx
-        std::vector<uint8_t>(1024 * 1024 * 1024),  // alloc_step_ctx
-        std::vector<uint8_t>(1024 * 1024 * 1024),  // alloc_next_step_ctx
+        std::vector<uint8_t>(256 * 1024 * 1024),  // step_ctx
+        std::vector<uint8_t>(256 * 1024 * 1024),  // next_step_ctx
+        std::vector<uint8_t>(256 * 1024 * 1024),  // search_ctx
+        std::vector<uint8_t>(0),  // alloc_step_ctx
+        std::vector<uint8_t>(0),  // alloc_next_step_ctx
     };
-    ggml_context* search_ctx = ctx_from_buffer(local_bufs[2]);
 
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
@@ -1366,6 +1372,7 @@ extern "C" Hypothesis* generate_sequence(
     int source_seq_len = encoder_output->ne[1];
     int max_seq_len = _determine_max_seq_len(job, source_seq_len);
 
+    ggml_context* search_ctx = ctx_from_buffer(local_bufs[2], 512);
     ggml_context* original_ctx = model.ctx;
     model.ctx = search_ctx;
     fairseq2_kv_cache_alloc(model, beam_size, max_seq_len);
@@ -1387,14 +1394,18 @@ extern "C" Hypothesis* generate_sequence(
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
 
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[0]);
-    ggml_context* next_step_ctx = ctx_from_buffer(local_bufs[1]);
-    model.ctx = next_step_ctx;
+    int prefix_seq_len = job.prefix_seq->ne[0];
+    int start_step = prefix_seq_len - 1;
+
+    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2], start_step);
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2], start_step);
+    GGML_ASSERT(step_ctx != search_ctx);
+    GGML_ASSERT(prev_step_ctx != step_ctx);
+    // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
+    model.ctx = search_ctx;
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask
     );
-    int prefix_seq_len = job.prefix_seq->ne[0];
-    int start_step = prefix_seq_len - 1;
 
     // Holds the indices of beams (a beam can occur more than once) that we
     // should continue with in the next step.
@@ -1489,24 +1500,17 @@ extern "C" Hypothesis* generate_sequence(
         // be selected more than once.
         ggml_tensor* new_seqs = seqs;
         ggml_tensor* new_scores = scores;
-        if (step_nr > start_step) {
-            // (B, S), (B) -> (B, S)
-            // ggml_get_rows and ggml_set only work with floats ...
-            new_seqs->type = GGML_TYPE_F32;
-            new_seqs = ggml_get_rows(search_ctx, seqs, beam_indices);
-            new_scores = ggml_get_rows(search_ctx, scores, beam_indices);
-            ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
-            ggml_build_forward_expand(&gf_reorder, new_scores);
-            reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
-            ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
-            ggml_detach(new_seqs);
-            ggml_detach(new_scores);
-            new_seqs->type = GGML_TYPE_I32;
-            printf_mem_usage(search_ctx, "search_ctx");
-            next_step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2]);
-            SWAP(step_ctx, next_step_ctx);
-            ggml_free(next_step_ctx);
-        }
+        // (B, S), (B) -> (B, S)
+        // ggml_get_rows and ggml_set only work with floats ...
+        new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
+        new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
+        ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
+        ggml_build_forward_expand(&gf_reorder, new_scores);
+        reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
+        ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
+        ggml_detach(new_seqs);
+        ggml_detach(new_scores);
+        new_seqs->type = GGML_TYPE_I32;
 
         // new_seqs[:, step_nr + 1] = next_tokens
         // new_scores[:, step_nr + 1] = next_scores
@@ -1518,7 +1522,15 @@ extern "C" Hypothesis* generate_sequence(
         // TODO the old seqs and score buffers could be reused for next step
         seqs = new_seqs;
         scores = new_scores;
+
         printf_mem_usage(step_ctx, "step_ctx");
+        ggml_free(prev_step_ctx);
+        prev_step_ctx = step_ctx;
+        prev_step_ctx->lifespan += 1;
+#if DEBUG_MEM_USAGE
+        std::fill(local_bufs[(step_nr + 1) % 2].begin(), local_bufs[(step_nr + 1) % 2].end(), 0xAA);
+#endif
+        step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2], step_nr + 1);
     }
 
 end_of_beam_search:
