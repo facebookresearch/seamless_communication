@@ -251,7 +251,7 @@ extern "C" ggml_tensor* Linear_forward(
     ggml_tensor* bias = model.tensors[prefix + ".bias"];  // (d_out)
     if (bias == nullptr) return out;
 
-    return ggml_add_inplace(model.ctx, out, bias);
+    return ggml_add(model.ctx, out, bias);
 }
 
 extern "C" ggml_tensor* LayerNorm_forward(
@@ -464,9 +464,9 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
     // (B * H, Sk, H_dim) x (B * H, S, H_dim) -> (B * H, S, Sk)
     ggml_tensor* qk = mul_mat(ctx, k, q);
     ggml_set_name(qk, "qk");
-    ggml_tensor* qk_scale = ggml_new_tensor_1d(ctx, qk->type, 1);
+    FORCE_ALLOC(qk_scale, ctx, ggml_new_tensor_1d(ctx, qk->type, 1));
     ggml_set_f32(qk_scale, 1.0f/sqrtf(float(head_dim)));
-    qk = ggml_scale_inplace(ctx, qk, qk_scale);
+    qk = ggml_scale(ctx, qk, qk_scale);
     ggml_set_name(qk, "qk_scaled");
 
     // TODO: Should we replace this by ggml_diag_mask_inf ?
@@ -671,7 +671,7 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     // self_attn: shift_bd. Logic follows https://github.com/facebookresearch/fairseq2/blob/main/src/fairseq2/nn/transformer/relative_attention.py#L161
     bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // H, S, 2S-1
 
-    ggml_tensor* pad = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, H, S, 1);
+    FORCE_ALLOC(pad, ctx, ggml_new_tensor_3d(ctx, GGML_TYPE_F32, H, S, 1));
     pad = ggml_set_f32(pad, 0.0);
 
     bd = ggml_concat(ctx, pad, bd); // bd[i][j][0] == 0, (H, S, 2S)
@@ -686,7 +686,7 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
 
     // self_attn: compute attn / weights
     ggml_tensor* attn_weights = ggml_add_inplace(ctx, ac, bd);
-    ggml_tensor* attn_scale = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1);
+    FORCE_ALLOC(attn_scale, ctx, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1));
     ggml_set_f32(attn_scale, 1.0 / pow(K_h, 0.5));
     attn_weights = ggml_mul_inplace(ctx, attn_weights, ggml_repeat(ctx, attn_scale, attn_weights));
     attn_weights = ggml_soft_max(ctx, attn_weights);
@@ -745,7 +745,7 @@ extern "C" ggml_tensor* StandardConformerEncoderLayer_forward(
     ggml_tensor* padding_mask
 ) {
     ggml_context* ctx = model.ctx;
-    ggml_tensor* ffn_scale = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1);
+    FORCE_ALLOC(ffn_scale, ctx, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1));
     ggml_set_f32(ffn_scale, 0.5f);
     ggml_tensor* residual = seqs;
     seqs = LayerNorm_forward(model, prefix + ".ffn1_layer_norm", seqs);
@@ -791,7 +791,7 @@ extern "C" ggml_tensor* StandardConformerEncoder_forward(
     seqs = Linear_forward(model, prefix + ".proj1", seqs);
     seqs = ggml_relu_inplace(ctx, seqs);
     seqs = Linear_forward(model, prefix + ".proj2", seqs);
-    ggml_tensor* ffn_scale = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1);
+    FORCE_ALLOC(ffn_scale, ctx, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, 1));
     ggml_set_f32(ffn_scale, 0.5f);
     seqs = ggml_mul(ctx, ggml_repeat(ctx, ffn_scale, seqs), seqs);
     seqs = ggml_add_inplace(ctx, seqs, residual);
@@ -941,7 +941,6 @@ extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
             flat_seqs = ggml_cont(ctx, flat_seqs);
         }
         flat_seqs = ggml_reshape_1d(ctx, flat_seqs, ggml_nelements(seqs));
-        flat_seqs->type = GGML_TYPE_I32;
         embeds = ggml_get_rows(ctx, embed_weights, flat_seqs);
         embeds = ggml_reshape_4d(ctx, embeds, embed_weights->ne[0], seqs->ne[0], seqs->ne[1], seqs->ne[2]);
         embeds->n_dims = seqs->n_dims + 1;
@@ -1193,7 +1192,6 @@ extern "C" void _bootstrap_seqs_and_scores(
     // output to correctly initialize its incremental state.
     // Note: we don't start decoding the last prefix token just yet.
     seqs = ggml_slice(ctx, seqs, 0, 0, prefix_seq_len - 1);
-    seqs->type = GGML_TYPE_I32;
 
     // Bootstrap the model state with prefix sequence.
     seqs = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", seqs);
@@ -1214,8 +1212,6 @@ extern "C" void _bootstrap_seqs_and_scores(
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
     ggml_graph_compute_with_ctx(ctx, &gf, 1);
-    full_seqs->type = GGML_TYPE_I32;
-    job.prefix_seq->type = GGML_TYPE_I32;
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
@@ -1364,9 +1360,9 @@ extern "C" Hypothesis* generate_sequence(
         std::vector<uint8_t>(256 * 1024 * 1024),  // step_ctx
         std::vector<uint8_t>(256 * 1024 * 1024),  // next_step_ctx
         std::vector<uint8_t>(256 * 1024 * 1024),  // search_ctx
-        std::vector<uint8_t>(0),  // alloc_step_ctx
-        std::vector<uint8_t>(0),  // alloc_next_step_ctx
+        std::vector<uint8_t>(256 * 1024 * 1024),  // alloc_step_ctx
     };
+    ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
@@ -1427,7 +1423,9 @@ extern "C" Hypothesis* generate_sequence(
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         model.ctx = step_ctx;
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
+
         ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
+        ggml_set_no_alloc(step_ctx, true); // Use allocr for the model forward pass // ALLOCR
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
             "text_decoder",
@@ -1437,17 +1435,22 @@ extern "C" Hypothesis* generate_sequence(
             encoder_padding_mask
         ); // (B, 1, D)
 
-        // Just look at the last token.
         decoder_output = ggml_flatten_1d(step_ctx, decoder_output, 0);  // (B, model_dim)
+        ggml_set_no_alloc(step_ctx, false);  // ALLOCR
         ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);  // (B, vocab_size)
         ggml_tensor* lprobs = ggml_log_softmax(step_ctx, logits);
 
         // Compute lprobs here so we can modify it in place in the lprob tweaking phase
         // TODO: use ggml properly compute the tweaks
         ggml_cgraph gf = ggml_build_forward(lprobs);
-        printf("beam search step %d. Graph.n_nodes: %d\n", step_nr, gf.n_nodes);
+        printf("beam search step %d. Graph.n_nodes: %d.\n", step_nr, gf.n_nodes);
+        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, &gf);  // ALLOCR
+        printf("  Fwd mem: %.1fMB\n", fwd_mem/1024.0/1024.0); // ALLOCR
         ggml_graph_compute_with_ctx(step_ctx, &gf, 1);
         ggml_detach(lprobs);
+        GGML_ASSERT(lprobs->data > local_bufs[step_nr % 2].data() && lprobs->data < local_bufs[step_nr % 2].data() + local_bufs[step_nr % 2].size());
+        ggml_allocr_reset(step_alloc);  // ALLOCR
+        std::fill(local_bufs[3].begin(), local_bufs[3].end(), 0xAA);  // ALLOCR
 
         _tweak_lprobs(job, lprobs, step_nr, max_seq_len, vocab_size);
 
@@ -1502,19 +1505,16 @@ extern "C" Hypothesis* generate_sequence(
 
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
-        ggml_tensor* new_seqs = seqs;
-        ggml_tensor* new_scores = scores;
         // (B, S), (B) -> (B, S)
         // ggml_get_rows and ggml_set only work with floats ...
-        new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
-        new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
+        ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
+        ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
         ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
         ggml_build_forward_expand(&gf_reorder, new_scores);
         reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
         ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
         ggml_detach(new_seqs);
         ggml_detach(new_scores);
-        new_seqs->type = GGML_TYPE_I32;
 
         // new_seqs[:, step_nr + 1] = next_tokens
         // new_scores[:, step_nr + 1] = next_scores

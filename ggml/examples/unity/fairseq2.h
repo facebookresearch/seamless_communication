@@ -6,6 +6,14 @@
 #include "ggml.h"
 #include "kaldi-native-fbank/csrc/feature-fbank.h"
 
+#include "ggml-alloc.h"
+
+#define FORCE_ALLOC(name, ctx, ggml_new_tensor)\
+    bool name ## _save_no_alloc_ = ggml_get_no_alloc(ctx); \
+    ggml_set_no_alloc(ctx, false); \
+    ggml_tensor* name = ggml_new_tensor; \
+    ggml_set_no_alloc(ctx, name ## _save_no_alloc_);
+
 typedef int32_t llama_token;
 
 extern "C" enum llama_token_type {
