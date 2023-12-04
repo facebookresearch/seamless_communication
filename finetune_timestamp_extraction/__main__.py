@@ -49,18 +49,30 @@ for w_lang, s_lang in WHISPER_TO_SEAMLESS.items():
 
 ftt = FineTuneTranscriber(MODEL, transcriptions)
 
-for use_dtw in [True, False]:
-    for median_filter_width in [0, 3, 5, 7]:
-        print(use_dtw, median_filter_width)
-        results = ftt.compare(use_dtw=use_dtw, median_filter_width=median_filter_width)
-        results["metadata"] = {
-            "use_dtw": use_dtw,
-            "median_filter_width": median_filter_width,
-        }
+for use_dtw in [False, True]:
+    algorithm = "DTW" if use_dtw else "LIS"
+    for median_filter_width in [0, 3, 5]:
+        for seconds_per_chunk in [90, 10]:
+            print(
+                f"algorithm: {algorithm}",
+                f"median_filter_width: {median_filter_width}",
+                f"seconds_per_chunk: {seconds_per_chunk}",
+                sep=", ",
+            )
+            results = ftt.compare(
+                use_dtw=use_dtw,
+                median_filter_width=median_filter_width,
+                seconds_per_chunk=seconds_per_chunk,
+            )
+            results["metadata"] = {
+                "algorithm": algorithm,
+                "median_filter_width": median_filter_width,
+                "seconds_per_chunk": seconds_per_chunk,
+            }
 
-        with open(
-            f"{PATH}/results_{int(datetime.now().timestamp())}.txt",
-            "w",
-            encoding="utf-16",
-        ) as file:
-            file.write(json.dumps(results, indent=2, ensure_ascii=False))
+            with open(
+                f"{PATH}/results_{int(datetime.now().timestamp())}.json",
+                "w",
+                encoding="utf-16",
+            ) as file:
+                file.write(json.dumps(results, indent=2, ensure_ascii=False))
