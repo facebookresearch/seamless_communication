@@ -255,6 +255,34 @@ class Transcriber(nn.Module):
         ]
         return word_stats
 
+    @classmethod
+    def _join_transcriptions(
+        cls, transcriptions: List[Transcription], seconds_per_chunk: int
+    ) -> Transcription:
+        # Set global timestamp
+        # Remove first and last token from chunks except very first and very last
+        for tr_idx, transcription in enumerate(transcriptions):
+            tokens = transcription.tokens
+            if tr_idx != 0 and len(tokens) > 0:
+                tokens.pop(0)
+            if tr_idx != len(transcriptions) - 1 and len(tokens) > 0:
+                tokens.pop(-1)
+
+            for tk_idx in range(len(tokens)):
+                tokens[tk_idx].time_s += tr_idx * seconds_per_chunk / 2
+
+            transcriptions[tr_idx].tokens = tokens
+
+        tokens = []
+        last_timestamp = -1
+        for transcription in transcriptions:
+            for token in transcription.tokens:
+                if token.time_s > last_timestamp:
+                    tokens.append(token)
+                    last_timestamp = token.time_s
+
+        return Transcription(tokens)
+
     def run_inference(
         self,
         fbanks: torch.Tensor,
@@ -304,6 +332,7 @@ class Transcriber(nn.Module):
         median_filter_width: int = 0,
         sample_rate: int = 16000,
         use_dtw: bool = False,
+        seconds_per_chunk: int = 10,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -320,6 +349,8 @@ class Transcriber(nn.Module):
             rather than default Longest Increasing Subsequence
         :param median_filter_width:
             Window size for padding weights tensor.
+        :param seconds_per_chunk:
+            Chunk length to split audio into.
         :params **sequence_generator_options:
             - beam_size
             - min_seq_len
@@ -338,21 +369,53 @@ class Transcriber(nn.Module):
             with Path(audio).open("rb") as fb:
                 block = MemoryBlock(fb.read())
             decoded_audio = self.decode_audio(block)
+            audio = decoded_audio["waveform"]
+            sample_rate = decoded_audio["sample_rate"]
+            audio_format = decoded_audio["format"]
         else:
-            decoded_audio = {
-                "waveform": audio,
-                "sample_rate": sample_rate,
-                "format": -1,
-            }
-
-        src = self.convert_to_fbank(decoded_audio)["fbank"]
-
-        length_seconds = (
-            decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
-        )
+            audio_format = -1
 
         gen_opts = SequenceGeneratorOptions(beam_size=1, **sequence_generator_options)
 
-        return self.run_inference(
-            src, src_lang, length_seconds, median_filter_width, use_dtw, gen_opts
-        )
+        if seconds_per_chunk <= 0:
+            print(
+                f"Invalid argument chunk_seconds={seconds_per_chunk}, "
+                f"defaulting to {10}"
+            )
+            seconds_per_chunk = 10
+
+        samples_per_chunk = int(sample_rate * seconds_per_chunk)
+        total_sample_count = audio.size(0)
+        chunks = []
+        sample_idx = 0
+        audio = torch.squeeze(audio, 1)
+        while sample_idx < total_sample_count:
+            chunks.append(
+                audio[sample_idx : sample_idx + samples_per_chunk].unsqueeze(1)
+            )
+            sample_idx += samples_per_chunk // 2
+
+        overlapping_transcriptions = []
+        for chunk in chunks:
+            src = self.convert_to_fbank(
+                {
+                    "waveform": chunk,
+                    "sample_rate": sample_rate,
+                    "format": audio_format,
+                }
+            )["fbank"]
+
+            length_seconds = chunk.size(0) / sample_rate
+
+            overlapping_transcriptions.append(
+                self.run_inference(
+                    src,
+                    src_lang,
+                    length_seconds,
+                    median_filter_width,
+                    use_dtw,
+                    gen_opts,
+                )
+            )
+
+        return self._join_transcriptions(overlapping_transcriptions, seconds_per_chunk)
