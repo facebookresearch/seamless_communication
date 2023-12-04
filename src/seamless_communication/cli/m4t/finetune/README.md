@@ -8,7 +8,7 @@ The trainer and dataloader were designed mainly for demonstration purposes. Thei
 
 M4T training dataset is a multimodal parallel corpus. Each training sample has four parts: audio and text representation of the sample in the source language, and its corresponding audio and text representation in the target language.
 
-That kind of dataset can be prepared using `dataset.py` script that downloads FLEURS dataset from [HuggingFace datastes hub](https://huggingface.co/datasets/google/fleurs), (optionally) extracts units from the target audio samples, and prepares a manifest consumable by `finetune.py`. Manifest is a text file where each line represents information about a single dataset sample, serialized in JSON format.
+That kind of dataset can be prepared using `dataset.py` script that downloads FLEURS dataset from [HuggingFace datasets hub](https://huggingface.co/datasets/google/fleurs), (optionally) extracts units from the target audio samples, and prepares a manifest consumable by `finetune.py`. Manifest is a text file where each line represents information about a single dataset sample, serialized in JSON format.
 
 List of input arguments for `dataset.py`:
 
@@ -18,7 +18,7 @@ List of input arguments for `dataset.py`:
   --target_lang TARGET_LANG
                         M4T langcode of the dataset TARGET language
   --split SPLIT         Dataset split/shard to download (`train`, `test`)
-  --save_dir SAVE_DIR   Directory where the datastets will be stored with HuggingFace datasets cache files
+  --save_dir SAVE_DIR   Directory where the datasets will be stored with HuggingFace datasets cache files
 ```
 
 Language codes should follow the notation adopted by M4T models.
