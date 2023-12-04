@@ -25,7 +25,7 @@ It is expected that the files `transcriptions/whisper_{lang}.json` contain data 
 from datetime import datetime
 import json
 
-from FineTuneTranscriber import FineTuneTranscriber
+from finetune_timestamp_extraction.fine_tune_transcriber import FineTuneTranscriber
 from seamless_communication.models.inference import Transcriber
 
 WHISPER_TO_SEAMLESS = {
