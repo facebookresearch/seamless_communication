@@ -419,17 +419,19 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
 
             KeyValueTensor& kv_cache = model.kv_cache[prefix];
             if (kv_cache.step_nr == 0) {
+                if (model.kv_cache_ctx) model.ctx = model.kv_cache_ctx;
                 k = Linear_forward(model, prefix + ".k_proj", keys);
                 ggml_set_name(k, "k");
                 v = Linear_forward(model, prefix + ".v_proj", values);
                 ggml_set_name(v, "v");
                 // TODO: encoder_padding_mask
                 // Note we are only storing a pointer to the buffer, not the full graph
-                kv_cache.full_k = ggml_detach(ggml_dup_inplace(ctx, k));
+                kv_cache.full_k = ggml_detach(ggml_dup_inplace(model.kv_cache_ctx, k));
                 ggml_format_name(kv_cache.full_k, "%s.k_cache", prefix.c_str());
-                kv_cache.full_v = ggml_detach(ggml_dup_inplace(ctx, v));
+                kv_cache.full_v = ggml_detach(ggml_dup_inplace(model.kv_cache_ctx, v));
                 ggml_format_name(kv_cache.full_v, "%s.v_cache", prefix.c_str());
                 kv_cache.step_nr = keys->ne[1];
+                model.ctx = ctx;
             } else {
                 k = kv_cache.full_k;
                 v = kv_cache.full_v;
@@ -1333,11 +1335,12 @@ void _finalize_hypothesis(
     (Type*)(ggml_new_tensor_1d(ctx, GGML_TYPE_I8, sizeof(Type) * n)->data);
 
 
-ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer) {
+ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer, int lifespan) {
     return ggml_init({
         /*.mem_size   =*/ static_cast<int64_t>(buffer.capacity()),
         /*.mem_buffer =*/ buffer.data(),
         /*.no_alloc   =*/ false,
+        lifespan,
     });
 }
 
@@ -1401,8 +1404,9 @@ extern "C" Hypothesis* generate_sequence(
     ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2], start_step);
     GGML_ASSERT(step_ctx != search_ctx);
     GGML_ASSERT(prev_step_ctx != step_ctx);
+    model.ctx = prev_step_ctx;
     // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
-    model.ctx = search_ctx;
+    model.kv_cache_ctx = search_ctx;
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask
     );

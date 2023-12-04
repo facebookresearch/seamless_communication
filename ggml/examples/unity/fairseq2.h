@@ -97,6 +97,8 @@ struct fairseq2_model {
     // an inference context, not managed by this object
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
     ggml_context* ctx;
+
+    ggml_context* kv_cache_ctx;
 };
 
 double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name);
@@ -107,7 +109,7 @@ extern "C" fairseq2_model* fairseq2_model_alloc();
 extern "C" void fairseq2_model_free(fairseq2_model* model);
 extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx);
 extern "C" void fairseq2_kv_cache_reset(const fairseq2_model& model);
-ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer);
+ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer, int lifespan);
 
 extern "C" std::string* std_string_alloc(char* c_str);
 extern "C" void std_string_free(std::string* str);
