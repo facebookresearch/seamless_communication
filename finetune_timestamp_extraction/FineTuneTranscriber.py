@@ -283,17 +283,25 @@ class FineTuneTranscriber:
             if transcription.lang not in results:
                 results[transcription.lang] = []
             results[transcription.lang].append(
-                (
-                    " ".join([word.text for word in transcription.words]),
-                    " ".join([word.text for word in new_words]),
-                    err.get_time_delta_abs(),
-                )
+                {
+                    "whisper": " ".join([word.text for word in transcription.words]),
+                    "seamless": " ".join([word.text for word in new_words]),
+                    "abs": err.get_time_delta_abs(),
+                    "abs_no_skip": err.get_time_delta_abs_skip_missing(),
+                    "l": err.get_time_delta_l(),
+                    "r": err.get_time_delta_r(),
+                }
             )
 
         results["average"] = {}
         for lang, errors in results.items():
             if lang == "average":
                 continue
-            results["average"][lang] = mean([error[2] for error in errors])
+            results["average"][lang] = {
+                "abs": mean([error["abs"] for error in errors]),
+                "abs_no_skip": mean([error["abs_no_skip"] for error in errors]),
+                "l": mean([error["l"] for error in errors]),
+                "r": mean([error["r"] for error in errors]),
+            }
 
         return results
