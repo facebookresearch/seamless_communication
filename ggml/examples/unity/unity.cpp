@@ -183,7 +183,7 @@ int main(int argc, char ** argv) {
         sf_readf_float(sndfile, data.data(), info.frames);
 
         // Reset the ggml_context
-        model.ctx = ctx_from_buffer(encoder_buf);
+        model.ctx = ctx_from_buffer(encoder_buf, 1024);
         ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, 1);
         memcpy(seqs->data, data.data(), data.size() * sizeof(float));
         // Audio encoder

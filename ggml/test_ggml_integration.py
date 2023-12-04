@@ -20,7 +20,7 @@ from ggml_convert import convert_model
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-CTX_PARAMS = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None)
+CTX_PARAMS = ggml.ggml_init_params(mem_size=16 * 1024 * 1024, mem_buffer=None, lifespan=8192)
 
 
 @pytest.fixture(name="ctx")

@@ -47,6 +47,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         /*.mem_size   =*/ ctx_size,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
+        8192,
     };
     model.tensors_ctx = ggml_init(params);
 

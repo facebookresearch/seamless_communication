@@ -30,7 +30,7 @@ import requests
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024 * 5, mem_buffer=None)
+CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024 * 5, mem_buffer=None, lifespan=8192)
 
 FAIRSEQ2_CPP = Path(__file__).parent / "examples/unity/fairseq2.cpp"
 UNITY_FLASH_ATTN = "\n# define UNITY_FLASH_ATTN 0\n" not in FAIRSEQ2_CPP.read_text()
@@ -701,7 +701,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
         beam_size=beam_size,
         soft_max_seq_len_a=1,
         soft_max_seq_len_b=200,
-        hard_max_seq_len=500,
+        hard_max_seq_len=25,
     )
     job = ggml.SequenceGeneratorJob(
         opts=opts,

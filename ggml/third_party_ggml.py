@@ -777,6 +777,7 @@ class ggml_init_params(ctypes.Structure):
         ("mem_size", ctypes.c_int64),
         ("mem_buffer", ctypes.c_void_p),
         ("no_alloc", ctypes.c_bool),
+        ("lifespan", ctypes.c_int32),
     ]
 
 
