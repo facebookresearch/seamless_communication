@@ -29,7 +29,7 @@ from fine_tune_transcriber import FineTuneTranscriber
 from seamless_communication.models.inference import Transcriber
 
 WHISPER_TO_SEAMLESS = {
-    # "de": "deu",
+    "de": "deu",
     "en": "eng",
     "es": "spa",
     "fr": "fra",
