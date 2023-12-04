@@ -62,7 +62,7 @@ The Seamless model is the unified model for expressive streaming speech-to-speec
 ## Installation
 > [!NOTE]
 > One of the prerequisites is [fairseq2](https://github.com/facebookresearch/fairseq2) which has pre-built packages available only
-> for Linux x84-86 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
+> for Linux x86-64 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
 > might not be installed on your machine. If you experience any installation issues, please refer to its
 > [README](https://github.com/facebookresearch/fairseq2) for further instructions.
 
@@ -181,11 +181,11 @@ To transcribe/translte a given audio,
 ./ggml/bin/unity --model seamlessM4T_medium.ggml input.wav
 ```
 
-For details of build and more usage please checkout [unity.cpp](ggml)
+For details of build and more usage please check out [unity.cpp](ggml)
 
 ## Expressive Datasets
 
-We created two expressive speech-to-speech translation datasets, mExpresso and mDRAL, between English and five other languages -- French, German, Italian, Mandarin and Spanish. We currently open source the speech-to-text of mExpresso for out-of-English directions, and we will open source the remaining part of the datasets soon. For details, please checkout [README](docs/expressive/README.md#benchmark-datasets)
+We created two expressive speech-to-speech translation datasets, mExpresso and mDRAL, between English and five other languages -- French, German, Italian, Mandarin and Spanish. We currently open source the speech-to-text of mExpresso for out-of-English directions, and we will open source the remaining part of the datasets soon. For details, please check out [README](docs/expressive/README.md#benchmark-datasets)
 
 ### SeamlessAlignExpressive
 We’re introducing the first expressive speech alignment procedure. Starting with raw data, the expressive alignment procedure automatically discovers pairs of audio segments sharing not only the same meaning, but the same overall expressivity. To showcase this procedure, we are making metadata available to create a benchmarking dataset called SeamlessAlignExpressive, that can be used to validate the quality of our alignment method. SeamlessAlignExpressive is the first large-scale (11k+ hours) collection of multilingual audio alignments for expressive translation. More details can be found on the [SeamlessAlignExpressive README](docs/expressive/seamless_align_expressive_README.md).
