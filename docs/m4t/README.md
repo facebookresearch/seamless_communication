@@ -13,6 +13,8 @@ This unified model enables multiple tasks without relying on multiple separate m
 - Text-to-text translation (T2TT)
 - Automatic speech recognition (ASR).
 
+> [!NOTE]
+> SeamlessM4T v2 and v1 are also supported in the 🤗 Transformers library, more on it [in the dedicated section below](#transformers-usage).
 
 ## SeamlessM4T v1
 The v1 version of SeamlessM4T is a multitask adaptation of the *UnitY* architecture [(Inaguma et al., 2023)](https://aclanthology.org/2023.acl-long.872/). 
@@ -22,7 +24,6 @@ The v1 version of SeamlessM4T is a multitask adaptation of the *UnitY* architect
 ## SeamlessM4T v2
 The v2 version of SeamlessM4T is a multitask adaptation of our novel *UnitY2* architecture. 
 *Unity2* with its hierarchical character-to-unit upsampling and non-autoregressive text-to-unit decoding considerably improves over SeamlessM4T v1 in quality and inference speed.
-
 
 ![SeamlessM4T architectures](seamlessm4t_arch.svg)
 
@@ -161,6 +162,60 @@ The `target` column specifies whether a language is supported as target speech (
 
 
 Note that seamlessM4T-medium supports 200 languages in the text modality, and is based on NLLB-200 (see full list in [asset card](src/seamless_communication/cards/unity_nllb-200.yaml))
+
+## Transformers usage
+
+SeamlessM4T is available in the 🤗 Transformers library, requiring minimal dependencies. Steps to get started:
+
+1. First install the 🤗 [Transformers library](https://github.com/huggingface/transformers) from main and [sentencepiece](https://github.com/google/sentencepiece):
+
+```
+pip install git+https://github.com/huggingface/transformers.git sentencepiece
+```
+
+2. Run the following Python code to generate speech samples. Here the target language is Russian:
+
+```py
+from transformers import AutoProcessor, SeamlessM4Tv2Model
+
+processor = AutoProcessor.from_pretrained("facebook/seamless-m4t-v2-large")
+model = SeamlessM4Tv2Model.from_pretrained("facebook/seamless-m4t-v2-large")
+
+# from text
+text_inputs = processor(text = "Hello, my dog is cute", src_lang="eng", return_tensors="pt")
+audio_array_from_text = model.generate(**text_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+
+# from audio
+audio, orig_freq =  torchaudio.load("https://www2.cs.uic.edu/~i101/SoundFiles/preamble10.wav")
+audio =  torchaudio.functional.resample(audio, orig_freq=orig_freq, new_freq=16_000) # must be a 16 kHz waveform array
+audio_inputs = processor(audios=audio, return_tensors="pt")
+audio_array_from_audio = model.generate(**audio_inputs, tgt_lang="rus")[0].cpu().numpy().squeeze()
+```
+
+3. Listen to the audio samples either in an ipynb notebook:
+
+```py
+from IPython.display import Audio
+
+sample_rate = model.sampling_rate
+Audio(audio_array_from_text, rate=sample_rate)
+# Audio(audio_array_from_audio, rate=sample_rate)
+```
+
+Or save them as a `.wav` file using a third-party library, e.g. `scipy`:
+
+```py
+import scipy
+
+sample_rate = model.sampling_rate
+scipy.io.wavfile.write("out_from_text.wav", rate=sample_rate, data=audio_array_from_text)
+# scipy.io.wavfile.write("out_from_audio.wav", rate=sample_rate, data=audio_array_from_audio)
+```
+
+> [!NOTE]  
+> For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
+[SeamlessM4T v2 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2), the 
+[SeamlessM4T v1 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/scripts_and_notebooks/blob/main/v2_seamless_m4t_hugging_face.ipynb).
 
 ## Citation
 For *UnitY*, please cite :

@@ -10,9 +10,9 @@ SeamlessM4T models support the tasks of:
 - Text-to-text translation (T2TT)
 - Automatic speech recognition (ASR)
 
-:star2: We are releasing SemalessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
+:star2: We are releasing SeamlessM4T v2, an updated version with our novel *UnitY2* architecture. This new model improves over SeamlessM4T v1 in quality as well as inference latency in speech generation tasks.
 
-To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large)
+To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large).
 
 ## SeamlessExpressive
 
@@ -124,13 +124,16 @@ You can also run the demo locally, by cloning the space from [here](https://hugg
 
 ## Running SeamlessM4T & SeamlessExpressive [Gradio](https://github.com/gradio-app/gradio) demos locally
 
-To launch the same space demo we host on HuggingFace locally,
+To launch the same demo Space we host on Hugging Face locally:
 
 ```bash
 cd demo
 pip install -r requirements.txt
 python app.py
 ```
+
+Seamless M4T is also available in the 🤗 Transformers library. For more details, refer to the [SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2) 
+or this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/explanatory_notebooks/blob/main/seamless_m4t_hugging_face.ipynb).
 
 # Resources and usage
 ## Model
