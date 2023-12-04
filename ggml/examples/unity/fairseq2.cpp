@@ -929,7 +929,6 @@ extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
         // ggml_get_rows isn't very flexible, we have to handle the reshape ourselves.
         ggml_tensor* flat_seqs = seqs;
         if (!ggml_is_contiguous(seqs)) {
-            flat_seqs->type = GGML_TYPE_F32;
             flat_seqs = ggml_cont(ctx, flat_seqs);
         }
         flat_seqs = ggml_reshape_1d(ctx, flat_seqs, ggml_nelements(seqs));
@@ -1155,7 +1154,6 @@ ggml_tensor* ggml_log_softmax(ggml_context* ctx, ggml_tensor* logits) {
 ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int64_t ne1) {
     ggml_tensor* shape = ggml_new_tensor_2d(ctx, GGML_TYPE_I8, ne0, ne1);
     ggml_type true_type = x->type;
-    x->type = GGML_TYPE_F32;
     ggml_tensor* y = ggml_repeat(ctx, x, shape);
     y->type = true_type;
     return y;
@@ -1179,8 +1177,6 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_context* ctx = model.ctx;
 
     // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
-    full_seqs->type = GGML_TYPE_F32;
-    job.prefix_seq->type = GGML_TYPE_F32;
     ggml_tensor* seqs = ggml_slice(ctx, full_seqs, 0, 0, prefix_seq_len);
     seqs = ggml_cpy(ctx, ggml_repeat(ctx, job.prefix_seq, seqs), seqs);
 
@@ -1209,7 +1205,6 @@ extern "C" void _bootstrap_seqs_and_scores(
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
     ggml_graph_compute_with_ctx(ctx, &gf, 1);
-    ggml_free(ctx);
     full_seqs->type = GGML_TYPE_I32;
     job.prefix_seq->type = GGML_TYPE_I32;
 

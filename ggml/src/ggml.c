@@ -8982,10 +8982,12 @@ static void ggml_compute_forward_dup(
     }
     switch (src0->type) {
         case GGML_TYPE_F16:
+        case GGML_TYPE_I16:
             {
                 ggml_compute_forward_dup_f16(params, src0, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_dup_f32(params, src0, dst);
             } break;
@@ -12286,10 +12288,12 @@ static void ggml_compute_forward_get_rows(
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
             } break;
         case GGML_TYPE_F16:
+        case GGML_TYPE_I16:
             {
                 ggml_compute_forward_get_rows_f16(params, src0, src1, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_get_rows_f32(params, src0, src1, dst);
             } break;
