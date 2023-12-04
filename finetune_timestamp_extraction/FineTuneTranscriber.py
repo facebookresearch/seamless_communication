@@ -18,6 +18,7 @@ from seamless_communication.models.inference.transcriber import (
 )
 
 PUNCTUATION_MARKS = '¿?¡!.,:;"«»'
+JOIN_CHARACTERS = ("'", "-")
 MAX_TIME_DELTA = 5
 
 
@@ -118,15 +119,20 @@ class FTTranscription:
     words: List[FTWord]
 
     def __init__(self, words: List[FTWord], lang: str = "", path: str = "") -> None:
-        self.words = self.separate_words(words)
+        self.words = self.separate_join_words(words)
         self.words.append(FTWord())  # empty so the last word always matches
         self.lang = lang
         self.path = path
 
     @staticmethod
-    def separate_words(words: List[FTWord]) -> List[FTWord]:
-        """Separate FTWords from a list into FTWords containing a single word"""
-        separated_words = []
+    def separate_join_words(words: List[FTWord]) -> List[FTWord]:
+        """
+        Separate FTWords from a list into FTWords containing a single word
+        and join with preceeding/following if leading/trailing apostrophe/hyphen
+        """
+        separated_words: List[FTWord] = []
+
+        # Separate joined words
         for word in words:
             texts = word.text.split()
             if len(texts) > 1:
@@ -143,7 +149,22 @@ class FTTranscription:
                 )
             else:
                 separated_words.append(word)
-        return separated_words
+
+        # Join by leading/trailing apostrophe/hyphen
+        joined_words: List[FTWord] = []
+        for word in separated_words:
+            if len(joined_words) == 0:
+                joined_words.append(word)
+                continue
+            if joined_words[-1].text.endswith(JOIN_CHARACTERS) or word.text.startswith(
+                JOIN_CHARACTERS
+            ):
+                joined_words[-1].text += word.text
+                joined_words[-1].end_time = word.end_time
+            else:
+                joined_words.append(word)
+
+        return joined_words
 
     def get_lcs_matrix(self, words: List[FTWord]) -> List[List[int]]:
         """Calculate longest common subsequence matrix"""
@@ -193,7 +214,7 @@ class FTTranscription:
 
     def compare(self, words: List[FTWord]) -> FTError:
         """Calculate time delta and missed words between lists of words"""
-        words = self.separate_words(words)
+        words = self.separate_join_words(words)
         lcs_matrix = self.get_lcs_matrix(words)
         lcs = self.get_lcs(lcs_matrix, words)
         err = FTError()
