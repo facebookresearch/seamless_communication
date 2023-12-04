@@ -162,24 +162,35 @@ class Transcriber(nn.Module):
     def generate_dtw(
         arr: np.array,
     ) -> List[Tuple[int, int]]:
-        n = arr.shape[0] - 1
-        m = arr.shape[1] - 1
-        path = [(n, m)]
-        while n > 0 or m > 0:
-            if n == 0:
-                next_pos = (0, m - 1)
-            elif m == 0:
-                next_pos = (n - 1, 0)
-            else:
-                val = min(arr[n - 1, m - 1], arr[n - 1, m], arr[n, m - 1])
-                if val == arr[n - 1, m - 1]:
-                    next_pos = (n - 1, m - 1)
-                elif val == arr[n - 1, m]:
-                    next_pos = (n - 1, m)
+        n = arr.shape[0]
+        m = arr.shape[1]
+        c = np.ones((n + 1, m + 1)) * np.inf
+        t = np.array([[(0, 0)] * (m + 1)] * (n + 1))
+        c[0, 0] = 0
+        for i in range(n):
+            for j in range(m):
+                prev_xy = c[i, j]
+                prev_x = c[i, j + 1]
+                prev_y = c[i + 1, j]
+                if prev_xy < prev_x and prev_xy < prev_y:
+                    c[i + 1, j + 1] = arr[i, j] + prev_xy
+                    t[i + 1, j + 1] = (1, 1)
+                elif prev_x < prev_xy and prev_x < prev_y:
+                    c[i + 1, j + 1] = arr[i, j] + prev_x
+                    t[i + 1, j + 1] = (1, 0)
                 else:
-                    next_pos = (n, m - 1)
-            path.append(next_pos)
-            n, m = next_pos
+                    c[i + 1, j + 1] = arr[i, j] + prev_y
+                    t[i + 1, j + 1] = (0, 1)
+
+        path = []
+        i, j = n, m
+        t[0, :] = (0, 1)
+        t[:, 0] = (1, 0)
+        while i > 0 or j > 0:
+            path.append((i - 1, j - 1))
+            i -= t[i, j][0]
+            j -= t[i, j][1]
+
         return path[::-1]
 
     @classmethod
