@@ -62,7 +62,7 @@ The Seamless model is the unified model for expressive streaming speech-to-speec
 ## Installation
 > [!NOTE]
 > One of the prerequisites is [fairseq2](https://github.com/facebookresearch/fairseq2) which has pre-built packages available only
-> for Linux x84-64 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
+> for Linux x86-64 and Apple-silicon Mac computers. In addition it has a dependency on [libsndfile](https://github.com/libsndfile/libsndfile) which
 > might not be installed on your machine. If you experience any installation issues, please refer to its
 > [README](https://github.com/facebookresearch/fairseq2) for further instructions.
 
