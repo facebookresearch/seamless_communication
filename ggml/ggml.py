@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Tuple, Type, Union
 
 import numpy as np
 import torch
+import subprocess
 
 from ctypes_utils import NULLPTR, Ptr, c_fn, c_struct
 from third_party_ggml import *
@@ -397,10 +398,19 @@ def forward(
 
 
 def build_and_compute(
-    ctx: ggml_context_p, tensor: ggml_tensor_p, num_threads: int = 1
-) -> None:
+    ctx: ggml_context_p, tensor: ggml_tensor_p, num_threads: int = 1, dump: str = ""
+) -> ggml_cgraph:
     gf = ggml_build_forward(tensor)
+    need_alloc = tensor.contents.data == NULLPTR
+    if need_alloc:
+        alloc = FixedSizeArena(1024 * 1024 * 1024 * 2)
+        ggml_allocr_alloc_graph(alloc.ptr, ctypes.pointer(gf))
+        setattr(tensor, "__data", alloc)
+    if dump:
+        ggml_graph_dump_dot(ctypes.pointer(gf), NULLPTR, dump.encode("ascii"))
+        subprocess.run(["dot", "-Tsvg", "-O", dump])
     ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), num_threads)
+    return gf
 
 
 @c_fn(lib)

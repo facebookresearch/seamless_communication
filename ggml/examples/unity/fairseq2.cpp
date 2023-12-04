@@ -563,7 +563,7 @@ extern "C" ggml_tensor* WaveformToFbank_forward(
 
     std::vector<float_t> signal_frame{};
     std::int32_t num_frames = knf::NumFrames(/*num_samples=*/waveform->ne[0], frame_opts);
-    ggml_tensor* output = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 80, num_frames);
+    FORCE_ALLOC(output, ctx, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 80, num_frames));
     knf::FbankComputer native_(opts);
     knf::FeatureWindowFunction window_fn_(native_.GetFrameOptions());
 
@@ -623,7 +623,7 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
 
     int num_indices = end_index - start_index;
 
-    ggml_tensor* rows = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, num_indices);
+    FORCE_ALLOC(rows, ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_I32, num_indices));
     for (int i = 0; i < num_indices; i++) {
         ((int32_t *)rows->data)[i] = start_index + i;
     }

@@ -30,7 +30,6 @@ import requests
 Ctx = ggml.ggml_context_p
 
 UNITY_MODELS = Path(__file__).parent / "examples/unity/models"
-CTX_PARAMS = ggml.ggml_init_params(mem_size=1024 * 1024 * 1024 * 5, mem_buffer=None, lifespan=8192)
 
 FAIRSEQ2_CPP = Path(__file__).parent / "examples/unity/fairseq2.cpp"
 UNITY_FLASH_ATTN = "\n# define UNITY_FLASH_ATTN 0\n" not in FAIRSEQ2_CPP.read_text()
@@ -46,7 +45,11 @@ TEST_AUDIO_SAMPLE_URL = (
 def _ctx() -> Iterator[Ctx]:
     """Allocate a new context with 1024 MB of memory"""
     try:
-        ctx = ggml.ggml_init(params=CTX_PARAMS)
+        ctx = ggml.ggml_init(
+            params=ggml.ggml_init_params(
+                mem_size=1024 * 1024 * 1024 * 5, mem_buffer=None, no_alloc=True, lifespan=8192
+            )
+        )
         with torch.inference_mode():
             yield ctx
     finally:
@@ -108,10 +111,8 @@ def test_causal_attention_mask(ctx: Ctx):
 
     gx = ggml.from_numpy(ctx, x)
     gmask = ggml.causal_attention_mask(ctx, gx)
+    ggml.build_and_compute(ctx, gmask)
     mask = ggml.to_numpy(gmask)
-
-    gf = ggml.ggml_build_forward(gmask)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
     assert mask_exp.shape == (10, 10)
     assert mask.shape == (10, 10)
@@ -121,10 +122,8 @@ def test_causal_attention_mask(ctx: Ctx):
     mask_exp = generator(x, x).materialize().numpy()
     gx = ggml.from_numpy(ctx, x)
     gmask = ggml.causal_attention_mask(ctx, gx)
+    ggml.build_and_compute(ctx, gmask)
     mask = ggml.to_numpy(gmask)
-
-    gf = ggml.ggml_build_forward(gmask)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
 
     assert mask_exp.shape == (8, 8)
     assert mask.shape == (8, 8)
@@ -153,7 +152,7 @@ def test_Linear_forward(ctx: Ctx, g_model: c_void_p) -> None:
     y_exp = pt_model.text_encoder.layers[0].ffn.inner_proj(x).numpy()
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward("Linear", g_model, "text_encoder.layers.0.ffn.inner_proj", gx)
-    ggml.build_and_compute(ctx, gy)
+    gf = ggml.build_and_compute(ctx, gy, dump="dot/test_Linear_forward.dot")
 
     y = ggml.to_numpy(gy)
     assert np.allclose(y_exp, y, atol=1e-5)
@@ -197,6 +196,7 @@ def test_MultiheadAttention_forward(
     gxq = ggml.from_numpy(ctx, xq.contiguous())
     gxk = ggml.from_numpy(ctx, xk.contiguous())
     ggml.ggml_set_name(gxk, b"xk")
+    ggml.ggml_set_no_alloc(ctx, True)
     gy = ggml.forward(
         "MultiheadAttention",
         g_model,
@@ -206,8 +206,7 @@ def test_MultiheadAttention_forward(
         gxk,
         NULLPTR,  # TODO: tests with causal attention masks
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy, dump="dot/test_MultiheadAttention_forward")
 
     pt_model = load_pt_model()
     self_attn = pt_model.text_encoder.layers[0].self_attn
@@ -273,8 +272,7 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
                 gxq,
                 None,  # type: ignore
             )
-            gf = ggml.ggml_build_forward(gy)
-            ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+            gf = ggml.build_and_compute(ctx, gy)
             nodes = ggml.nodes(gf)
             gk_cache = ggml.to_numpy(
                 nodes[
@@ -302,6 +300,7 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
 def test_MultiheadAttention_forward_cross_attn_with_cache(
     ctx: Ctx, g_model: c_void_p
 ) -> None:
+    pytest.fail(reason="segfault")
     pt_model = load_pt_model()
     attn = pt_model.text_decoder.layers[0].encoder_decoder_attn
 
@@ -330,8 +329,7 @@ def test_MultiheadAttention_forward_cross_attn_with_cache(
                 gxk,
                 None,  # type: ignore
             )
-            gf = ggml.ggml_build_forward(gy)
-            ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+            gf = ggml.build_and_compute(ctx, gy, dump=f"test_MultiheadAttention_forward_cross_attn_with_cache_{t}.dot")
             y = ggml.to_numpy(gy)
             nodes = ggml.nodes(gf)
             leaves = ggml.leafs(gf)
@@ -375,8 +373,7 @@ def test_StandardTransformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) ->
         gx,
         None,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
 
@@ -401,8 +398,7 @@ def test_StandardConformerEncoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> N
         gx,
         None,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
 
@@ -428,8 +424,7 @@ def test_StandardConformerEncoderAdaptorLayer_forward(
         gx,
         None,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
 
@@ -457,8 +452,7 @@ def test_StandardTransformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None
         gx,
         None,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
 
@@ -484,8 +478,7 @@ def test_StandardConformerEncoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
         gx,
         None,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
 
@@ -533,8 +526,7 @@ def test_WaveformToFbank_forward(ctx: Ctx, g_model: c_void_p) -> None:
     ggml.ggml_set_name(gx, b"x")
 
     gy = ggml.forward("WaveformToFbank", g_model, "", gx)
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
 
     y = ggml.to_numpy(gy)
     converter_input = {
@@ -560,8 +552,7 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
     gy = ggml.forward(
         "PositionalEmbedding", g_model, "text_decoder_frontend.pos_encoder", gseq
     )
-    gf = ggml.ggml_build_forward(gy)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, gy)
     y = ggml.to_numpy(gy)
 
     assert y.shape == y_exp.shape
@@ -585,8 +576,7 @@ def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> 
                 "text_decoder_frontend.pos_encoder",
                 gseq,
             )
-            gf = ggml.ggml_build_forward(gy)
-            ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+            gf = ggml.build_and_compute(ctx, gy)
             y = ggml.to_numpy(gy)
 
             y_exp = pos_encoder(seq[:, t : t + 1, :], None, state_bag=state_bag).numpy()
@@ -617,6 +607,7 @@ def test_TransformerEmbeddingFrontend_forward(ctx: Ctx, g_model: c_void_p) -> No
 
 
 def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
+    pytest.fail(reason="segfault")
     x = torch.empty((2, 13, 1024))
     encoder_out = torch.empty((2, 21, 1024))
     padding_mask = fairseq2.nn.padding.PaddingMask(torch.tensor([13, 13]), 13)
@@ -649,6 +640,7 @@ def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None
 
 
 def test_s2tt(ctx: Ctx, g_model: c_void_p):
+    pytest.fail(reason="segfault")
     if not LOCAL_AUDIO_SAMPLE_PATH.exists():
         download_sample_audio()
     src_audio_wav, _ = torchaudio.load(LOCAL_AUDIO_SAMPLE_PATH)
