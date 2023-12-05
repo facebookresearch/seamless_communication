@@ -10,6 +10,8 @@ from ctypes import c_void_p
 from pathlib import Path
 from typing import Any, Iterator, List, Tuple
 
+import ggml
+
 import fairseq2.nn
 import fairseq2.nn.transformer
 import numpy as np
@@ -21,7 +23,6 @@ from seamless_communication.inference import SequenceGeneratorOptions
 from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 from seamless_communication.inference.translator import Modality, Translator
 
-import ggml
 from ctypes_utils import NULLPTR, Ptr
 from ggml import NativeObj
 from ggml_convert import convert_model, read_layer_config
