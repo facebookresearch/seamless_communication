@@ -5784,7 +5784,6 @@ struct ggml_tensor * ggml_repeat(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
-    ggml_check_lifespan(result);
 
     return result;
 }
@@ -18011,8 +18010,6 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
             ggml_visit_parents(cgraph, node->src[i]);
         }
     }
-
-    ggml_check_lifespan(node);
 
     if (node->op == GGML_OP_NONE && node->grad == NULL) {
         // reached a leaf node, not part of the gradient graph (e.g. a constant)

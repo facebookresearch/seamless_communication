@@ -85,28 +85,28 @@ struct KeyValueTensor {
 
 struct fairseq2_model {
     // Context containing all tensors memory
-    ggml_context* tensors_ctx;
+    ggml_context* tensors_ctx = nullptr;
 
     // Named tensors, all tensors should belong to tensors_ctx
-    std::unordered_map<std::string, struct ggml_tensor *> tensors;
+    std::unordered_map<std::string, struct ggml_tensor *> tensors = {};
 
     // Hashmap containing model hyper-parameters.
-    std::unordered_map<std::string, std::int64_t> hparams;
+    std::unordered_map<std::string, std::int64_t> hparams = {};
 
     // Hashmap containing layers hyper-parameters.
     // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
-    std::unordered_map<std::string, std::int64_t> layer_config;
+    std::unordered_map<std::string, std::int64_t> layer_config = {};
 
     llama_vocab vocab;
 
     // KV cache for attention layers
-    mutable std::unordered_map<std::string, KeyValueTensor> kv_cache;
+    mutable std::unordered_map<std::string, KeyValueTensor> kv_cache = {};
 
     // an inference context, not managed by this object
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
-    ggml_context* ctx;
+    ggml_context* ctx = nullptr;
 
-    ggml_context* kv_cache_ctx;
+    ggml_context* kv_cache_ctx = nullptr;
 };
 
 double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name);

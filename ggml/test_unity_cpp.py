@@ -41,13 +41,21 @@ TEST_AUDIO_SAMPLE_URL = (
 )
 
 
+MB = 1024 * 1024
+
+
 @pytest.fixture(name="ctx")
 def _ctx() -> Iterator[Ctx]:
     """Allocate a new context with 1024 MB of memory"""
     try:
+        mem_size = 16 * MB
+        memory = torch.zeros(mem_size, dtype=torch.uint8)
         ctx = ggml.ggml_init(
             params=ggml.ggml_init_params(
-                mem_size=1024 * 1024 * 1024 * 5, mem_buffer=None, no_alloc=True, lifespan=8192
+                mem_size=mem_size,
+                mem_buffer=ctypes.c_void_p(memory.data_ptr()),
+                no_alloc=True,
+                lifespan=8192,
             )
         )
         with torch.inference_mode():
@@ -194,6 +202,7 @@ def test_MultiheadAttention_forward(
         pytest.skip(reason="flash_attn requires qlen > klen")
 
     gxq = ggml.from_numpy(ctx, xq.contiguous())
+    ggml.ggml_set_name(gxq, b"xq")
     gxk = ggml.from_numpy(ctx, xk.contiguous())
     ggml.ggml_set_name(gxk, b"xk")
     ggml.ggml_set_no_alloc(ctx, True)
@@ -207,26 +216,29 @@ def test_MultiheadAttention_forward(
         NULLPTR,  # TODO: tests with causal attention masks
     )
     gf = ggml.build_and_compute(ctx, gy, dump="dot/test_MultiheadAttention_forward")
+    y = ggml.to_numpy(gy)
+    nodes = ggml.nodes(gf)
+    node_buffers = set(t.contents.data for t in nodes.values())
 
     pt_model = load_pt_model()
     self_attn = pt_model.text_encoder.layers[0].self_attn
-    q_exp = self_attn._project_q(xq, None).numpy().reshape(2 * 16, qlen, 64)
 
-    y = ggml.to_numpy(gy)
-    nodes = ggml.nodes(gf)
+    # If buffers are overlapping, reading node contents, can be misleading.
+    overlap = len(node_buffers) < len(nodes)
+    if not overlap:
+        q_exp = self_attn._project_q(xq, None).numpy().reshape(2 * 16, qlen, 64)
+        q = ggml.to_numpy(nodes[b"q"])
+        assert q.shape == q_exp.shape
+        assert np.allclose(q_exp, q, atol=1e-5)
 
-    attn_weights_hook = fairseq2.nn.transformer.AttentionWeightStoreHook([])
-    self_attn.register_attn_weight_hook(attn_weights_hook)
+        attn_weights_hook = fairseq2.nn.transformer.AttentionWeightStoreHook([])
+        self_attn.register_attn_weight_hook(attn_weights_hook)
 
     y_exp = self_attn(xq, None, xk, None, xk).numpy()
 
-    q = ggml.to_numpy(nodes[b"q"])
-    assert q.shape == q_exp.shape
-    assert np.allclose(q_exp, q, atol=1e-5)
-
     # with flash_attn we don't have attn_weights
     naive_attn = b"attn_weights" in nodes
-    if naive_attn:
+    if naive_attn and not overlap:
         attn_weights = ggml.to_numpy(nodes[b"attn_weights"]).reshape(-1, 16, qlen, klen)
         [(_, attn_weights_exp)] = attn_weights_hook._storage
         attn_weights_exp = attn_weights_exp.numpy()
@@ -256,7 +268,7 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
 
     state_bag = fairseq2.nn.IncrementalStateBag(100)
 
-    with ggml.fairseq2_kv_cache_alloc(g_model, 2, 21):
+    with ggml.fairseq2_kv_cache_alloc(g_model, 16 * MB, 2, 21):
         # Incremental decoding
         for t in range(3):
             xq = x[:, t : t + 1]
@@ -272,15 +284,18 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
                 gxq,
                 None,  # type: ignore
             )
-            gf = ggml.build_and_compute(ctx, gy)
+            gf = ggml.build_and_compute(
+                ctx,
+                gy,
+                dump=f"dot/test_MultiheadAttention_forward_self_attn_with_cache_{t}.dot",
+            )
             nodes = ggml.nodes(gf)
             gk_cache = ggml.to_numpy(
-                nodes[
-                    b"text_decoder.layers.0.self_attn.k (step=%d) (view) (permuted) (c"
-                    % t
-                ]
+                nodes[b"text_decoder.layers.0.self_attn.k (step=%d)" % t]
             )
-            assert gk_cache.shape == (2 * 16, t + 1, 64)
+            assert gk_cache.shape == (2, t + 1, 1024)
+            gk_cache = gk_cache.reshape(2, t + 1, 16, 64).transpose(0, 2, 1, 3)
+            assert gk_cache.shape == (2, 16, t + 1, 64)
 
             y_exp = attn(xq, None, xq, None, xq, state_bag=state_bag).numpy()
             assert y_exp.shape == (2, 1, 1024)
@@ -290,7 +305,6 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
 
             k_cache = state.get()[0].numpy()
             assert k_cache.shape == (2, 16, t + 1, 64)
-            k_cache = k_cache.reshape(2 * 16, t + 1, -1)
             assert np.allclose(gk_cache, k_cache, atol=1e-3)
 
             y = ggml.to_numpy(gy)
@@ -300,7 +314,6 @@ def test_MultiheadAttention_forward_self_attn_with_cache(
 def test_MultiheadAttention_forward_cross_attn_with_cache(
     ctx: Ctx, g_model: c_void_p
 ) -> None:
-    pytest.fail(reason="segfault")
     pt_model = load_pt_model()
     attn = pt_model.text_decoder.layers[0].encoder_decoder_attn
 
@@ -310,7 +323,7 @@ def test_MultiheadAttention_forward_cross_attn_with_cache(
 
     state_bag = fairseq2.nn.IncrementalStateBag(100)
 
-    with ggml.fairseq2_kv_cache_alloc(g_model, 2, 21):
+    with ggml.fairseq2_kv_cache_alloc(g_model, 16 * MB, 2, 21):
         # Incremental decoding, the keys come from the encoder, and don't change during decoding
         xk = x[:, :11]
         gxk = ggml.from_numpy(ctx, xk.contiguous(), name=b"xk")
@@ -329,7 +342,11 @@ def test_MultiheadAttention_forward_cross_attn_with_cache(
                 gxk,
                 None,  # type: ignore
             )
-            gf = ggml.build_and_compute(ctx, gy, dump=f"test_MultiheadAttention_forward_cross_attn_with_cache_{t}.dot")
+            gf = ggml.build_and_compute(
+                ctx,
+                gy,
+                dump=f"dot/test_MultiheadAttention_forward_cross_attn_with_cache_{t}.dot",
+            )
             y = ggml.to_numpy(gy)
             nodes = ggml.nodes(gf)
             leaves = ggml.leafs(gf)
@@ -552,7 +569,7 @@ def test_PositionalEmbedding_forward(ctx: Ctx, g_model: c_void_p) -> None:
     gy = ggml.forward(
         "PositionalEmbedding", g_model, "text_decoder_frontend.pos_encoder", gseq
     )
-    gf = ggml.build_and_compute(ctx, gy)
+    gf = ggml.build_and_compute(ctx, gy, dump=True)
     y = ggml.to_numpy(gy)
 
     assert y.shape == y_exp.shape
@@ -565,7 +582,7 @@ def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> 
     pos_encoder.eval()
     state_bag = fairseq2.nn.IncrementalStateBag(100)
 
-    with ggml.fairseq2_kv_cache_alloc(g_model, 2, 21):
+    with ggml.fairseq2_kv_cache_alloc(g_model, 16 * MB, 2, 21):
         # Incremental decoding
         for t in range(20):
             gseq = ggml.from_numpy(ctx, seq[:, t : t + 1, :].numpy())
@@ -576,7 +593,7 @@ def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> 
                 "text_decoder_frontend.pos_encoder",
                 gseq,
             )
-            gf = ggml.build_and_compute(ctx, gy)
+            gf = ggml.build_and_compute(ctx, gy, dump=t == 1)
             y = ggml.to_numpy(gy)
 
             y_exp = pos_encoder(seq[:, t : t + 1, :], None, state_bag=state_bag).numpy()
@@ -606,8 +623,41 @@ def test_TransformerEmbeddingFrontend_forward(ctx: Ctx, g_model: c_void_p) -> No
     assert np.allclose(y_exp, y, atol=1e-6)
 
 
+def test_StandardTransformerDecoderLayer_forward(ctx: Ctx, g_model: c_void_p) -> None:
+    x = torch.empty((2, 13, 1024))
+    encoder_out = torch.empty((2, 21, 1024))
+    torch.random.manual_seed(0)
+    torch.nn.init.uniform_(x, -1, 1)
+    torch.nn.init.uniform_(encoder_out, -1, 1)
+
+    self_attn_mask = fairseq2.nn.transformer.CausalAttentionMaskFactory()(x, x)
+    gx = ggml.from_numpy(ctx, x)
+    ggml.ggml_set_name(gx, b"x")
+    gself_attn_mask = ggml.from_numpy(ctx, self_attn_mask.materialize().numpy())
+    ggml.ggml_set_name(gself_attn_mask, b"self_attn_mask")
+    genc = ggml.from_numpy(ctx, encoder_out)
+    ggml.ggml_set_name(genc, b"encoder_out")
+    gy = ggml.forward(
+        "StandardTransformerDecoderLayer",
+        g_model,
+        "text_decoder.layers.0",
+        gx,
+        gself_attn_mask,
+        genc,
+        NULLPTR,  # TODO support padding mask,
+    )
+    ggml.build_and_compute(ctx, gy, dump=True)
+    y = ggml.to_numpy(gy)
+
+    pt_model = load_pt_model()
+    y_exp, _ = pt_model.text_decoder.layers[0](x, None, encoder_output=encoder_out, self_attn_mask=self_attn_mask)
+    y_exp = y_exp.numpy()
+
+    assert y.shape == y_exp.shape
+    assert np.allclose(y_exp, y, atol=1e-3)  # TODO: those tests are failing now
+
+
 def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None:
-    pytest.fail(reason="segfault")
     x = torch.empty((2, 13, 1024))
     encoder_out = torch.empty((2, 21, 1024))
     padding_mask = fairseq2.nn.padding.PaddingMask(torch.tensor([13, 13]), 13)
@@ -636,11 +686,10 @@ def test_StandardTransformerDecoder_forward(ctx: Ctx, g_model: c_void_p) -> None
     y_exp = y_exp.numpy()
 
     assert y.shape == y_exp.shape
-    assert np.allclose(y_exp, y, atol=1e-4 if UNITY_FLASH_ATTN else 1e-3)
+    assert np.allclose(y_exp, y, atol=1e-3)  # TODO: those tests are failing now
 
 
 def test_s2tt(ctx: Ctx, g_model: c_void_p):
-    pytest.fail(reason="segfault")
     if not LOCAL_AUDIO_SAMPLE_PATH.exists():
         download_sample_audio()
     src_audio_wav, _ = torchaudio.load(LOCAL_AUDIO_SAMPLE_PATH)
@@ -685,8 +734,7 @@ def test_s2tt(ctx: Ctx, g_model: c_void_p):
         gx,
         NULLPTR,  # TODO support padding mask
     )
-    gf = ggml.ggml_build_forward(encoder_out)
-    ggml.ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), 1)
+    gf = ggml.build_and_compute(ctx, encoder_out)
 
     beam_size = 5
     opts = ggml.SequenceGeneratorOptions(

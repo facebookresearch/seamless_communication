@@ -46,13 +46,14 @@ extern "C" fairseq2_model* fairseq2_model_alloc() {
     return model;
 }
 
-extern "C" void fairseq2_kv_cache_alloc(const fairseq2_model& model, int beam_size, int max_seq_len) {
-    // Note: we only allocate the cache for the decoder attention.
-    // For encoder attention since we compute it all at once,
-    // the allocation is delayed to the first forward pass, to not over allocate.
+extern "C" void fairseq2_kv_cache_alloc(fairseq2_model& model, ggml_context* kv_cache_ctx, int beam_size, int max_seq_len) {
+    // Note: we only allocate the masks, proper kv cache allocation is delayed.
+    GGML_ASSERT(kv_cache_ctx);
+    GGML_ASSERT(!ggml_get_no_alloc(kv_cache_ctx));  // We need to be able to alloc the kv_cache buffers
+    model.kv_cache_ctx = kv_cache_ctx;
     auto attn_glob = "text_decoder.*_attn.k_proj.weight";
-    ggml_tensor* self_attn_mask = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, max_seq_len, max_seq_len);
-    self_attn_mask = ggml_diag_mask_inf_inplace(model.ctx, self_attn_mask, 0);
+    FORCE_ALLOC(self_attn_mask, kv_cache_ctx, ggml_new_tensor_2d(kv_cache_ctx, GGML_TYPE_F32, max_seq_len, max_seq_len));
+    self_attn_mask = ggml_diag_mask_inf_inplace(kv_cache_ctx, self_attn_mask, 0);
     ggml_format_name(self_attn_mask, "self_attn_mask[%d]", max_seq_len);
 
     for (auto named_tensor : model.tensors) {
@@ -100,7 +101,7 @@ inline ggml_tensor* ggml_unsqueeze(ggml_context* ctx, ggml_tensor* x, int dim) {
 void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, ggml_tensor** k, ggml_tensor** v, ggml_tensor** self_attn_mask) {
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
-    ggml_context* ctx = model.ctx;
+    ggml_context* ctx = model.kv_cache_ctx ? model.kv_cache_ctx : model.ctx;
     int n_steps = (*k)->ne[1];
     int k_proj, batch_size;
 
@@ -112,15 +113,15 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
         ggml_detach(kv.full_v);
         kv.full_k = ggml_squeeze(ctx, ggml_concat(ctx, ggml_unsqueeze(ctx, kv.full_k, 1), ggml_unsqueeze(ctx, *k, 1)), 1);
         kv.full_v = ggml_squeeze(ctx, ggml_concat(ctx, ggml_unsqueeze(ctx, kv.full_v, 1), ggml_unsqueeze(ctx, *v, 1)), 1);
-        *k = kv.full_k;
-        *v = kv.full_v;
     } else {
         GGML_ASSERT(step_nr == 0);
         k_proj = (*k)->ne[0];
         batch_size = (*v)->ne[2];
-        kv.full_k = *k;
-        kv.full_v = *v;
+        kv.full_k = ggml_dup(ctx, *k);
+        kv.full_v = ggml_dup(ctx, *v);
     }
+    *k = kv.full_k;
+    *v = kv.full_v;
     ggml_format_name(kv.full_k, "%s.k (step=%d)", prefix.c_str(), step_nr);
     ggml_format_name(kv.full_v, "%s.v (step=%d)", prefix.c_str(), step_nr);
     step_nr += n_steps;
@@ -419,6 +420,8 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
 
             KeyValueTensor& kv_cache = model.kv_cache[prefix];
             if (kv_cache.step_nr == 0) {
+                // If possible we use the ctx dedicated to kv_cache here,
+                // because the enc dec attention is typically long lived.
                 if (model.kv_cache_ctx) model.ctx = model.kv_cache_ctx;
                 k = Linear_forward(model, prefix + ".k_proj", keys);
                 ggml_set_name(k, "k");
@@ -426,9 +429,9 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
                 ggml_set_name(v, "v");
                 // TODO: encoder_padding_mask
                 // Note we are only storing a pointer to the buffer, not the full graph
-                kv_cache.full_k = ggml_detach(ggml_dup_inplace(model.kv_cache_ctx, k));
+                kv_cache.full_k = ggml_detach(ggml_dup_inplace(model.ctx, k));
                 ggml_format_name(kv_cache.full_k, "%s.k_cache", prefix.c_str());
-                kv_cache.full_v = ggml_detach(ggml_dup_inplace(model.kv_cache_ctx, v));
+                kv_cache.full_v = ggml_detach(ggml_dup_inplace(model.ctx, v));
                 ggml_format_name(kv_cache.full_v, "%s.v_cache", prefix.c_str());
                 kv_cache.step_nr = keys->ne[1];
                 model.ctx = ctx;
@@ -1360,7 +1363,7 @@ extern "C" Hypothesis* generate_sequence(
         std::vector<uint8_t>(256 * 1024 * 1024),  // step_ctx
         std::vector<uint8_t>(256 * 1024 * 1024),  // next_step_ctx
         std::vector<uint8_t>(256 * 1024 * 1024),  // search_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // alloc_step_ctx
+        std::vector<uint8_t>(256 * 1024 * 1024),  // step_alloc
     };
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
@@ -1373,13 +1376,14 @@ extern "C" Hypothesis* generate_sequence(
 
     ggml_context* search_ctx = ctx_from_buffer(local_bufs[2], 512);
     ggml_context* original_ctx = model.ctx;
-    model.ctx = search_ctx;
-    fairseq2_kv_cache_alloc(model, beam_size, max_seq_len);
+    fairseq2_kv_cache_alloc(model, search_ctx, beam_size, max_seq_len);
 
     // (S_enc, M) -> (B, S_enc, M)
+    model.ctx = search_ctx;
     _fan_out_encoder_output(search_ctx, &encoder_output, &encoder_padding_mask, beam_size);
 
     // Allocate results in the context provided by the caller.
+    ggml_set_no_alloc(result_ctx, false);
     Hypothesis* finished_searches_begin = GGML_CTX_ALLOC(result_ctx, Hypothesis, beam_size);
     Hypothesis* finished_searches = finished_searches_begin;
     for (std::size_t i = 0; i < beam_size; ++i) finished_searches[i] = {nullptr, -INFINITY, nullptr};
