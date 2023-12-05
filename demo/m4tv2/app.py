@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import getpass
 
 import gradio as gr
 import numpy as np
@@ -28,7 +29,8 @@ from lang_list import (
     TEXT_SOURCE_LANGUAGE_NAMES,
 )
 
-CHECKPOINTS_PATH = pathlib.Path(os.getenv("CHECKPOINTS_PATH", "/home/user/app/models"))
+user = getpass.getuser() # this is not portable on windows
+CHECKPOINTS_PATH = pathlib.Path(os.getenv("CHECKPOINTS_PATH", f"/home/{user}/app/models"))
 if not CHECKPOINTS_PATH.exists():
     snapshot_download(repo_id="facebook/seamless-m4t-v2-large", repo_type="model", local_dir=CHECKPOINTS_PATH)
 asset_store.env_resolvers.clear()
