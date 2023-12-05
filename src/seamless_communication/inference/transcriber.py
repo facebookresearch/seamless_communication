@@ -195,9 +195,9 @@ class Transcriber(nn.Module):
 
     @classmethod
     def _extract_timestamps(
-        cls, attn_weights, audio_len, median_filter_width, use_dtw
+        cls, attn_weights, n_scores, audio_len, median_filter_width, use_dtw
     ) -> List[float]:
-        attn_weights = attn_weights[:-2]  # omit last two (TODO: do for v2, not v1)
+        attn_weights = attn_weights[:n_scores]  # matching lengths
 
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
@@ -292,6 +292,7 @@ class Transcriber(nn.Module):
         length_seconds: float,
         median_filter_width: int,
         use_dtw: bool,
+        rerun_decoder: bool,
         gen_opts: Dict,
     ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
@@ -302,9 +303,7 @@ class Transcriber(nn.Module):
             model=self.s2t,
             **gen_opts,
         )
-        # encoder_output, encoder_padding_mask = self.s2t.encode(
-        #     fbanks.unsqueeze(0), None
-        # )
+
         self.enc_dec_attn_collector.reset()
         output: SequenceGeneratorOutput = generator(
             source_seqs=fbanks.unsqueeze(0),
@@ -312,17 +311,31 @@ class Transcriber(nn.Module):
             prompt_seqs=prefix.unsqueeze(0),
             prompt_padding_mask=None,
         )
+
+        if rerun_decoder:
+            print(len(output.hypotheses))
+            print(len(output.hypotheses[0]))
+            print(output.hypotheses[0][0].seq.size())
+            print(output.hypotheses[0][0].seq.bfloat16().size())
+            print(output.encoder_output.size())
+            self.enc_dec_attn_collector.reset()
+            output, _ = self.s2t.decoder.forward(
+                seqs=output.hypotheses[0][0].seq.unsqueeze(0).bfloat16(),
+                padding_mask=None,
+                encoder_output=output.encoder_output.squeeze(0),
+                encoder_padding_mask=output.encoder_padding_mask,
+            )
+
         token_ids = output.hypotheses[0][0].seq.squeeze(0)[prefix_len:].tolist()
         step_scores = output.hypotheses[0][0].step_scores[prefix_len:].tolist()
-        # output, _ = self.s2t.decoder.forward(
-        #     seqs=prefix.unsqueeze(0).bfloat16(),
-        #     padding_mask=None,
-        #     encoder_output=torch.squeeze(encoder_output),
-        #     encoder_padding_mask=encoder_padding_mask,
-        # )
+        # Subtract 1 from enc_dec_attn_scores slicing?
         enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len:]
         token_timestamps = self._extract_timestamps(
-            enc_dec_attn_scores, length_seconds, median_filter_width, use_dtw
+            enc_dec_attn_scores,
+            len(step_scores),
+            length_seconds,
+            median_filter_width,
+            use_dtw,
         )
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
@@ -340,6 +353,7 @@ class Transcriber(nn.Module):
         median_filter_width: int = 0,
         sample_rate: int = 16000,
         use_dtw: bool = False,
+        rerun_decoder: bool = True,
         seconds_per_chunk: int = 10,
         **sequence_generator_options: Dict,
     ) -> Transcription:
@@ -412,6 +426,7 @@ class Transcriber(nn.Module):
                     length_seconds,
                     median_filter_width,
                     use_dtw,
+                    rerun_decoder,
                     sequence_generator_options,
                 )
             )
