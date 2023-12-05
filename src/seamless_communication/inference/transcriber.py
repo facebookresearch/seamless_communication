@@ -9,9 +9,8 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
-from fairseq2.generation.sequence_generator import (
-    Seq2SeqGenerator,
-    SequenceGeneratorOptions,
+from fairseq2.generation import (
+    BeamSearchSeq2SeqGenerator,
     SequenceGeneratorOutput,
 )
 from fairseq2.memory import MemoryBlock
@@ -20,7 +19,6 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -38,8 +36,10 @@ class EncDecAttentionsCollect(AttentionWeightHook):
         super().__init__()
         self.attn_scores = []
 
-    def __call__(self, m, attn_weights) -> None:
-        val = torch.clone(attn_weights).detach().sum(dim=0).squeeze(0).tolist()
+    def __call__(self, m, attn, attn_weights) -> None:
+        val = (
+            torch.clone(attn_weights).detach().sum(dim=0).sum(dim=0).squeeze(0).tolist()
+        )
         self.attn_scores.append(val)
 
     def reset(self):
@@ -103,7 +103,7 @@ class Transcriber(nn.Module):
             decoder_frontend=model.text_decoder_frontend,
             decoder=model.text_decoder,
             final_proj=model.final_proj,
-            pad_idx=model.pad_idx,
+            target_vocab_info=self.decoder_vocab_info,
         )
         self.enc_dec_attn_collector = EncDecAttentionsCollect()
         self.s2t.decoder.layers[-1].encoder_decoder_attn.register_attn_weight_hook(
@@ -120,7 +120,7 @@ class Transcriber(nn.Module):
             dtype=dtype,
         )
         self.collate = Collater(
-            pad_idx=self.tokenizer.vocab_info.pad_idx, pad_to_multiple=2
+            pad_value=self.tokenizer.vocab_info.pad_idx, pad_to_multiple=2
         )
 
     @staticmethod
@@ -197,6 +197,8 @@ class Transcriber(nn.Module):
     def _extract_timestamps(
         cls, attn_weights, audio_len, median_filter_width, use_dtw
     ) -> List[float]:
+        attn_weights = attn_weights[:-2]  # omit last two (TODO: do for v2, not v1)
+
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
@@ -290,29 +292,35 @@ class Transcriber(nn.Module):
         length_seconds: float,
         median_filter_width: int,
         use_dtw: bool,
-        gen_opts: SequenceGeneratorOptions,
+        gen_opts: Dict,
     ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
-        ).prefix_indices.tolist()
-        prefix_len = len(prefix)
-        generator = Seq2SeqGenerator(
-            decoder=self.s2t,
-            vocab_info=self.decoder_vocab_info,
-            prefix_seq=torch.LongTensor(prefix, device=self.device),
-            opts=gen_opts,
+        ).prefix_indices
+        prefix_len = len(prefix.tolist())
+        generator = BeamSearchSeq2SeqGenerator(
+            model=self.s2t,
+            **gen_opts,
         )
-
-        encoder_output, encoder_padding_mask = self.s2t.encode(
-            fbanks.unsqueeze(0), None
-        )
+        # encoder_output, encoder_padding_mask = self.s2t.encode(
+        #     fbanks.unsqueeze(0), None
+        # )
         self.enc_dec_attn_collector.reset()
         output: SequenceGeneratorOutput = generator(
-            encoder_output=encoder_output, encoder_padding_mask=encoder_padding_mask
+            source_seqs=fbanks.unsqueeze(0),
+            source_padding_mask=None,
+            prompt_seqs=prefix.unsqueeze(0),
+            prompt_padding_mask=None,
         )
-        token_ids = output.results[0][0].seq.squeeze(0)[prefix_len:].tolist()
-        step_scores = output.results[0][0].step_scores[prefix_len:].tolist()
-        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
+        token_ids = output.hypotheses[0][0].seq.squeeze(0)[prefix_len:].tolist()
+        step_scores = output.hypotheses[0][0].step_scores[prefix_len:].tolist()
+        # output, _ = self.s2t.decoder.forward(
+        #     seqs=prefix.unsqueeze(0).bfloat16(),
+        #     padding_mask=None,
+        #     encoder_output=torch.squeeze(encoder_output),
+        #     encoder_padding_mask=encoder_padding_mask,
+        # )
+        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len:]
         token_timestamps = self._extract_timestamps(
             enc_dec_attn_scores, length_seconds, median_filter_width, use_dtw
         )
@@ -352,15 +360,7 @@ class Transcriber(nn.Module):
         :param seconds_per_chunk:
             Chunk length to split audio into.
         :params **sequence_generator_options:
-            - beam_size
-            - min_seq_len
-            - soft_max_seq_len
-            - hard_max_seq_len
-            - len_penalty
-            - unk_penalty
-            - normalize_scores
-            - search
-            - logics_processor
+            See BeamSearchSeq2SeqGenerator.
 
         :returns:
             - List of Tokens with timestamps.
@@ -374,8 +374,6 @@ class Transcriber(nn.Module):
             audio_format = decoded_audio["format"]
         else:
             audio_format = -1
-
-        gen_opts = SequenceGeneratorOptions(beam_size=1, **sequence_generator_options)
 
         if seconds_per_chunk <= 0:
             print(
@@ -414,7 +412,7 @@ class Transcriber(nn.Module):
                     length_seconds,
                     median_filter_width,
                     use_dtw,
-                    gen_opts,
+                    sequence_generator_options,
                 )
             )
 
