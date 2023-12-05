@@ -30,7 +30,7 @@ from lang_list import (
 
 CHECKPOINTS_PATH = pathlib.Path(os.getenv("CHECKPOINTS_PATH", "/home/user/app/models"))
 if not CHECKPOINTS_PATH.exists():
-    snapshot_download(repo_id="meta-private/M4Tv2", repo_type="model", local_dir=CHECKPOINTS_PATH)
+    snapshot_download(repo_id="facebook/seamless-m4t-v2-large", repo_type="model", local_dir=CHECKPOINTS_PATH)
 asset_store.env_resolvers.clear()
 asset_store.env_resolvers.append(lambda: "demo")
 demo_metadata = [
