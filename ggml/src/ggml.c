@@ -4156,6 +4156,22 @@ static void ggml_setup_op_has_task_pass(void) {
 // ggml context
 //
 
+struct ggml_context {
+    int64_t mem_size;
+    void * mem_buffer;
+    bool   mem_buffer_owned;
+    bool   no_alloc;
+    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
+
+    int    n_objects;
+
+    struct ggml_object * objects_begin;
+    struct ggml_object * objects_end;
+
+    struct ggml_scratch scratch;
+    struct ggml_scratch scratch_save;
+};
+
 struct ggml_context_container {
     bool used;
 
@@ -4612,7 +4628,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.objects_end        =*/ NULL,
         /*.scratch            =*/ { 0, 0, NULL, },
         /*.scratch_save       =*/ { 0, 0, NULL, },
-        /*.lifespan           =*/ params.lifespan,
     };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -4845,7 +4860,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.view_offs    =*/ view_offs,
         /*.data         =*/ obj_alloc_size > 0 ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
-        /*.extra        =*/ ctx,
+        /*.extra        =*/ NULL,
         /*.padding      =*/ { 0 },
     };
 
@@ -17964,31 +17979,6 @@ static bool hash_insert(void * hash_table[], void * p) {
     return false;
 }
 
-bool ggml_check_lifespan(struct ggml_tensor* node) {
-    if (node == NULL) return true;
-    bool cross_ctx = false;
-    int32_t ctx0 = ((struct ggml_context*)node->extra)->lifespan;
-    for (int i = 0; i < GGML_MAX_SRC; ++i) {
-        if (node->src[i]) {
-            int32_t ctx1 = ((struct ggml_context*)node->src[i]->extra)->lifespan;
-            // We want the inputs to live at least as long as this tensor.
-            bool valid = (ctx0 == ctx1) || ((ctx0 >> 8) < (ctx1 >> 8));
-            cross_ctx = !valid;
-            if (cross_ctx) break;
-        }
-    }
-    if (cross_ctx) {
-        printf("Cross ctx op %p: %s@%p %s(", node, node->name, node->extra, ggml_op_name(node->op));
-        for (int i = 0; i < GGML_MAX_SRC; ++i) {
-            if (node->src[i] == NULL) continue;
-            printf("%s@%p, ", node->src[i]->name, node->src[i]->extra);
-        }
-        printf(")\n");
-    }
-    GGML_ASSERT(!cross_ctx);
-    return !cross_ctx;
-}
-
 static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor * node) {
     if (node->grad == NULL) {
         // this usually happens when we generate intermediate nodes from constants in the backward pass
@@ -18051,16 +18041,6 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
         GGML_ASSERT(cgraph->nodes[cgraph->n_nodes - 1] == tensor);
     }
 }
-
-bool ggml_ctx_is_own(struct ggml_context * ctx, const struct ggml_tensor * tensor) {
-    size_t n = ggml_nelements(tensor);
-
-    return (
-        ((size_t)tensor->data > (size_t)ctx->mem_buffer)
-        && ((size_t)tensor->data + n <= (size_t)ctx->mem_buffer + (size_t)ctx->mem_size)
-    );
-}
-
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
     ggml_build_forward_impl(cgraph, tensor, true);

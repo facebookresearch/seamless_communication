@@ -166,8 +166,6 @@ void _reorder_kv_cache(ggml_context* ctx, ggml_cgraph* gf, KeyValueTensor& kv, g
         ggml_build_forward_expand(gf, kv.full_k);
         ggml_format_name(kv.full_k, "%s (sorted)", name);
     }
-    GGML_ASSERT(ggml_check_lifespan(kv.full_k));
-
 
     if (kv.full_v != nullptr) {
         ggml_detach(kv.full_v);
@@ -1334,12 +1332,11 @@ void _finalize_hypothesis(
     (Type*)(ggml_new_tensor_1d(ctx, GGML_TYPE_I8, sizeof(Type) * n)->data);
 
 
-ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer, int lifespan) {
+ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer) {
     return ggml_init({
         /*.mem_size   =*/ static_cast<int64_t>(buffer.capacity()),
         /*.mem_buffer =*/ buffer.data(),
         /*.no_alloc   =*/ false,
-        lifespan,
     });
 }
 
@@ -1374,7 +1371,7 @@ extern "C" Hypothesis* generate_sequence(
     int source_seq_len = encoder_output->ne[1];
     int max_seq_len = _determine_max_seq_len(job, source_seq_len);
 
-    ggml_context* search_ctx = ctx_from_buffer(local_bufs[2], 512);
+    ggml_context* search_ctx = ctx_from_buffer(local_bufs[2]);
     ggml_context* original_ctx = model.ctx;
     fairseq2_kv_cache_alloc(model, search_ctx, beam_size, max_seq_len);
 
@@ -1400,8 +1397,8 @@ extern "C" Hypothesis* generate_sequence(
     int prefix_seq_len = job.prefix_seq->ne[0];
     int start_step = prefix_seq_len - 1;
 
-    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2], start_step);
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2], start_step);
+    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
     GGML_ASSERT(step_ctx != search_ctx);
     GGML_ASSERT(prev_step_ctx != step_ctx);
     model.ctx = prev_step_ctx;
@@ -1454,8 +1451,9 @@ extern "C" Hypothesis* generate_sequence(
         ggml_detach(lprobs);
         GGML_ASSERT(lprobs->data > local_bufs[step_nr % 2].data() && lprobs->data < local_bufs[step_nr % 2].data() + local_bufs[step_nr % 2].size());
         ggml_allocr_reset(step_alloc);  // ALLOCR
+#if DEBUG_MEM_USAGE
         std::fill(local_bufs[3].begin(), local_bufs[3].end(), 0xAA);  // ALLOCR
-
+#endif
         _tweak_lprobs(job, lprobs, step_nr, max_seq_len, vocab_size);
 
         ggml_tensor* last_scores = ggml_slice(step_ctx, scores, 0, step_nr, step_nr+1);
@@ -1534,11 +1532,10 @@ extern "C" Hypothesis* generate_sequence(
         printf_mem_usage(step_ctx, "step_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
-        prev_step_ctx->lifespan += 1;
 #if DEBUG_MEM_USAGE
         std::fill(local_bufs[(step_nr + 1) % 2].begin(), local_bufs[(step_nr + 1) % 2].end(), 0xAA);
 #endif
-        step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2], step_nr + 1);
+        step_ctx = ctx_from_buffer(local_bufs[(step_nr + 1) % 2]);
     }
 
 end_of_beam_search:

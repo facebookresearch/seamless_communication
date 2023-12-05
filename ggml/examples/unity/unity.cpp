@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
 
 
         // Reset the ggml_context
-        model.ctx = ctx_from_buffer(encoder_buf, 1024);
+        model.ctx = ctx_from_buffer(encoder_buf);
         ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
 
         // Load audio input

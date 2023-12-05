@@ -529,7 +529,6 @@ def fairseq2_kv_cache_alloc(
             mem_size=kv_cache_size,
             mem_buffer=ctypes.c_void_p(memory.data_ptr()),
             no_alloc=False,
-            lifespan=8192,
         )
     )
     _fairseq2_kv_cache_alloc(model, ctx, beam_size, max_seq_len)

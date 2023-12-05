@@ -117,7 +117,7 @@ extern "C" fairseq2_model* fairseq2_model_alloc();
 extern "C" void fairseq2_model_free(fairseq2_model* model);
 extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx);
 extern "C" void fairseq2_kv_cache_reset(const fairseq2_model& model);
-ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer, int lifespan);
+ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer);
 
 extern "C" std::string* std_string_alloc(char* c_str);
 extern "C" void std_string_free(std::string* str);

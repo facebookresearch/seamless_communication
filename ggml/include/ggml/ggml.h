@@ -563,26 +563,7 @@ extern "C" {
         int64_t mem_size;   // bytes
         void * mem_buffer; // if NULL, memory will be allocated internally
         bool   no_alloc;   // don't allocate memory for the tensor data
-        int32_t lifespan;
     };
-
-    struct ggml_context {
-    int64_t mem_size;
-    void * mem_buffer;
-    bool   mem_buffer_owned;
-    bool   no_alloc;
-    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
-
-    int    n_objects;
-
-    struct ggml_object * objects_begin;
-    struct ggml_object * objects_end;
-
-    struct ggml_scratch scratch;
-    struct ggml_scratch scratch_save;
-    int32_t lifespan;
-};
-
 
 
     // compute types
@@ -654,8 +635,6 @@ extern "C" {
 
     GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
     GGML_API void                  ggml_free(struct ggml_context * ctx);
-    GGML_API bool ggml_check_lifespan(struct ggml_tensor* node);
-
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
@@ -1676,7 +1655,6 @@ extern "C" {
             struct ggml_tensor  * tensor);
 
 
-    GGML_API bool ggml_ctx_is_own(struct ggml_context * ctx, const struct ggml_tensor * tensor);
     GGML_API void ggml_build_forward_expand (struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
     GGML_API void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * gf, struct ggml_cgraph * gb, bool keep);
 
