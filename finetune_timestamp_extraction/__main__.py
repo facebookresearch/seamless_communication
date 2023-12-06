@@ -53,7 +53,7 @@ ftt = FineTuneTranscriber(MODEL, transcriptions)
 for use_dtw in [False, True]:
     algorithm = "DTW" if use_dtw else "LIS"
     for median_filter_width in [0, 3, 5]:
-        for seconds_per_chunk in [90]:
+        for seconds_per_chunk in [10, 90]:
             for rerun_decoder in [False, True]:
                 print(
                     f"algorithm: {algorithm}",
