@@ -36,7 +36,8 @@ WHISPER_TO_SEAMLESS = {
     "ru": "rus",
 }
 PATH = "transcriptions"
-MODEL = Transcriber("seamlessM4T_v2_large")
+MODEL_NAME = "seamlessM4T_v2_large"
+MODEL = Transcriber(MODEL_NAME)
 
 # Load text pre-transcribed with Whisper
 transcriptions = list()
@@ -68,6 +69,7 @@ for use_dtw in [False, True]:
                     rerun_decoder=rerun_decoder,
                 )
                 results["metadata"] = {
+                    "model_name": MODEL_NAME,
                     "algorithm": algorithm,
                     "median_filter_width": median_filter_width,
                     "seconds_per_chunk": seconds_per_chunk,
