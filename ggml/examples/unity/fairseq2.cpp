@@ -1250,7 +1250,7 @@ int topk(
 }
 
 void _tweak_lprobs(const SequenceGeneratorJob& job, ggml_tensor* lprobs, int step_nr, int max_seq_len, std::size_t vocab_size) {
-        std::size_t beam_size = job.opts.beam_size;
+    std::size_t beam_size = job.opts.beam_size;
     std::size_t eos_idx = job.eos_idx;
 
     // Do not allow EOS before reaching the minimum sequence length.
@@ -1349,7 +1349,6 @@ ggml_allocr* new_arena_allocr(std::vector<uint8_t>& buffer) {
 
 /// Generates a translation for a single sequence
 /// The results Hypothesis are written inside `result_ctx`.
-// * replace manual tensor tweaking with ggml_set_*d (a ggml_set_slice could be useful)
 extern "C" Hypothesis* generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
