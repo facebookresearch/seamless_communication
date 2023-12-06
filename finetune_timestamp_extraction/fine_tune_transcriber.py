@@ -12,7 +12,7 @@ from math import isclose
 from statistics import mean
 from typing import Union, List, Tuple, Dict
 
-from seamless_communication.models.inference.transcriber import (
+from seamless_communication.inference.transcriber import (
     TranscriptionToken,
     Transcriber,
 )
