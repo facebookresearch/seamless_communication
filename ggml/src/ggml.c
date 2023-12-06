@@ -19498,45 +19498,8 @@ static void ggml_graph_dump_dot_leaf_edge(FILE * fp, struct ggml_tensor * node, 
             label);
 }
 
-enum SVG_COLOR_ENUM {
-    SVG_SPECIAL_COLOR = 2,
-    SVG_COLORS_COUNT = 147,
-};
-static const char * SVG_COLORS[SVG_COLORS_COUNT] = {
-    "black", "pink",
-    "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure",
-    "beige", "bisque", "blanchedalmond", "blue",
-    "blueviolet", "brown", "burlywood", "cadetblue", "chartreuse",
-    "chocolate", "coral", "cornflowerblue", "cornsilk", "crimson",
-    "cyan", "darkblue", "darkcyan", "darkgoldenrod", "darkgray",
-    "darkgreen", "darkgrey", "darkkhaki", "darkmagenta", "darkolivegreen",
-    "darkorange", "darkorchid", "darkred", "darksalmon", "darkseagreen",
-    "darkslateblue", "darkslategray", "darkslategrey", "darkturquoise", "darkviolet",
-    "deeppink", "deepskyblue", "dimgray", "dimgrey", "dodgerblue",
-    "firebrick", "floralwhite", "forestgreen", "fuchsia", "gainsboro",
-    "ghostwhite", "gold", "goldenrod", "gray", "grey",
-    "green", "greenyellow", "honeydew", "hotpink", "indianred",
-    "indigo", "ivory", "khaki", "lavender", "lavenderblush",
-    "lawngreen", "lemonchiffon", "lightblue", "lightcoral", "lightcyan",
-    "lightgoldenrodyellow", "lightgray", "lightgreen", "lightgrey", "lightpink",
-    "lightsalmon", "lightseagreen", "lightskyblue", "lightslategray", "lightslategrey",
-    "lightsteelblue", "lightyellow", "lime", "limegreen", "linen",
-    "magenta", "maroon", "mediumaquamarine", "mediumblue", "mediumorchid",
-    "mediumpurple", "mediumseagreen", "mediumslateblue", "mediumspringgreen", "mediumturquoise",
-    "mediumvioletred", "midnightblue", "mintcream", "mistyrose", "moccasin",
-    "navajowhite", "navy", "oldlace", "olive", "olivedrab",
-    "orange", "orangered", "orchid", "palegoldenrod", "palegreen",
-    "paleturquoise", "palevioletred", "papayawhip", "peachpuff", "peru",
-    "plum", "powderblue", "purple", "red",
-    "rosybrown", "royalblue", "saddlebrown", "salmon", "sandybrown",
-    "seagreen", "seashell", "sienna", "silver", "skyblue",
-    "slateblue", "slategray", "slategrey", "snow", "springgreen",
-    "steelblue", "tan", "teal", "thistle", "tomato",
-    "turquoise", "violet", "wheat", "white", "whitesmoke",
-    "yellow", "yellowgreen"
-};
-
 void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph * gf, const char * filename) {
+    char color[16];
 
     FILE * fp = fopen(filename, "w");
     GGML_ASSERT(fp);
@@ -19552,7 +19515,17 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             continue;
         }
 
-        const char* color = node->data == NULL ? SVG_COLORS[0] : SVG_COLORS[(hash(node->data) % (SVG_COLORS_COUNT - SVG_SPECIAL_COLOR)) + SVG_SPECIAL_COLOR];
+        if (node->is_param) {
+            snprintf(color, sizeof(color), "yellow");
+        } else if (node->grad) {
+            if (ggml_graph_find(gf, node)) {
+                snprintf(color, sizeof(color), "green");
+            } else {
+                snprintf(color, sizeof(color), "lightblue");
+            }
+        } else {
+            snprintf(color, sizeof(color), "white");
+        }
 
         fprintf(fp, "  \"%p\" [ "
                     "style = filled; fillcolor = %s; shape = record; "
@@ -19560,9 +19533,9 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
                 (void *) node, color);
 
         if (strlen(node->name) > 0) {
-            fprintf(fp, "%s@%p (%s)|", node->name, node->data, ggml_type_name(node->type));
+            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
         } else {
-            fprintf(fp, "@%p (%s)|", node->data, ggml_type_name(node->type));
+            fprintf(fp, "(%s)|", ggml_type_name(node->type));
         }
 
         if (node->n_dims == 2) {
@@ -19581,7 +19554,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
     for (int i = 0; i < gb->n_leafs; i++) {
         struct ggml_tensor * node = gb->leafs[i];
 
-        const char* color = node->data == NULL ? SVG_COLORS[0] : SVG_COLORS[1];
+        snprintf(color, sizeof(color), "pink");
 
         fprintf(fp, "  \"%p\" [ "
                     "style = filled; fillcolor = %s; shape = record; "
@@ -19589,9 +19562,9 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
                 (void *) node, color);
 
         if (strlen(node->name) > 0) {
-            fprintf(fp, "%s@%p (%s)|", node->name, node->data, ggml_type_name(node->type));
+            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
         } else {
-            fprintf(fp, "@%p (%s)|", node->data, ggml_type_name(node->type));
+            fprintf(fp, "(%s)|", ggml_type_name(node->type));
         }
 
         fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
