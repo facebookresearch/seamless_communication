@@ -14,6 +14,7 @@ from fairseq2.generation import (
     SequenceGeneratorOutput,
 )
 from fairseq2.memory import MemoryBlock
+from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
 from fairseq2.typing import DataType, Device
 
@@ -37,10 +38,19 @@ class EncDecAttentionsCollect(AttentionWeightHook):
         self.attn_scores = []
 
     def __call__(self, m, attn, attn_weights) -> None:
-        val = (
-            torch.clone(attn_weights).detach().sum(dim=0).sum(dim=0).squeeze(0).tolist()
-        )
-        self.attn_scores.append(val)
+        if attn_weights.shape[-2] > 1:
+            val = torch.clone(attn_weights).detach().squeeze(0).sum(dim=0).tolist()
+            self.attn_scores.extend(val)
+        else:
+            val = (
+                torch.clone(attn_weights)
+                .detach()
+                .sum(dim=0)
+                .sum(dim=0)
+                .squeeze(0)
+                .tolist()
+            )
+            self.attn_scores.append(val)
 
     def reset(self):
         self.attn_scores = []
@@ -313,23 +323,27 @@ class Transcriber(nn.Module):
         )
 
         if rerun_decoder:
-            print(len(output.hypotheses))
-            print(len(output.hypotheses[0]))
-            print(output.hypotheses[0][0].seq.size())
-            print(output.hypotheses[0][0].seq.bfloat16().size())
-            print(output.encoder_output.size())
             self.enc_dec_attn_collector.reset()
-            output, _ = self.s2t.decoder.forward(
-                seqs=output.hypotheses[0][0].seq.unsqueeze(0).bfloat16(),
-                padding_mask=None,
-                encoder_output=output.encoder_output.squeeze(0),
+
+            tokens = output.hypotheses[0][0].seq
+            tokens_padding_mask = PaddingMask(
+                seq_lens=torch.LongTensor([tokens.shape[-1]]),
+                batch_seq_len=tokens.shape[-1],
+            )
+            seqs, padding_mask = self.s2t.decoder_frontend(
+                seqs=tokens.unsqueeze(0),
+                padding_mask=tokens_padding_mask,
+            )
+            self.s2t.decoder(
+                seqs=seqs,
+                padding_mask=padding_mask,
+                encoder_output=output.encoder_output,
                 encoder_padding_mask=output.encoder_padding_mask,
             )
 
         token_ids = output.hypotheses[0][0].seq.squeeze(0)[prefix_len:].tolist()
         step_scores = output.hypotheses[0][0].step_scores[prefix_len:].tolist()
-        # Subtract 1 from enc_dec_attn_scores slicing?
-        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len:]
+        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
         token_timestamps = self._extract_timestamps(
             enc_dec_attn_scores,
             len(step_scores),
