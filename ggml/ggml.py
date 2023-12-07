@@ -13,6 +13,8 @@ from typing import Any, Callable, Dict, Iterator, NamedTuple, Tuple, Type, Union
 
 import numpy as np
 import torch
+import subprocess
+import sys
 
 from ctypes_utils import NULLPTR, Ptr, c_fn, c_struct
 from third_party_ggml import *
@@ -397,10 +399,21 @@ def forward(
 
 
 def build_and_compute(
-    ctx: ggml_context_p, tensor: ggml_tensor_p, num_threads: int = 1
-) -> None:
+    ctx: ggml_context_p, tensor: ggml_tensor_p, num_threads: int = 1, dump: Union[bool, str] = False
+) -> ggml_cgraph:
     gf = ggml_build_forward(tensor)
+    need_alloc = tensor.contents.data == NULLPTR
+    if need_alloc:
+        alloc = FixedSizeArena(1024 * 1024 * 1024 * 2)
+        ggml_allocr_alloc_graph(alloc.ptr, ctypes.pointer(gf))
+        setattr(tensor, "__data", alloc)
+    if dump:
+        if dump == True:
+            dump = f"dot/{sys._getframe(1).f_code.co_name}"
+        ggml_graph_dump_dot(ctypes.pointer(gf), NULLPTR, dump.encode("ascii"))
+        # subprocess.run(["dot", "-Tsvg", "-O", dump])
     ggml_graph_compute_with_ctx(ctx, ctypes.pointer(gf), num_threads)
+    return gf
 
 
 @c_fn(lib)
@@ -495,7 +508,7 @@ def fairseq2_model_layer_config_int(model: ctypes.c_void_p, name: bytes) -> int:
 
 @c_fn(lib.fairseq2_kv_cache_alloc)
 def _fairseq2_kv_cache_alloc(
-    model: ctypes.c_void_p, beam_size: int, max_seq_len: int
+    model: ctypes.c_void_p, ctx: ctypes.c_void_p, beam_size: int, max_seq_len: int
 ) -> None:
     pass
 
@@ -507,13 +520,23 @@ def _fairseq2_kv_cache_reset(model: ctypes.c_void_p) -> None:
 
 @contextlib.contextmanager
 def fairseq2_kv_cache_alloc(
-    model: ctypes.c_void_p, beam_size: int, max_seq_len: int
+    model: ctypes.c_void_p, kv_cache_size: int, beam_size: int, max_seq_len: int
 ) -> Iterator[None]:
-    _fairseq2_kv_cache_alloc(model, beam_size, max_seq_len)
+
+    memory = torch.zeros(kv_cache_size, dtype=torch.uint8)
+    ctx = ggml_init(
+        params=ggml_init_params(
+            mem_size=kv_cache_size,
+            mem_buffer=ctypes.c_void_p(memory.data_ptr()),
+            no_alloc=False,
+        )
+    )
+    _fairseq2_kv_cache_alloc(model, ctx, beam_size, max_seq_len)
     try:
         yield
     finally:
         _fairseq2_kv_cache_reset(model)
+        ggml_free(ctx)
 
 
 @c_fn(lib)

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <sndfile.h>
 #include <cstdlib>
+#include "ggml-alloc.h"
 
 struct unity_params {
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
@@ -111,7 +112,7 @@ Hypothesis* unity_decode(
         /*eos_idx*/model.vocab.token_to_id["</s>"],
         /*num_threads*/n_threads,
     };
-    struct ggml_tensor * prefix_seq = ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2);
+    FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
     ((int *)prefix_seq->data)[0]  = job.eos_idx;
     ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
     job.prefix_seq = prefix_seq;
@@ -133,13 +134,13 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
         return 1;
     }
-    int ctx_size_gb = 20;
-    if (model.hparams["w2v2_encoder_config__num_encoder_layers"] == 24) {
-        ctx_size_gb = 40;
-    } 
 
+    // The ctx_size_mb mostly depends of input length and model dim.
+    int ctx_size_mb = 128;
+    auto encoder_buf = std::vector<uint8_t>(128 * 1024 * 1024);
+    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
+    ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
     char result_str[4096];
-    static std::vector<uint8_t> encoder_buf(ctx_size_gb * 1024LL * 1024LL * 1024LL);
 
     std::string input;
     bool interactive = params.files.size() == 0;
@@ -178,17 +179,21 @@ int main(int argc, char ** argv) {
         }
         int tgt_lang_idx = tgt_lang_ptr->second;
 
-        // Load audio input
-        std::vector<float> data(info.frames * info.channels); // Assume info.channels is always 1
-        sf_readf_float(sndfile, data.data(), info.frames);
 
         // Reset the ggml_context
         model.ctx = ctx_from_buffer(encoder_buf);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, 1);
-        memcpy(seqs->data, data.data(), data.size() * sizeof(float));
+        ggml_set_no_alloc(model.ctx, false);
+        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
+        ggml_set_no_alloc(model.ctx, true);
+
+        // Load audio input
+        sf_readf_float(sndfile, (float*)seqs->data, info.frames);
+
         // Audio encoder
         ggml_cgraph* gf = unity_speech_encoder(model, seqs);
+        ggml_allocr_alloc_graph(fwd_alloc, gf);
         ggml_graph_compute_with_ctx(model.ctx, gf, params.n_threads);
+        // encoder_output is valid until we call `ggml_allocr_reset(fwd_alloc)`
         ggml_tensor* encoder_output = gf->nodes[gf->n_nodes - 1];
 
         // Beam search decoding
@@ -201,7 +206,7 @@ int main(int argc, char ** argv) {
         int n = fairseq2_spm_detokenize(&model, tokens, (char*)&result_str);
         std::cout << std::string((char*)&result_str, n) << std::endl;
         ggml_free(model.ctx);
-
+        ggml_allocr_reset(fwd_alloc);
     }
 
     return 0;
