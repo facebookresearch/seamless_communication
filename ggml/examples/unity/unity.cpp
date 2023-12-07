@@ -178,14 +178,14 @@ int main(int argc, char ** argv) {
         }
         int tgt_lang_idx = tgt_lang_ptr->second;
 
-        // Load audio input
-        std::vector<float> data(info.frames * info.channels); // Assume info.channels is always 1
-        sf_readf_float(sndfile, data.data(), info.frames);
 
         // Reset the ggml_context
         model.ctx = ctx_from_buffer(encoder_buf);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, 1);
-        memcpy(seqs->data, data.data(), data.size() * sizeof(float));
+        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
+
+        // Load audio input
+        sf_readf_float(sndfile, (float*)seqs->data, info.frames);
+
         // Audio encoder
         ggml_cgraph* gf = unity_speech_encoder(model, seqs);
         ggml_graph_compute_with_ctx(model.ctx, gf, params.n_threads);

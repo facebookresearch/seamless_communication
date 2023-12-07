@@ -1,6 +1,6 @@
-build: build/src/libggml.so ggml/build/bin/unity
+build: build/examples/unity/libfairseq2_cpp.so ggml/build/bin/unity
 
-build/src/libggml.so: Makefile examples/unity/*.h examples/unity/*.cpp src/ggml*.c
+build/examples/unity/libfairseq2_cpp.so: Makefile examples/unity/*.h examples/unity/*.cpp src/ggml*.c
 	mkdir -p build
 	cd build; cmake\
 		-DGGML_OPENBLAS=ON \

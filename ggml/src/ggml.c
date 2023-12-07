@@ -6822,9 +6822,7 @@ struct ggml_tensor * ggml_get_rows(
         is_node = true;
     }
 
-    // TODO: implement non F32 return
-    //struct ggml_tensor * result = ggml_new_tensor_2d(ctx, a->type, a->ne[0], b->ne[0]);
-    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, a->ne[0], b->ne[0]);
+    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, a->type, a->ne[0], b->ne[0]);
 
     result->op   = GGML_OP_GET_ROWS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -8982,10 +8980,12 @@ static void ggml_compute_forward_dup(
     }
     switch (src0->type) {
         case GGML_TYPE_F16:
+        case GGML_TYPE_I16:
             {
                 ggml_compute_forward_dup_f16(params, src0, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_dup_f32(params, src0, dst);
             } break;
@@ -10379,6 +10379,7 @@ static void ggml_compute_forward_repeat(
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_repeat_f32(params, src0, dst);
             } break;
@@ -10520,6 +10521,7 @@ static void ggml_compute_forward_concat(
     struct ggml_tensor* dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_concat_f32(params, src0, src1, dst);
             } break;
@@ -12284,10 +12286,12 @@ static void ggml_compute_forward_get_rows(
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
             } break;
         case GGML_TYPE_F16:
+        case GGML_TYPE_I16:
             {
                 ggml_compute_forward_get_rows_f16(params, src0, src1, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_get_rows_f32(params, src0, src1, dst);
             } break;
