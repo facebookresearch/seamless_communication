@@ -137,7 +137,7 @@ int main(int argc, char ** argv) {
 
     // The ctx_size_mb mostly depends of input length and model dim.
     int ctx_size_mb = 128;
-    auto encoder_buf = std::vector<uint8_t>(128 * 1024 * 1024);
+    auto encoder_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
     auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
     ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
     char result_str[4096];

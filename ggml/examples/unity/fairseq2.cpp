@@ -590,11 +590,7 @@ extern "C" ggml_tensor* WaveformToFbank_forward(
     output = ggml_norm(ctx, output, 1e-5);
     output = ggml_dup(ctx, ggml_transpose(ctx, output));
     if (output->ne[1] % 2 == 1) {
-        ggml_tensor* remove_last = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, output->ne[1]-1);
-        for (int i = 0; i < output->ne[1]-1; ++i) {
-            ((int32_t *) remove_last->data)[i] = i;
-        }
-        output = ggml_get_rows(ctx, output, remove_last);
+        output = ggml_dup(ctx, ggml_slice(ctx, output, 1, 0, output->ne[1]-1));
     }
     output = ggml_reshape_2d(ctx, output, output->ne[0] * 2, output->ne[1] / 2);
     return output;
