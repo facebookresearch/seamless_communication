@@ -15,7 +15,7 @@ SeamlessM4T models support the tasks of:
 To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large).
 
 > [!NOTE]
-> Seamless M4T is also available in the 🤗 Transformers library. Visit the [SeamlessM4T README](docs/m4t/README.md#transformers-usage) for more details.
+> Seamless M4T is also available in the 🤗 Transformers library. Visit [this section](docs/m4t/README.md#transformers-usage) for more details.
 
 ## SeamlessExpressive
 
