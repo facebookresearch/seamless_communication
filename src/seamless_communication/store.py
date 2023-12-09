@@ -6,8 +6,6 @@
 
 from pathlib import Path
 
-import torch
-
 from fairseq2.assets import InProcAssetMetadataProvider, asset_store
 
 

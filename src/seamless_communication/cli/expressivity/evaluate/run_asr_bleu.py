@@ -5,12 +5,9 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from fire import Fire
-import pandas as pd
-import csv
 from seamless_communication.cli.eval_utils.compute_metrics import (
     compute_quality_metrics,
 )
-import os
 from fairseq2.typing import Device
 from pathlib import Path
 

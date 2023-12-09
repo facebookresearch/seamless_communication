@@ -25,7 +25,7 @@ from fairseq2.typing import DataType, Device
 from torch import Tensor
 from tqdm import tqdm
 
-from seamless_communication.cli.expressivity.evaluate.pretssel_generator import (
+from seamless_communication.cli.expressivity.predict.pretssel_generator import (
     PretsselGenerator,
 )
 from seamless_communication.cli.m4t.evaluate.evaluate import (

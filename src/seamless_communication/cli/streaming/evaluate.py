@@ -7,9 +7,12 @@
 import argparse
 import logging
 
+from pathlib import Path
 from fairseq2.assets import asset_store, download_manager
+
+from seamless_communication.store import add_gated_assets
 from seamless_communication.cli.streaming.scorers.seamless_quality_scorer import (
-    SeamlessQualityScorer,
+    SeamlessQualityScorer as SeamlessQualityScorer,
 )
 from seamless_communication.streaming.agents.seamless_s2st import SeamlessS2STAgent
 from seamless_communication.streaming.agents.seamless_streaming_s2st import (
@@ -18,6 +21,7 @@ from seamless_communication.streaming.agents.seamless_streaming_s2st import (
 from seamless_communication.streaming.agents.seamless_streaming_s2t import (
     SeamlessStreamingS2TAgent,
 )
+
 from simuleval.cli import evaluate
 
 logging.basicConfig(
@@ -48,6 +52,12 @@ def main() -> None:
         default=False,
         help="Expressive streaming S2ST inference",
     )
+    parser.add_argument(
+        "--gated-model-dir",
+        type=Path,
+        required=False,
+        help="SeamlessExpressive model directory.",
+    )
 
     args, _ = parser.parse_known_args()
 
@@ -69,6 +79,11 @@ def main() -> None:
 
         if args.expressive:
             agent_class = SeamlessS2STAgent
+            if not args.gated_model_dir:
+                raise ValueError(
+                    "--gated-model-dir must be provided for the Seamless model."
+                )
+            add_gated_assets(args.gated_model_dir)
         else:
             agent_class = SeamlessStreamingS2STAgent
     elif args.task in ["s2tt", "asr"]:
