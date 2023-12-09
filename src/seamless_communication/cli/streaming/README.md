@@ -36,7 +36,7 @@ streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-
 ```
 
 #### Seamless:
-The Seamless model is an unified model for streaming expressive speech-to-speech tranlsation. Use the `--expressive` arg for running evaluation of this unified model.
+The Seamless model is a unified model for streaming expressive speech-to-speech translation. Use the `--expressive` arg for running evaluation of this unified model.
 
 ```bash
 streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_lang_code> --expressive
