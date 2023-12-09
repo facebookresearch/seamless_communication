@@ -116,7 +116,7 @@ Hypothesis* unity_decode(
     ((int *)prefix_seq->data)[0]  = job.eos_idx;
     ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
     job.prefix_seq = prefix_seq;
-    return generate_sequence(model, job, encoder_output, nullptr, model.ctx);
+    return generate_sequence(model, job, encoder_output, nullptr, model.ctx, n_threads);
 }
 
 int main(int argc, char ** argv) {
