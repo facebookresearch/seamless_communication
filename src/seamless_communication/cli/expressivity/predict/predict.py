@@ -28,8 +28,6 @@ from seamless_communication.models.unity import (
 from seamless_communication.store import add_gated_assets
 
 
-MODEL_NAME = "seamless_expressivity"
-VOCODER_NAME = "vocoder_pretssel"
 AUDIO_SAMPLE_RATE = 16000
 
 
@@ -84,17 +82,17 @@ def main() -> None:
 
     logger.info(f"Running inference on {device=} with {dtype=}.")
 
-    unit_tokenizer = load_unity_unit_tokenizer(MODEL_NAME)
+    unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
     
     translator = Translator(
-        MODEL_NAME,
+        args.model_name,
         vocoder_name_or_card=None,
         device=device,
         dtype=dtype,
     )
 
     pretssel_generator = PretsselGenerator(
-        VOCODER_NAME,
+        args.vocoder_name,
         vocab_info=unit_tokenizer.vocab_info,
         device=device,
         dtype=dtype,
@@ -109,7 +107,7 @@ def main() -> None:
         dtype=dtype,
     )
 
-    _gcmvn_mean, _gcmvn_std = load_gcmvn_stats(VOCODER_NAME)
+    _gcmvn_mean, _gcmvn_std = load_gcmvn_stats(args.vocoder_name)
     gcmvn_mean = torch.tensor(_gcmvn_mean, device=device, dtype=dtype)
     gcmvn_std = torch.tensor(_gcmvn_std, device=device, dtype=dtype)
 

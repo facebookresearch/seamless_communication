@@ -245,7 +245,7 @@ def main() -> None:
                 prosody_encoder_input = example[args.audio_field]["data"]["gcmvn_fbank"]
                 text_output, unit_output = translator.predict(
                     src,
-                    args.task,
+                    "s2st",
                     args.tgt_lang,
                     src_lang=args.src_lang,
                     text_generation_opts=text_generation_opts,

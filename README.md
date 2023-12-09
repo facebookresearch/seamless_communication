@@ -98,7 +98,7 @@ For running S2TT/ASR natively (without Python) using GGML, please refer to [the 
 Here’s an example of using the CLI from the root directory to run inference.
 
 ```bash
-expressivity_predict <path_to_input_audio> --tgt_lang <tgt_lang> --output--path <path_to_save_audio>
+expressivity_predict <path_to_input_audio> --tgt_lang <tgt_lang> --model_name seamless_expressivity --vocoder_name vocoder_pretssel --output--path <path_to_save_audio>
 ```
 
 ### SeamlessStreaming and Seamless Inference
