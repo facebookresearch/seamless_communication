@@ -39,9 +39,9 @@ streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-
 The Seamless model is an unified model for streaming expressive speech-to-speech tranlsation. Use the `--expressive` arg for running evaluation of this unified model.
 
 ```bash
-streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_lang_code> --expressive
+streaming_evaluate --task s2st --data-file <path_to_data_tsv_file> --audio-root-dir <path_to_audio_root_directory> --output <path_to_evaluation_output_directory> --tgt-lang <3_letter_lang_code> --expressive --gated-model-dir <path_to_vocoder_checkpoints_dir>
 ```
 
-The Seamless model uses `vocoder_pretssel` which is a 24KHz version (`vocoder_pretssel`) by default. In the current version of our paper, we use 16KHz version (`vocoder_pretssel_16khz`) for the evaluation , so in order to reproduce those results please add this arg to the above command: `--vocoder-name vocoder_pretssel_16khz`.
+The Seamless model uses `vocoder_pretssel` which is a 24KHz version (`vocoder_pretssel`) by default. In the current version of our paper, we use 16KHz version (`vocoder_pretssel_16khz`) for the evaluation, so in order to reproduce those results please add this arg to the above command: `--vocoder-name vocoder_pretssel_16khz`.
 
 `vocoder_pretssel` or `vocoder_pretssel_16khz` checkpoints are gated, please check out [this section](/README.md#seamlessexpressive-models) to acquire these checkpoints. Also, make sure to add `--gated-model-dir <path_to_vocoder_checkpoints_dir>`

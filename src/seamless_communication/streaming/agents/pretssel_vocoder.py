@@ -137,7 +137,7 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ign
 
     @classmethod
     def add_args(cls, parser: ArgumentParser) -> None:
-        param = parser.add_argument(
+        parser.add_argument(
             "--gated-model-dir",
             type=Path,
             required=False,
