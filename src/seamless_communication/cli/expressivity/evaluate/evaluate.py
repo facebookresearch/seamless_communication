@@ -22,11 +22,10 @@ from fairseq2.data.audio import (
 )
 from fairseq2.data.text import StrSplitter, read_text
 from fairseq2.typing import DataType, Device
-from sacrebleu.metrics import BLEU  # type: ignore[attr-defined]
 from torch import Tensor
 from tqdm import tqdm
 
-from seamless_communication.cli.expressivity.evaluate.pretssel_inference_helper import (
+from seamless_communication.cli.expressivity.predict.pretssel_generator import (
     PretsselGenerator,
 )
 from seamless_communication.cli.m4t.evaluate.evaluate import (
@@ -121,7 +120,7 @@ def main() -> None:
     )
 
     parser = add_inference_arguments(parser)
-    param = parser.add_argument(
+    parser.add_argument(
         "--gated-model-dir",
         type=Path,
         required=False,
@@ -246,7 +245,7 @@ def main() -> None:
                 prosody_encoder_input = example[args.audio_field]["data"]["gcmvn_fbank"]
                 text_output, unit_output = translator.predict(
                     src,
-                    args.task,
+                    "s2st",
                     args.tgt_lang,
                     src_lang=args.src_lang,
                     text_generation_opts=text_generation_opts,

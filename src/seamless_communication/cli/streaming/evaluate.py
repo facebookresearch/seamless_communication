@@ -8,8 +8,9 @@ import argparse
 import logging
 
 from fairseq2.assets import asset_store, download_manager
+
 from seamless_communication.cli.streaming.scorers.seamless_quality_scorer import (
-    SeamlessQualityScorer,
+    SeamlessQualityScorer as SeamlessQualityScorer,
 )
 from seamless_communication.streaming.agents.seamless_s2st import SeamlessS2STAgent
 from seamless_communication.streaming.agents.seamless_streaming_s2st import (
@@ -18,6 +19,7 @@ from seamless_communication.streaming.agents.seamless_streaming_s2st import (
 from seamless_communication.streaming.agents.seamless_streaming_s2t import (
     SeamlessStreamingS2TAgent,
 )
+
 from simuleval.cli import evaluate
 
 logging.basicConfig(

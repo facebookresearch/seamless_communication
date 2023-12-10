@@ -13,7 +13,7 @@ import gradio as gr
 import torch
 import torchaudio
 from fairseq2.assets import InProcAssetMetadataProvider, asset_store
-from fairseq2.data import Collater, SequenceData, VocabularyInfo
+from fairseq2.data import Collater
 from fairseq2.data.audio import (
     AudioDecoder,
     WaveformToFbankConverter,
@@ -23,19 +23,15 @@ from fairseq2.data.audio import (
 from seamless_communication.inference import SequenceGeneratorOptions
 from fairseq2.generation import NGramRepeatBlockProcessor
 from fairseq2.memory import MemoryBlock
-from fairseq2.typing import DataType, Device
 from huggingface_hub import snapshot_download
-from seamless_communication.inference import BatchedSpeechOutput, Translator, SequenceGeneratorOptions
-from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
+from seamless_communication.inference import Translator, SequenceGeneratorOptions
 from seamless_communication.models.unity import (
-    UnitTokenizer,
     load_gcmvn_stats,
-    load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from torch.nn import Module
-from seamless_communication.cli.expressivity.evaluate.pretssel_inference_helper import PretsselGenerator
+from seamless_communication.cli.expressivity.predict.pretssel_generator import PretsselGenerator
 
+from typing import Tuple
 from utils import LANGUAGE_CODE_TO_NAME
 
 DESCRIPTION = """\
@@ -183,7 +179,7 @@ def run(
     input_audio_path: str,
     source_language: str,
     target_language: str,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     target_language_code = LANGUAGE_NAME_TO_CODE[target_language]
     source_language_code = LANGUAGE_NAME_TO_CODE[source_language]
 

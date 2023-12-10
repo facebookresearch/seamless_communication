@@ -53,7 +53,7 @@ class UnitExtractor(nn.Module):
         assert isinstance(wav2vec2_model, Wav2Vec2Model)
         self.model = Wav2Vec2LayerOutputModel(wav2vec2_model)
         self.decode_audio = AudioDecoder(dtype=torch.float32, device=device)
-        self.collate = Collater(pad_value=2, pad_to_multiple=2)
+        self.collate = Collater(pad_value=1, pad_to_multiple=2)
         self.kmeans_model = KmeansModel(kmeans_uri, device, dtype)
         self.device = device
         self.dtype = dtype
