@@ -14,6 +14,9 @@ SeamlessM4T models support the tasks of:
 
 To learn more about the collection of SeamlessM4T models, the approach used in each, their language coverage and their performance, visit the [SeamlessM4T README](docs/m4t/README.md) or [🤗 Model Card](https://huggingface.co/facebook/seamless-m4t-v2-large).
 
+> [!NOTE]
+> Seamless M4T is also available in the 🤗 Transformers library. Visit [this section](docs/m4t/README.md#transformers-usage) for more details.
+
 ## SeamlessExpressive
 
 SeamlessExpressive is a speech-to-speech translation model that captures certain underexplored aspects of prosody such as speech rate and pauses, while preserving the style of one's voice and high content translation quality.
@@ -121,9 +124,6 @@ cd demo
 pip install -r requirements.txt
 python app.py
 ```
-
-Seamless M4T is also available in the 🤗 Transformers library. For more details, refer to the [SeamlessM4T docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2) 
-or this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/explanatory_notebooks/blob/main/seamless_m4t_hugging_face.ipynb).
 
 # Resources and usage
 ## Model
