@@ -56,7 +56,7 @@ def assert_unit_close(
     if percent_unit_tol > 0.0:
         num_unit_tol = int(percent_unit_tol * len(a))
 
-    num_unit_diff = (a != b).sum()
+    num_unit_diff = (a != b).sum()  # type: ignore
     assert (
         num_unit_diff <= num_unit_tol
     ), f"The difference is beyond tolerance, {num_unit_diff} units are different, tolerance is {num_unit_tol}"

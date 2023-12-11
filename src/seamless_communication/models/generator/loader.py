@@ -5,8 +5,6 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 
-from typing import Any, Mapping
-
 from fairseq2.assets import asset_store, download_manager
 from fairseq2.models.utils import ConfigLoader, ModelLoader
 

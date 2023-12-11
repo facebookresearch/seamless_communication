@@ -37,6 +37,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_sessionstart(session: pytest.Session) -> None:
     tests.common.device = cast(Device, session.config.getoption("device"))
 
+    from fairseq2.assets import asset_store
+
+    asset_store.env_resolvers.append(lambda: "integ_test")
+
 
 @pytest.fixture(scope="module")
 def example_rate16k_audio() -> AudioDecoderOutput:

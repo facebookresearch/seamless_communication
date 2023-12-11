@@ -8,6 +8,7 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 from typing import Final, List, Optional, cast
+import os
 import pytest
 
 import torch
@@ -51,7 +52,9 @@ def load_watermarking_model() -> Optional[Module]:
     assert wm_spec.loader, f"Module cannot be loaded from {wm_py_file}"
     wm_spec.loader.exec_module(wm_py_module)
 
-    return cast(Module, wm_py_module.model_from_checkpoint(device=device, dtype=dtype))
+    ckpt = os.getenv("SEAMLESS_WM_CKPT", "")
+
+    return cast(Module, wm_py_module.model_from_checkpoint(device=device, checkpoint=ckpt, dtype=dtype))
 
 
 @pytest.mark.parametrize("sr", [16_000, 24_000])
@@ -133,7 +136,9 @@ def test_pretssel_vocoder_watermarking(
 
     # Test that the watermark is detectable
     detection = watermarker.detect_watermark(wav_wm)  # type: ignore
-    assert torch.all(detection[:, 1, :] > 0.5)
+
+    # 0.9 is the current lower bound of Watermarking w.r.t all attacks
+    assert torch.count_nonzero(torch.gt(detection[:, 1, :], 0.5)) / detection.shape[-1] > 0.9
 
     # Remove the batch and compare parity on the overlapping frames
     wav_wm = wav_wm.squeeze(0)
