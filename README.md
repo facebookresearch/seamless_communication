@@ -1,5 +1,27 @@
 ![](23-11_SEAMLESS_BlogHero_11.17.jpg)
 # Seamless Intro
+
+Seamless is a family of AI models that enable more natural and authentic communication across languages. SeamlessM4T is a massive multilingual multimodal machine translation model supporting around 100 languages. SeamlessM4T serves as foundation for SeamlessExpressive, a model that preserves elements of prosody and voice style across languages and SeamlessStreaming, a model supporting simultaneous translation and streaming ASR for around 100 languages. SeamlessExpressive and SeamlessStreaming are combined into Seamless, a unified model featuring multilinguality, real-time and expressive translations.
+
+## Links
+
+### Demos
+
+|                        | SeamlessM4T v2                                                                                                                        | SeamlessExpressive                                                                                                                               | SeamlessStreaming                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Demo                   | [SeamlessM4T v2 Demo](https://seamless.metademolab.com/m4t?utm_source=github&utm_medium=web&utm_campaign=seamless&utm_content=readme) | [SeamlessExpressive Demo](https://seamless.metademolab.com/expressive?utm_source=github&utm_medium=web&utm_campaign=seamless&utm_content=readme) |                                                                                          |
+| HuggingFace Space Demo | [🤗 SeamlessM4T v2 Space](https://huggingface.co/spaces/facebook/seamless-m4t-v2-large)                                                | [🤗 SeamlessExpressive Space](https://huggingface.co/spaces/facebook/seamless-expressive)                                                         | [🤗 SeamlessStreaming Space](https://huggingface.co/spaces/facebook/seamless-streaming) |
+
+### Papers
+[Seamless](https://ai.facebook.com/research/publications/seamless-multilingual-expressive-and-streaming-speech-translation/)
+
+[EMMA](https://ai.meta.com/research/publications/efficient-monotonic-multihead-attention/)
+
+[SONAR](https://ai.meta.com/research/publications/sonar-expressive-zero-shot-expressive-speech-to-speech-translation/)
+
+### Blog
+[AI at Meta Blog](https://ai.meta.com/research/seamless-communication/)
+
 ## SeamlessM4T
 SeamlessM4T is our foundational all-in-one **M**assively **M**ultilingual and **M**ultimodal **M**achine **T**ranslation model delivering high-quality translation for speech and text in nearly 100 languages.
 
@@ -38,24 +60,6 @@ To learn more about SeamlessStreaming models, visit the [SeamlessStreaming READM
 ## Seamless
 
 The Seamless model is the unified model for expressive streaming speech-to-speech translations.
-
-## Links
-### Blog
-[AI at Meta Blog](https://ai.meta.com/research/seamless-communication/)
-### Papers
-[Seamless](https://ai.facebook.com/research/publications/seamless-multilingual-expressive-and-streaming-speech-translation/)
-
-[EMMA](https://ai.meta.com/research/publications/efficient-monotonic-multihead-attention/)
-
-[SONAR](https://ai.meta.com/research/publications/sonar-expressive-zero-shot-expressive-speech-to-speech-translation/)
-
-
-### Demos
-
-|                        | SeamlessM4T v2                                                                                                                        | SeamlessExpressive                                                                                                                               | SeamlessStreaming                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Demo                   | [SeamlessM4T v2 Demo](https://seamless.metademolab.com/m4t?utm_source=github&utm_medium=web&utm_campaign=seamless&utm_content=readme) | [SeamlessExpressive Demo](https://seamless.metademolab.com/expressive?utm_source=github&utm_medium=web&utm_campaign=seamless&utm_content=readme) |                                                                                          |
-| HuggingFace Space Demo | [🤗 SeamlessM4T v2 Space](https://huggingface.co/spaces/facebook/seamless-m4t-v2-large)                                                | [🤗 SeamlessExpressive Space](https://huggingface.co/spaces/facebook/seamless-expressive)                                                         | [🤗 SeamlessStreaming Space](https://huggingface.co/spaces/facebook/seamless-streaming) |
 
 ## What's new
 
