@@ -48,25 +48,20 @@ The model can be specified with `--model_name` `seamlessM4T_v2_large`, `seamless
 
 ```bash
 # S2ST:
-m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
-# S2T:
-m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang>
-# T2TT:
-m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
-# T2ST:
-m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
-# ASR:
-m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang>
-```
+m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large 
 
-The input audio must be 16kHz currently. Here's how you could resample your audio:
-```python
-import torchaudio
-resample_rate = 16000
-waveform, sample_rate = torchaudio.load(<path_to_input_audio>)
-resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
-resampled_waveform = resampler(waveform)
-torchaudio.save(<path_to_resampled_audio>, resampled_waveform, resample_rate)
+# S2T:
+m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large 
+
+# T2TT:
+m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang> --model_name seamlessM4T_v2_large 
+
+# T2ST:
+m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large 
+
+# ASR:
+m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large 
+
 ```
 ### Inference with `Translator`:
 Inference calls for the `Translator` object instantiated with a multitask UnitY or UnitY2 model with the options:
@@ -202,7 +197,7 @@ from IPython.display import Audio
 
 sample_rate = model.sampling_rate
 Audio(audio_array_from_text, rate=sample_rate)
-# Audio(audio_array_from_audio, rate=sample_rate)
+Audio(audio_array_from_audio, rate=sample_rate)
 ```
 
 Or save them as a `.wav` file using a third-party library, e.g. `torchaudio`:
