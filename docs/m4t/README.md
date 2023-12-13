@@ -17,12 +17,12 @@ This unified model enables multiple tasks without relying on multiple separate m
 > SeamlessM4T v2 and v1 are also supported in the 🤗 Transformers library, more on it [in the dedicated section below](#transformers-usage).
 
 ## SeamlessM4T v1
-The v1 version of SeamlessM4T is a multitask adaptation of the *UnitY* architecture [(Inaguma et al., 2023)](https://aclanthology.org/2023.acl-long.872/). 
+The v1 version of SeamlessM4T is a multitask adaptation of the *UnitY* architecture [(Inaguma et al., 2023)](https://aclanthology.org/2023.acl-long.872/).
 *UnitY* is a two-pass direct S2ST architecture which first generates textual representations and subsequently predicts discrete acoustic units.
 
 
 ## SeamlessM4T v2
-The v2 version of SeamlessM4T is a multitask adaptation of our novel *UnitY2* architecture. 
+The v2 version of SeamlessM4T is a multitask adaptation of our novel *UnitY2* architecture.
 *Unity2* with its hierarchical character-to-unit upsampling and non-autoregressive text-to-unit decoding considerably improves over SeamlessM4T v1 in quality and inference speed.
 
 ![SeamlessM4T architectures](seamlessm4t_arch.svg)
@@ -48,19 +48,19 @@ The model can be specified with `--model_name` `seamlessM4T_v2_large`, `seamless
 
 ```bash
 # S2ST:
-m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large 
+m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large
 
 # S2T:
-m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large 
+m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large
 
 # T2TT:
-m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang> --model_name seamlessM4T_v2_large 
+m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang> --model_name seamlessM4T_v2_large
 
 # T2ST:
-m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large 
+m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large
 
 # ASR:
-m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large 
+m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large
 
 ```
 ### Inference with `Translator`:
@@ -92,19 +92,19 @@ we first set the `text_generation_opts`, `unit_generation_opts` and then transla
 ```python
 # S2ST
 text_output, speech_output = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="S2ST", 
-    tgt_lang=<tgt_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="S2ST",
+    tgt_lang=<tgt_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=unit_generation_opts
 )
 
 # T2ST
 text_output, speech_output = translator.predict(
-    input=<input_text>, 
-    task_str="T2ST", 
-    tgt_lang=<tgt_lang>, 
-    src_lang=<src_lang>, 
+    input=<input_text>,
+    task_str="T2ST",
+    tgt_lang=<tgt_lang>,
+    src_lang=<src_lang>,
     text_generation_opts=text_generation_opts,
     unit_generation_opts=unit_generation_opts
 )
@@ -128,30 +128,30 @@ torchaudio.save(
 ```python
 # S2TT
 text_output, _ = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="S2TT", 
-    tgt_lang=<tgt_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="S2TT",
+    tgt_lang=<tgt_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 
 # ASR
 # This is equivalent to S2TT with `<tgt_lang>=<src_lang>`.
     text_output, _ = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="ASR", 
-    tgt_lang=<src_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="ASR",
+    tgt_lang=<src_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 
 # T2TT
 text_output, _ = translator.predict(
-    input=<input_text>, 
-    task_str="T2TT", 
-    tgt_lang=<tgt_lang>, 
-    src_lang=<src_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<input_text>,
+    task_str="T2TT",
+    tgt_lang=<tgt_lang>,
+    src_lang=<src_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 
@@ -223,9 +223,9 @@ print(f"{tgt_lang}: {translated_text}")
 
 ```
 
-> [!NOTE]  
-> For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the 
-[SeamlessM4T v2 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2), the 
+> [!NOTE] 
+> For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the
+[SeamlessM4T v2 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2), the
 [SeamlessM4T v1 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/scripts_and_notebooks/blob/main/v2_seamless_m4t_hugging_face.ipynb).
 
 
