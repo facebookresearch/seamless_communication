@@ -7,38 +7,27 @@ The model can be specified with `--model_name` `seamlessM4T_v2_large`, `seamless
 
 **S2ST**:
 ```bash
-m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_large
+m4t_predict <path_to_input_audio> --task s2st --tgt_lang <tgt_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large
 ```
 
-**S2TT**:
+**S2TT:**
 ```bash
-m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang>
+m4t_predict <path_to_input_audio> --task s2tt --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large
 ```
 
-**T2TT**:
+**T2TT:**
 ```bash
-m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang>
+m4t_predict <input_text> --task t2tt --tgt_lang <tgt_lang> --src_lang <src_lang> --model_name seamlessM4T_v2_large
 ```
 
-**T2ST**:
+**T2ST:**
 ```bash
-m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio>
-```
+m4t_predict <input_text> --task t2st --tgt_lang <tgt_lang> --src_lang <src_lang> --output_path <path_to_save_audio> --model_name seamlessM4T_v2_large
 
-**ASR**:
+```
+**ASR:**
 ```bash
-m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang>
-```
-Please set --ngram-filtering to True to get the same translation performance as the [demo](https://seamless.metademolab.com/).
-
-The input audio must be 16kHz currently. Here's how you could resample your audio:
-```python
-import torchaudio
-resample_rate = 16000
-waveform, sample_rate = torchaudio.load(<path_to_input_audio>)
-resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
-resampled_waveform = resampler(waveform)
-torchaudio.save(<path_to_resampled_audio>, resampled_waveform, resample_rate)
+m4t_predict <path_to_input_audio> --task asr --tgt_lang <tgt_lang> --model_name seamlessM4T_v2_large
 ```
 ## Inference breakdown
 
@@ -53,7 +42,6 @@ and a vocoder:
 
 ```python
 import torch
-import torchaudio
 from seamless_communication.inference import Translator
 
 
@@ -66,24 +54,24 @@ Now `predict()` can be used to run inference as many times on any of the support
 Given an input audio with `<path_to_input_audio>` or an input text `<input_text>` in `<src_lang>`,
 we first set the `text_generation_opts`, `unit_generation_opts` and then translate into `<tgt_lang>` as follows:
 
-## S2ST and T2ST:
+**S2ST and T2ST (speech output):**
 
 ```python
 # S2ST
 text_output, speech_output = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="S2ST", 
-    tgt_lang=<tgt_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="S2ST",
+    tgt_lang=<tgt_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=unit_generation_opts
 )
 
 # T2ST
 text_output, speech_output = translator.predict(
-    input=<input_text>, 
-    task_str="T2ST", 
-    tgt_lang=<tgt_lang>, 
-    src_lang=<src_lang>, 
+    input=<input_text>,
+    task_str="T2ST",
+    tgt_lang=<tgt_lang>,
+    src_lang=<src_lang>,
     text_generation_opts=text_generation_opts,
     unit_generation_opts=unit_generation_opts
 )
@@ -94,42 +82,43 @@ Note that `<src_lang>` must be specified for T2ST.
 The generated units are synthesized and the output audio file is saved with:
 
 ```python
-# Save the translated audio generation.
+# Save the translated audio output:
+import torchaudio
 torchaudio.save(
     <path_to_save_audio>,
     speech_output.audio_wavs[0][0].cpu(),
     sample_rate=speech_output.sample_rate,
 )
 ```
-## S2TT, T2TT and ASR:
+**S2TT, T2TT and ASR (text output):**
 
 ```python
 # S2TT
 text_output, _ = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="S2TT", 
-    tgt_lang=<tgt_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="S2TT",
+    tgt_lang=<tgt_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 
 # ASR
 # This is equivalent to S2TT with `<tgt_lang>=<src_lang>`.
     text_output, _ = translator.predict(
-    input=<path_to_input_audio>, 
-    task_str="ASR", 
-    tgt_lang=<src_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<path_to_input_audio>,
+    task_str="ASR",
+    tgt_lang=<src_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 
 # T2TT
 text_output, _ = translator.predict(
-    input=<input_text>, 
-    task_str="T2TT", 
-    tgt_lang=<tgt_lang>, 
-    src_lang=<src_lang>, 
-    text_generation_opts=text_generation_opts, 
+    input=<input_text>,
+    task_str="T2TT",
+    tgt_lang=<tgt_lang>,
+    src_lang=<src_lang>,
+    text_generation_opts=text_generation_opts,
     unit_generation_opts=None
 )
 

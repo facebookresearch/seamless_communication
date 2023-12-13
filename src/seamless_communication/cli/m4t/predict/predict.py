@@ -214,8 +214,17 @@ def main() -> None:
         f"unit_generation_ngram_filtering={args.unit_generation_ngram_filtering}"
     )
 
+    # If the input is audio, resample to 16kHz
+    if args.task.upper() in {"S2ST", "T2ST"}:
+        wav, sample_rate = torchaudio.load(args.input)
+        translator_input = torchaudio.functional.resample(
+            wav, orig_freq=sample_rate, new_freq=16_000
+        )
+    else:
+        translator_input = args.input
+
     text_output, speech_output = translator.predict(
-        args.input,
+        translator_input,
         args.task,
         args.tgt_lang,
         src_lang=args.src_lang,
