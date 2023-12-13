@@ -223,7 +223,7 @@ print(f"{tgt_lang}: {translated_text}")
 
 ```
 
-> [!NOTE] 
+> [!NOTE]
 > For more details on using the SeamlessM4T model for inference using the 🤗 Transformers library, refer to the
 [SeamlessM4T v2 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2), the
 [SeamlessM4T v1 docs](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t) or to this hands-on [Google Colab](https://colab.research.google.com/github/ylacombe/scripts_and_notebooks/blob/main/v2_seamless_m4t_hugging_face.ipynb).
@@ -380,4 +380,3 @@ For SeamlessM4T v2, please cite :
   year={2023}
 }
 ```
-
