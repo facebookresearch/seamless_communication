@@ -218,9 +218,7 @@ def main() -> None:
     if args.task.upper() in {"S2ST", "T2ST"}:
         wav, sample_rate = torchaudio.load(args.input)
         translator_input = torchaudio.functional.resample(
-            wav,
-            orig_freq=sample_rate,
-            new_freq=16_000
+            wav, orig_freq=sample_rate, new_freq=16_000
         )
     else:
         translator_input = args.input
