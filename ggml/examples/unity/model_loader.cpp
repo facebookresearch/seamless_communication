@@ -39,12 +39,17 @@ std::int64_t
 model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 {
     std::int64_t num_tensor = 0;
-    std::int64_t ctx_size = 0;
+    std::int64_t f32_ctx_size = 0;
+    std::int64_t f16_ctx_size = 0;
     fin.read((char*) &num_tensor, sizeof(num_tensor));
-    fin.read((char*) &ctx_size, sizeof(ctx_size));
+    fin.read((char*) &f32_ctx_size, sizeof(f32_ctx_size));
+    fin.read((char*) &f16_ctx_size, sizeof(f16_ctx_size));
+
+    // TODO: it might be intersting to allow the caller to not upcast the weights to float32.
+    bool as_float32 = true;
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ ctx_size,
+        /*.mem_size   =*/ as_float32 ? f32_ctx_size : f16_ctx_size,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
@@ -55,7 +60,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         std::string name = get_name(fin);
         if (name.length() == 0)
             break;
-        auto tensor = load_tensor_value(fin, model.tensors_ctx);
+        auto tensor = load_tensor_value(fin, model.tensors_ctx, as_float32);
         if (tensor == nullptr) {
             // Abort in case of error, the input stream is corrupted at this point.
             printf("Error while reading tensor %s\n", name.c_str() );
@@ -75,10 +80,10 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
         __func__,
         model_size / mb,
         ggml_used_mem(model.tensors_ctx) / mb,
-        ctx_size / mb
+        ggml_get_mem_size(model.tensors_ctx) / mb
     );
 
-    return ctx_size;
+    return ggml_get_mem_size(model.tensors_ctx);
 }
 
 void assert_endianness() {
@@ -139,9 +144,9 @@ void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
     std::int64_t ctx_size = vocab_size * sizeof(float) + vocab_size + 2 * ggml_tensor_overhead();
     ctx_size *= 2;
     ggml_context* ctx = ggml_init(ggml_init_params{ctx_size, nullptr, false});
-    ggml_tensor* lengths_tensor = load_tensor_value(fin, ctx);
+    ggml_tensor* lengths_tensor = load_tensor_value(fin, ctx, true);
     std::int8_t* lengths = (std::int8_t*)lengths_tensor->data;
-    ggml_tensor* scores_tensor = load_tensor_value(fin, ctx);
+    ggml_tensor* scores_tensor = load_tensor_value(fin, ctx, true);
     float* scores = ggml_get_data_f32(scores_tensor);
 
     int64_t offset = 0;
@@ -159,7 +164,7 @@ void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
     // TODO: special tokens stuff ?
 }
 
-ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
+ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx, bool as_float32)
 {
     int32_t n_dims = 0;
     int32_t raw_type = 0;
@@ -176,8 +181,21 @@ ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx)
         fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
     }
 
-    ggml_tensor* tensor = ggml_new_tensor(ctx, type, n_dims, ne);
-    fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
+    ggml_tensor* tensor;
+    if (as_float32 && type == GGML_TYPE_F16) {
+        // read quantized weights from disk, and convert them to f32.
+        tensor = ggml_new_tensor(ctx, GGML_TYPE_F32, n_dims, ne);
+        ggml_fp16_t buf[128];
+        int num_el = ggml_nelements(tensor);
+        for (int i = 0; i < num_el; i += 128) {
+            int block_size = std::min(128, num_el - i);
+            fin.read(reinterpret_cast<char *>(&buf), ggml_type_size(type) * block_size);
+            ggml_fp16_to_fp32_row((const ggml_fp16_t*)&buf, (float*)tensor->data + i, block_size);
+        }
+    } else {
+        tensor = ggml_new_tensor(ctx, type, n_dims, ne);
+        fin.read(reinterpret_cast<char *>(tensor->data), ggml_nbytes(tensor));
+    }
     return tensor;
 }
 
