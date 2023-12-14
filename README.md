@@ -22,6 +22,9 @@ Seamless is a family of AI models that enable more natural and authentic communi
 ### Blog
 [AI at Meta Blog](https://ai.meta.com/research/seamless-communication/)
 
+## Tutorial
+An exhaustive [tutorial](Seamless_Tutorial.ipynb) given at the NeurIPS 2023 - Seamless EXPO, which is a one-stop shop to learn how to use the entire suite of Seamless models. Please feel free to play with the notebook.
+
 ## SeamlessM4T
 SeamlessM4T is our foundational all-in-one **M**assively **M**ultilingual and **M**ultimodal **M**achine **T**ranslation model delivering high-quality translation for speech and text in nearly 100 languages.
 
