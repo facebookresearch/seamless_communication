@@ -235,7 +235,9 @@ def write_state_dict(
     compressed_byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
 
     out.write(struct.pack("<q", true_byte_size))
-    out.write(struct.pack("<q", compressed_byte_size))
+    # TODO: it could be interesting to write this to allow model_loader to chose the precision when loading.
+    # But changing this require republishing .ggml files
+    # out.write(struct.pack("<q", compressed_byte_size))
     GB = 1024**3
     if fp16:
         log.warning(
