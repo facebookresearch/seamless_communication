@@ -6,27 +6,27 @@
 
 import ctypes
 import functools
+import shutil
 from ctypes import c_void_p
 from pathlib import Path
-from typing import Any, Iterator, List, Tuple
-
-import ggml
+from typing import Any, Iterator, Tuple
 
 import fairseq2.nn
 import fairseq2.nn.transformer
 import numpy as np
 import pytest
+import requests  # type: ignore
 import torch
-import torchaudio
-from fairseq2.data.audio import WaveformToFbankConverter
-from seamless_communication.inference.generator import SequenceGeneratorOptions
-from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
-from seamless_communication.inference.translator import Modality, Translator
-
+import torchaudio  # type: ignore
 from ctypes_utils import NULLPTR, Ptr
-from ggml import NativeObj
+from fairseq2.data.audio import WaveformToFbankConverter
+from fairseq2.models.wav2vec2.feature_extractor import Wav2Vec2FbankFeatureExtractor
 from ggml_convert import convert_model, read_layer_config
-import requests
+
+import ggml
+from ggml import NativeObj
+from seamless_communication.inference.generator import SequenceGeneratorOptions
+from seamless_communication.inference.translator import Modality, Translator
 
 Ctx = ggml.ggml_context_p
 
@@ -57,6 +57,10 @@ def _ctx() -> Iterator[Ctx]:
                 no_alloc=True,
             )
         )
+
+        # Create 'dot' folder for temporary dump of ggml graphs
+        (Path(__file__).parent / "dot").mkdir(exist_ok=True)
+
         with torch.inference_mode():
             yield ctx
     finally:
@@ -88,6 +92,7 @@ def load_pt_model() -> Any:
 
 
 def download_sample_audio() -> Any:
+    Path(DATA).mkdir(exist_ok=True)
     response = requests.get(TEST_AUDIO_SAMPLE_URL, stream=True)
     with open(DATA / "LJ037-0171_sr16k.wav", "wb") as file:
         for chunk in response.iter_content(chunk_size=1024):
@@ -159,7 +164,7 @@ def test_Linear_forward(ctx: Ctx, g_model: c_void_p) -> None:
     y_exp = pt_model.text_encoder.layers[0].ffn.inner_proj(x).numpy()
     gx = ggml.from_numpy(ctx, x)
     gy = ggml.forward("Linear", g_model, "text_encoder.layers.0.ffn.inner_proj", gx)
-    gf = ggml.build_and_compute(ctx, gy, dump="dot/test_Linear_forward.dot")
+    ggml.build_and_compute(ctx, gy, dump="dot/test_Linear_forward.dot")
 
     y = ggml.to_numpy(gy)
     assert np.allclose(y_exp, y, atol=1e-5)
@@ -592,7 +597,7 @@ def test_PositionalEmbedding_forward_with_cache(ctx: Ctx, g_model: c_void_p) -> 
                 "text_decoder_frontend.pos_encoder",
                 gseq,
             )
-            gf = ggml.build_and_compute(ctx, gy, dump=t == 1)
+            ggml.build_and_compute(ctx, gy, dump=t == 1)
             y = ggml.to_numpy(gy)
 
             y_exp = pos_encoder(seq[:, t : t + 1, :], None, state_bag=state_bag).numpy()
