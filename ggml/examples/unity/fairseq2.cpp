@@ -11,6 +11,8 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 
+#include <numeric> 
+
 ggml_tensor* ggml_detach(ggml_tensor* a) {
     a->op = GGML_OP_NONE;
     std::fill(a->src, a->src + GGML_MAX_SRC, nullptr);
@@ -1166,15 +1168,18 @@ ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int6
     return y;
 }
 
-extern "C" void _bootstrap_seqs_and_scores(
+void _bootstrap_seqs_and_scores( 
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* full_seqs,
     ggml_tensor* scores,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    int n_threads
+    ggml_tensor* lid_scores,
+    int n_threads,
+    const std::vector<int>& lang_ids
 ) {
+    // Returns LID score map
     int prefix_seq_len = job.prefix_seq->ne[0];
     int max_seq_len = scores->ne[0];
     int beam_size = scores->ne[1];
@@ -1210,12 +1215,32 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_slice(ctx, logits, 1, 0, 1));
 
     ggml_cgraph gf = ggml_build_forward(lprobs);
-    ggml_graph_compute_with_ctx(ctx, &gf, 1);
+    ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
+
+    full_seqs->type = GGML_TYPE_I32;
+    job.prefix_seq->type = GGML_TYPE_I32;
+    // For LID
+    for (size_t i = 0; i < lang_ids.size(); ++i) {
+        ggml_set_f32_1d(lid_scores, i, std::exp(ggml_get_f32_1d(lprobs, lang_ids[i]))); 
+    }
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
     for (int i = 1; i < prefix_seq_len; ++i) {
-        int p = ggml_get_i32_1d(job.prefix_seq, i);
+        int p;
+        if (ggml_get_i32_1d(job.prefix_seq, i) == model.vocab.token_to_id["<unk>"]) {
+            // If tgt_lang is unk, use the most probable lang tag predicted by model
+            int max_value = std::numeric_limits<float>::min();
+            for (int j = 0; j < lang_ids.size(); j++) {
+                if(ggml_get_f32_1d(lprobs, lang_ids[j]) > max_value) {
+                    max_value = ggml_get_f32_1d(lprobs, lang_ids[j]);
+                    p = lang_ids[j];
+                }
+            }
+        } else {
+            p = ggml_get_i32_1d(job.prefix_seq, i);
+        }
+        
         p_score += ggml_get_f32_1d(lprobs, i * vocab_size + p);
         for (int b = 0; b < beam_size; ++b) {
             // scores: (N, S)
@@ -1296,6 +1321,7 @@ void _finalize_hypothesis(
     float eos_score,
     ggml_tensor* seqs, // (beam_size, seq_len)
     ggml_tensor* scores, // (beam_size, seq_len)
+    ggml_tensor* lid_scores,
     Hypothesis* hypothesis
 ) {
     ggml_tensor* seq = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
@@ -1323,6 +1349,7 @@ void _finalize_hypothesis(
         // Skip first EOS since it is always 0 and skews normalization.
         eos_score /= (float)std::pow((step_nr + 1), job.opts.len_penalty);
     hypothesis->score = eos_score;
+    hypothesis->lid_scores = lid_scores;
 }
 
 // Uses ggml_context to store any object.
@@ -1346,6 +1373,7 @@ ggml_allocr* new_arena_allocr(std::vector<uint8_t>& buffer) {
 
 /// Generates a translation for a single sequence
 /// The results Hypothesis are written inside `result_ctx`.
+/// If <unk> is set as lang_tok, sequence generator first predicts a lang_tok and use it for subsequent decoding. 
 extern "C" Hypothesis* generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
@@ -1370,6 +1398,14 @@ extern "C" Hypothesis* generate_sequence(
         std::vector<uint8_t>(256 * 1024 * 1024),  // step_alloc
     };
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
+
+    std::vector<int> lang_ids;
+    for (const auto& kv : model.vocab.token_to_id) {
+        if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
+            lang_ids.push_back(kv.second);
+        }
+    }
+    std::sort(lang_ids.begin(), lang_ids.end());
 
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
@@ -1400,10 +1436,8 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* scores = ggml_new_tensor_2d(search_ctx, GGML_TYPE_F32, max_seq_len, beam_size);
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
-
     int prefix_seq_len = job.prefix_seq->ne[0];
     int start_step = prefix_seq_len - 1;
-
     ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
     ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
     GGML_ASSERT(step_ctx != search_ctx);
@@ -1411,8 +1445,9 @@ extern "C" Hypothesis* generate_sequence(
     model.ctx = prev_step_ctx;
     // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
     model.kv_cache_ctx = search_ctx;
+    ggml_tensor* lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
     _bootstrap_seqs_and_scores(
-        model, job, seqs, scores, encoder_output, encoder_padding_mask, n_threads
+        model, job, seqs, scores, encoder_output, encoder_padding_mask, lid_scores, n_threads, lang_ids
     );
 
     // Holds the indices of beams (a beam can occur more than once) that we
@@ -1431,8 +1466,26 @@ extern "C" Hypothesis* generate_sequence(
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         model.ctx = step_ctx;
         ggml_set_no_alloc(step_ctx, true); // Use allocr for the model forward pass
+        float max_lprob;
+        int p;
+        if (step_nr == start_step) {
+            // Find the most probable lang_tok and assign it to all beams, when prefix_seq[1] is <unk>
+            if (ggml_get_i32_1d(job.prefix_seq, 1) == model.vocab.token_to_id["<unk>"]) {
+                float max_lprob = std::numeric_limits<float>::min();
+                for(int j = 0; j < lang_ids.size(); j++) {
+                    auto val = ggml_get_f32_1d(lid_scores, j);
+                    if (val > max_lprob) {
+                        max_lprob = val;
+                        p = lang_ids[j];
+                    }
+                }
+                for (int k = 0; k < beam_size; k++) {
+                    ggml_set_i32_1d(seqs, k * vocab_size + step_nr, p);
+                }
+            } 
+        }
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
-
+        
         ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
@@ -1454,7 +1507,7 @@ extern "C" Hypothesis* generate_sequence(
         ggml_cgraph gf = ggml_build_forward(lprobs);
         size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, &gf);
         GGML_UNUSED(fwd_mem);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, 1);
+        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
         ggml_detach(lprobs);
         ggml_allocr_reset(step_alloc);
 #if DEBUG_MEM_USAGE
@@ -1500,7 +1553,7 @@ extern "C" Hypothesis* generate_sequence(
             bool eos = token == job.eos_idx;
             eos &= tok_score != -INFINITY;
             if (eos) {
-                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches++);
+                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, lid_scores, finished_searches++);
                 if (finished_searches == finished_searches_end)
                     goto end_of_beam_search;
                 continue;
@@ -1521,7 +1574,7 @@ extern "C" Hypothesis* generate_sequence(
         ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
         ggml_build_forward_expand(&gf_reorder, new_scores);
         reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
-        ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, 1);
+        ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
 
@@ -1729,6 +1782,7 @@ extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, g
     spm.tokenize(std::string(text), out);
 }
 
+
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out) {
     int eos_idx = model->vocab.token_to_id["</s>"];
     int sent_len = tokens->ne[0];
@@ -1749,4 +1803,53 @@ extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tenso
     }
     *out = '0';
     return written;
+}
+
+
+// TODO: Unify with the above?
+std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out) {
+    int eos_idx = model->vocab.token_to_id["</s>"];
+    int sent_len = tokens->ne[0];
+    std::size_t written = 0;
+    std::vector<float> word_scores;
+    std::vector<float> subword_scores;
+    std::vector<std::string> result_text;
+    std::string curr_token = "";
+    for (int i = 0; i < sent_len; ++i) {
+        int id = ggml_get_i32_1d(tokens, i);
+        // Don't print the EOS token but only if it appear at the end.
+        if (i == sent_len - 1 && eos_idx == id) break;
+
+        std::string token = model->vocab.id_to_token.at(id).text;
+        float score = ggml_get_f32_1d(scores, i+2); // 2 is prefix size
+        if(token[0] == ' ') {
+            // reset word score
+            if(subword_scores.size() > 0) {
+                float avg = std::accumulate(subword_scores.begin(), subword_scores.end(), 0.0f) / subword_scores.size();
+                word_scores.push_back(avg);
+                subword_scores.clear();
+                result_text.push_back(curr_token);
+            }
+            curr_token = token.substr(1);
+        } else {
+            curr_token += token;
+        }
+        subword_scores.push_back(std::exp(score));
+        
+        // Skip the first space outputted.
+        auto begin = token.begin();
+        if (i == 0 && token.size() > 0 && token[0] == ' ') begin += 1;
+        std::copy(begin, token.end(), out);
+        std::size_t n = token.end() - begin;
+        written += n;
+        out += n;
+        
+    }
+    if(subword_scores.size() > 0) {
+        word_scores.push_back(*std::min_element(subword_scores.begin(), subword_scores.end()));
+        subword_scores.clear();
+        result_text.push_back(curr_token);
+    }
+    *out = '0';
+    return std::make_pair(result_text, word_scores);
 }

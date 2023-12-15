@@ -299,6 +299,9 @@ struct Hypothesis {
 
     /// The score of each individual sequence step.
     ggml_tensor* step_scores;
+
+    /// The score of each lang tok at first decoding step, serving as LID 
+    ggml_tensor* lid_scores;
 };
 
 
@@ -313,3 +316,5 @@ extern "C" Hypothesis* generate_sequence(
 
 extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out);
+std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out);
+
