@@ -219,33 +219,27 @@ def write_state_dict(
         convert float32 tensors to float16 on disk
     """
     out.write(struct.pack("<q", len(state_dict)))
-    # True size of each tensor
+    # True size of each tensor (before downcasting to float16)
     true_byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
-    # + tensor overhead
-    true_byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
-
-    def _fp16_byte_size(x: torch.Tensor) -> int:
-        full_byte_size = x.numel() * x.element_size()
-        if fp16 and x.dtype == torch.float32:
-            full_byte_size //= 2
-        return full_byte_size
-
-    # Compressed size
-    compressed_byte_size = sum(_fp16_byte_size(x) for x in state_dict.values())
-    compressed_byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
-
     out.write(struct.pack("<q", true_byte_size))
-    # TODO: it could be interesting to write this to allow model_loader to chose the precision when loading.
-    # But changing this require republishing .ggml files
-    # out.write(struct.pack("<q", compressed_byte_size))
+
     GB = 1024**3
-    if fp16:
-        log.warning(
-            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb compressed to {compressed_byte_size / GB:.3f}"
-        )
-    else:
+    if not fp16:
         log.warning(
             f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb"
+        )
+    else:
+
+        def _fp16_byte_size(x: torch.Tensor) -> int:
+            full_byte_size = x.numel() * x.element_size()
+            if fp16 and x.dtype == torch.float32:
+                full_byte_size //= 2
+            return full_byte_size
+
+        # Compressed size
+        compressed_byte_size = sum(_fp16_byte_size(x) for x in state_dict.values())
+        log.warning(
+            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb compressed to {compressed_byte_size / GB:.3f}"
         )
 
     for key, value in state_dict.items():

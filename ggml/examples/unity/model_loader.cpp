@@ -39,18 +39,15 @@ std::int64_t
 model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
 {
     std::int64_t num_tensor = 0;
-    std::int64_t f32_ctx_size = 0;
+    std::int64_t f32_tensor_size = 0;
     fin.read((char*) &num_tensor, sizeof(num_tensor));
-    fin.read((char*) &f32_ctx_size, sizeof(f32_ctx_size));
+    fin.read((char*) &f32_tensor_size, sizeof(f32_tensor_size));
 
     // TODO: it might be interesting to allow the caller to not upcast the weights to float32.
     // Note this require changing the on disk format
     bool as_float32 = true;
-    std::int64_t f16_ctx_size = f32_ctx_size;
-    // fin.read((char*) &f16_ctx_size, sizeof(f16_ctx_size));
-
     struct ggml_init_params params = {
-        /*.mem_size   =*/ as_float32 ? f32_ctx_size : f16_ctx_size,
+        /*.mem_size   =*/ f32_tensor_size + num_tensor * (int64_t)ggml_tensor_overhead(),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
