@@ -43,10 +43,10 @@ from seamless_communication.models.unity.t2u_builder import (
     UnitYT2UConfig,
     unity_t2u_archs,
 )
-from seamless_communication.models.wav2vec2_chunk import (
-    Wav2Vec2ChunkEncoderBuilder,
-    Wav2Vec2ChunkEncoderConfig,
-    wav2vec2_chunk_archs,
+from seamless_communication.models.conformer_shaw import (
+    ConformerShawEncoderBuilder,
+    ConformerShawEncoderConfig,
+    conformer_shaw_archs,
 )
 
 
@@ -163,7 +163,7 @@ def _medium() -> UnitYConfig:
 
 @unity_arch("base_v2")
 def _base_v2() -> UnitYConfig:
-    w2v2_chunk_encoder_config = wav2vec2_chunk_archs.get_config("600m")
+    conformer_shaw_encoder_config = conformer_shaw_archs.get_config("600m")
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
 
@@ -175,7 +175,7 @@ def _base_v2() -> UnitYConfig:
 
     return UnitYConfig(
         model_dim=1024,
-        w2v2_encoder_config=w2v2_chunk_encoder_config,
+        w2v2_encoder_config=conformer_shaw_encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
         prosody_encoder_config=None,
@@ -193,7 +193,7 @@ def _base_v2() -> UnitYConfig:
 
 @unity_arch("expressivity_v2")
 def _expressivity_v2() -> UnitYConfig:
-    w2v2_chunk_encoder_config = wav2vec2_chunk_archs.get_config("600m")
+    conformer_shaw_encoder_config = conformer_shaw_archs.get_config("600m")
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
 
@@ -207,7 +207,7 @@ def _expressivity_v2() -> UnitYConfig:
 
     return UnitYConfig(
         model_dim=1024,
-        w2v2_encoder_config=w2v2_chunk_encoder_config,
+        w2v2_encoder_config=conformer_shaw_encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
         prosody_encoder_config=prosody_encoder_config,
@@ -470,8 +470,8 @@ def create_unity_model(
     :param dtype:
         The data type of module parameters and buffers.
     """
-    if isinstance(config.w2v2_encoder_config, Wav2Vec2ChunkEncoderConfig):
-        w2v2_encoder_builder: Wav2Vec2EncoderBuilder = Wav2Vec2ChunkEncoderBuilder(
+    if isinstance(config.w2v2_encoder_config, ConformerShawEncoderConfig):
+        w2v2_encoder_builder: Wav2Vec2EncoderBuilder = ConformerShawEncoderBuilder(
             config.w2v2_encoder_config, device=device, dtype=dtype
         )
     else:
