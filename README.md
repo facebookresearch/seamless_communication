@@ -65,6 +65,7 @@ To learn more about SeamlessStreaming models, visit the [SeamlessStreaming READM
 The Seamless model is the unified model for expressive streaming speech-to-speech translations.
 
 ## What's new
+- [12/14/2023] We are releasing the Seamless [tutorial](#tutorial) given at NeurIPS 2023.
 - [12/18/2023] We are open-sourcing our Conformer-based [W2v-BERT 2.0 speech encoder](#w2v-bert-20-speech-encoder) as described in Section 3.2.1 of the [paper](https://arxiv.org/pdf/2312.05187.pdf), which is at the core of our Seamless models.
 
 
