@@ -23,6 +23,7 @@ ggml_tensor* ggml_detach(ggml_tensor* a) {
 // when we read garbage data.
 // It also prints memory usage information, which is useful to
 #define DEBUG_MEM_USAGE DEBUG
+size_t MB = 1024 * 1024;
 
 void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
@@ -1367,11 +1368,13 @@ extern "C" Hypothesis* generate_sequence(
     // like encoder kv cache.
     // * step_alloc contains buffer for the forward pass of the model.
     // TODO: the size allocated should depend on the input length and vocab size
-    std::vector<uint8_t> local_bufs[5] = {
-        std::vector<uint8_t>(128 * 1024 * 1024),  // step_ctx
-        std::vector<uint8_t>(128 * 1024 * 1024),  // prev_step_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // search_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // step_alloc
+    // Split mem_mb into the different context we need to use.
+    int mem_mb = job.opts.mem_mb;
+    std::vector<uint8_t> local_bufs[4] = {
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // step_ctx
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // prev_step_ctx
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // search_ctx
+        std::vector<uint8_t>(mem_mb * MB * 1 / 10),  // step_alloc
     };
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
@@ -1463,7 +1466,7 @@ extern "C" Hypothesis* generate_sequence(
         ggml_allocr_reset(step_alloc);
 #if DEBUG_MEM_USAGE
         printf("beam search step %d. Graph.n_nodes: %d.\n", step_nr, gf.n_nodes);
-        printf("  Fwd mem: %.1fMB\n", fwd_mem/1024.0/1024.0);
+        printf("  Fwd mem: %.1fMB, reserved %.1fMb\n", fwd_mem/(double)MB, local_bufs[3].capacity()/(double)MB);
         std::fill(local_bufs[3].begin(), local_bufs[3].end(), 0xAA);
 #endif
         _tweak_lprobs(job, lprobs, step_nr, max_seq_len, vocab_size);
@@ -1520,14 +1523,17 @@ extern "C" Hypothesis* generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         // (B, S), (B) -> (B, S)
+        // don't use allocr API, cause it might reuse a kv cache buffer several time.
+        ggml_set_no_alloc(step_ctx, false);
         ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
         ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
         ggml_build_forward_expand(&gf_reorder, new_scores);
-        reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
+        reorder_kv_cache(model, step_ctx, beam_indices, n_threads);
         ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
+        // reorder_kv_cache(model, step_ctx, beam_indices, n_threads);
 
         // seqs[:, step_nr + 1] = next_tokens
         // scores[:, step_nr + 1] = next_scores
@@ -1536,7 +1542,8 @@ extern "C" Hypothesis* generate_sequence(
             ((float*)scores->data)[step_nr + 1 + i * max_seq_len] = ggml_get_f32_1d(next_scores, i);
         }
 
-        printf_mem_usage(step_ctx, "step_ctx");
+        printf_mem_usage(step_ctx, "  step_ctx");
+        printf_mem_usage(search_ctx, "  search_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
 #if DEBUG_MEM_USAGE
