@@ -7,4 +7,4 @@
 name: conformer_shaw
 model_type: wav2vec2
 model_arch: conformer_shaw_600m
-checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/conformer_shaw.pt"
+checkpoint: "https://huggingface.co/facebook/conformer-shaw/resolve/main/conformer_shaw.pt"
