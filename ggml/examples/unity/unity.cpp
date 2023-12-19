@@ -142,7 +142,7 @@ int main(int argc, char ** argv) {
     // The ctx_size_mb mostly depends of input length and model dim.
     int ctx_size_mb = params.opts.mem_mb;
     auto encoder_buf = std::vector<uint8_t>(8 * 1024 * 1024); // Only tensor metadata goes in there
-    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024 / 8);
+    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024 / 2);
     ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
     char result_str[4096];
 
@@ -189,11 +189,13 @@ int main(int argc, char ** argv) {
         ggml_set_no_alloc(model.ctx, true);
         GGML_ASSERT(info.samplerate == 16000);
         GGML_ASSERT(info.channels == 1);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
+        // stop at 30s. Ideally we should chunk input audio, but this will prevent most obvious OOM.
+        int n_frames = std::min(info.samplerate * 30, (int)info.frames);
+        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_frames, info.channels);
         ggml_allocr_alloc(fwd_alloc, seqs);
 
         // Load audio input
-        sf_readf_float(sndfile, (float*)seqs->data, info.frames);
+        sf_readf_float(sndfile, (float*)seqs->data, n_frames);
 
         // Audio encoder
         ggml_cgraph* gf = unity_speech_encoder(model, seqs);

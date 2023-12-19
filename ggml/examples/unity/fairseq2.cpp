@@ -29,7 +29,7 @@ void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
     double mb = 1024.0 * 1024.0;
     printf(
-        "ctx %s: memory used = %8.2f MB, memory reserved = %8.2f Mb\n",
+        "%s: memory used = %8.2f MB, memory reserved = %8.2f Mb\n",
         name.c_str(),
         ggml_used_mem(ctx) / mb,
         ggml_get_mem_size(ctx) / mb
@@ -108,6 +108,9 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
     ggml_context* ctx = model.kv_cache_ctx ? model.kv_cache_ctx : model.ctx;
+    // We need to force allocation here, otherwise the kv_cache buffers can be reused
+    bool no_alloc_save = ggml_get_no_alloc(ctx);
+    ggml_set_no_alloc(ctx, false);
     int n_steps = (*k)->ne[1];
     int k_proj, batch_size;
 
@@ -136,15 +139,15 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
 
     // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
     // we return the Sq slice of the (Sq, Sk) attention mask
-    *self_attn_mask = ggml_slice(
-        model.ctx,
-        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr),
-        1,
-        step_nr - 1,
-        step_nr
-    );
+    if (self_attn_mask != nullptr) {
+        *self_attn_mask = ggml_slice(
+            ctx, ggml_slice(ctx, kv.self_attn_mask, 0, 0, step_nr),
+            1, step_nr - 1, step_nr
+        );
+    }
 
     kv.step_nr = step_nr;
+    ggml_set_no_alloc(ctx, no_alloc_save);
 }
 
 // variant of ggml_get_rows that allows for a with more than 2 dims.
@@ -637,32 +640,19 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     // we store the results (fixed) in checkpoint as model.audio_enc_pos_enc_w and load directly.
     ggml_tensor* r = ggml_get_rows(ctx, model.tensors["speech_encoder.pos_enc"], rows);
     r = mul_mat(ctx, model.tensors[prefix + ".sdpa.r_proj.weight"], r);
-    r = ggml_dup(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            r,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S*2-1)),
-                        0, 2, 1, 3));
+    r = ggml_dup(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, r, 0, K_h), 0, 2, 1, 3));
 
     ggml_tensor* u_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.u_bias"], K_h, 1, H);
     ggml_tensor* v_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.v_bias"], K_h, 1, H);
 
     // self_attn: Permute QKV
 
-    ggml_tensor* Q = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Qcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    ggml_tensor* K = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Kcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    ggml_tensor* V = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Vcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        1, 2, 0, 3)); // (H * K_h, S) -> (K_h, H, S) -> (H, S, K_h)
+    // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
+    ggml_tensor* Q = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Qcur, 0, K_h), 0, 2, 1, 3));
+    // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
+    ggml_tensor* K = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Kcur, 0, K_h), 0, 2, 1, 3));
+    // (H * K_h, S) -> (K_h, H, S) -> (H, S, K_h)
+    ggml_tensor* V = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Vcur, 0, K_h), 1, 2, 0, 3));
 
 
     ggml_tensor* q_with_u_bias = ggml_add_inplace(ctx, ggml_dup(ctx, Q), u_bias); // (K_h, S, H)
@@ -670,7 +660,6 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
 
     ggml_tensor* ac = mul_mat(ctx, K, q_with_u_bias);
     ggml_tensor* bd = mul_mat(ctx, r, q_with_v_bias);
-
 
     // self_attn: shift_bd. Logic follows https://github.com/facebookresearch/fairseq2/blob/main/src/fairseq2/nn/transformer/relative_attention.py#L161
     bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // H, S, 2S-1
@@ -1367,7 +1356,6 @@ extern "C" Hypothesis* generate_sequence(
     // * search_ctx contains tensors that should live for the full search,
     // like encoder kv cache.
     // * step_alloc contains buffer for the forward pass of the model.
-    // TODO: the size allocated should depend on the input length and vocab size
     // Split mem_mb into the different context we need to use.
     int mem_mb = job.opts.mem_mb;
     std::vector<uint8_t> local_bufs[4] = {
@@ -1421,6 +1409,8 @@ extern "C" Hypothesis* generate_sequence(
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask, n_threads
     );
+    // Now we will only add self_attn.k_cache and those need to be resorted and copied at every step.
+    model.kv_cache_ctx = nullptr;
 
     // Holds the indices of beams (a beam can occur more than once) that we
     // should continue with in the next step.
@@ -1529,7 +1519,7 @@ extern "C" Hypothesis* generate_sequence(
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
         ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
         ggml_build_forward_expand(&gf_reorder, new_scores);
-        reorder_kv_cache(model, step_ctx, beam_indices, n_threads);
+        reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
         ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
@@ -1543,7 +1533,6 @@ extern "C" Hypothesis* generate_sequence(
         }
 
         printf_mem_usage(step_ctx, "  step_ctx");
-        printf_mem_usage(search_ctx, "  search_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
 #if DEBUG_MEM_USAGE
@@ -1560,6 +1549,7 @@ end_of_beam_search:
         [](Hypothesis a, Hypothesis b) { return a.score > b.score; }
     );
 
+    printf_mem_usage(search_ctx, "search_ctx");
     fairseq2_kv_cache_reset(model);
     model.ctx = original_ctx;
     return finished_searches_begin;
