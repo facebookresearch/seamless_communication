@@ -8,6 +8,9 @@ from seamless_communication.inference.generator import (
     SequenceGeneratorOptions as SequenceGeneratorOptions,
 )
 from seamless_communication.inference.generator import UnitYGenerator as UnitYGenerator
+from seamless_communication.inference.expressive_translator import (
+    ExpressiveTranslator as ExpressiveTranslator,
+)
 from seamless_communication.inference.translator import (
     BatchedSpeechOutput as BatchedSpeechOutput,
 )

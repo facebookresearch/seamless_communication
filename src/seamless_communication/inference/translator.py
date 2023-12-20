@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union, cast
 
 import torch
-import torch.nn as nn
+from torch.nn import Module
 from fairseq2.assets import asset_store
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater, SequenceData, StringLike
@@ -75,7 +75,7 @@ class BatchedSpeechOutput:
     """Sample rate of the audio waveforms."""
 
 
-class Translator(nn.Module):
+class Translator(Module):
     def __init__(
         self,
         model_name_or_card: Union[str, AssetCard],
