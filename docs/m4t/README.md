@@ -195,7 +195,7 @@ audio_array_from_audio = model.generate(**audio_inputs, tgt_lang="rus")[0].cpu()
 ```py
 from IPython.display import Audio
 
-sample_rate = model.sampling_rate
+sample_rate = model.config.sampling_rate
 Audio(audio_array_from_text, rate=sample_rate)
 Audio(audio_array_from_audio, rate=sample_rate)
 ```
@@ -206,7 +206,7 @@ Or save them as a `.wav` file using a third-party library, e.g. `torchaudio`:
 torchaudio.save(
     <path_to_save_audio>,
     audio_array_from_audio,  # or audio_array_from_text
-    sample_rate=model.sampling_rate,
+    sample_rate=model.config.sampling_rate,
 )
 ```
 2.  (bis) To run inference for text generating tasks (T2TT, ASR or S2TT), it is recommended to use [dedicated models](https://huggingface.co/docs/transformers/main/en/model_doc/seamless_m4t_v2#1-use-dedicated-models). With that, only the required sub-modules will be loaded. For exmaple, text-to-text translation from English to Bulgarian, is performed as follows:
