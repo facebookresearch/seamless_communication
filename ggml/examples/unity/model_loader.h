@@ -30,7 +30,7 @@ private:
     std::string get_name(std::ifstream &fin);
 };
 
-ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx);
+ggml_tensor* load_tensor_value(std::ifstream &fin, ggml_context* ctx, bool as_float32);
 
 std::ifstream open_ggml_file(const char* fname);
 
