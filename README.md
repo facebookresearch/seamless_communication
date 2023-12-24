@@ -171,6 +171,7 @@ import torch
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.memory import MemoryBlock
 from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.data import Collater
 from pathlib import Path
 from seamless_communication.models.conformer_shaw import load_conformer_shaw_model
 
