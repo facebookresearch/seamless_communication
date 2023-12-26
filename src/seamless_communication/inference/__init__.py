@@ -14,3 +14,5 @@ from seamless_communication.inference.translator import (
 from seamless_communication.inference.translator import Modality as Modality
 from seamless_communication.inference.translator import Task as Task
 from seamless_communication.inference.translator import Translator as Translator
+
+from seamless_communication.inference.transcriber import Transcriber as Transcriber
