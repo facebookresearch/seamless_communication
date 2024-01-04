@@ -25,7 +25,6 @@ from fairseq2.typing import DataType, Device
 from torch import Tensor
 from tqdm import tqdm
 
-
 from seamless_communication.cli.m4t.evaluate.evaluate import (
     adjust_output_for_corrupted_inputs,
     count_lines,
@@ -34,14 +33,9 @@ from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
-from seamless_communication.inference.pretssel_generator import (
-    PretsselGenerator,
-)
-from seamless_communication.inference import BatchedSpeechOutput, Translator
-from seamless_communication.models.unity import (
-    load_gcmvn_stats,
-    load_unity_unit_tokenizer,
-)
+from seamless_communication.inference import BatchedSpeechOutput, ExpressiveTranslator
+from seamless_communication.models.unity import load_unity_unit_tokenizer
+
 from seamless_communication.store import add_gated_assets
 
 logging.basicConfig(
@@ -56,8 +50,6 @@ def build_data_pipeline(
     args: Namespace,
     device: Device,
     dtype: DataType,
-    gcmvn_mean: Tensor,
-    gcmvn_std: Tensor,
 ) -> DataPipeline:
     with open(args.data_file, "r") as f:
         header = f.readline().strip("\n").split("\t")
@@ -90,15 +82,8 @@ def build_data_pipeline(
         dtype=dtype,
     )
 
-    def normalize_fbank(data: WaveformToFbankOutput) -> WaveformToFbankOutput:
-        fbank = data["fbank"]
-        std, mean = torch.std_mean(fbank, dim=0)
-        data["fbank"] = fbank.subtract(mean).divide(std)
-        data["gcmvn_fbank"] = fbank.subtract(gcmvn_mean).divide(gcmvn_std)
-        return data
-
     pipeline_builder.map(
-        [decode_audio, convert_to_fbank, normalize_fbank],
+        [decode_audio, convert_to_fbank],
         selector=f"{args.audio_field}.data",
         num_parallel_calls=n_parallel,
     )
@@ -177,17 +162,10 @@ def main() -> None:
 
     unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
 
-    _gcmvn_mean, _gcmvn_std = load_gcmvn_stats(args.vocoder_name)
-    gcmvn_mean = torch.tensor(_gcmvn_mean, device=device, dtype=dtype)
-    gcmvn_std = torch.tensor(_gcmvn_std, device=device, dtype=dtype)
+    pipeline = build_data_pipeline(args, device, dtype)
 
-    pipeline = build_data_pipeline(args, device, dtype, gcmvn_mean, gcmvn_std)
-
-    translator = Translator(
-        args.model_name,
-        vocoder_name_or_card=None,
-        device=device,
-        dtype=dtype,
+    expressive_translator = ExpressiveTranslator(
+        args.model_name, args.vocoder_name, device, dtype
     )
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
@@ -196,13 +174,6 @@ def main() -> None:
     logger.info(f"{unit_generation_opts=}")
     logger.info(
         f"unit_generation_ngram_filtering={args.unit_generation_ngram_filtering}"
-    )
-
-    pretssel_generator = PretsselGenerator(
-        args.vocoder_name,
-        vocab_info=unit_tokenizer.vocab_info,
-        device=device,
-        dtype=dtype,
     )
 
     total_steps = count_lines(args.data_file) - 1
@@ -241,28 +212,16 @@ def main() -> None:
                 src["seqs"] = src["seqs"][valid_sequences]
                 src["seq_lens"] = src["seq_lens"][valid_sequences]
 
-            # Skip performing inference when the input is entirely corrupted.
+            # Skip inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                prosody_encoder_input = example[args.audio_field]["data"]["gcmvn_fbank"]
-                text_output, unit_output = translator.predict(
+                text_output, speech_output = expressive_translator.predict(
                     src,
-                    "s2st",
                     args.tgt_lang,
-                    src_lang=args.src_lang,
-                    text_generation_opts=text_generation_opts,
-                    unit_generation_opts=unit_generation_opts,
-                    unit_generation_ngram_filtering=args.unit_generation_ngram_filtering,
-                    duration_factor=args.duration_factor,
-                    prosody_encoder_input=prosody_encoder_input,
+                    text_generation_opts,
+                    unit_generation_opts,
+                    args.unit_generation_ngram_filtering,
+                    args.duration_factor,
                 )
-
-                assert unit_output is not None
-                speech_output = pretssel_generator.predict(
-                    unit_output.units,
-                    tgt_lang=args.tgt_lang,
-                    prosody_encoder_input=prosody_encoder_input,
-                )
-
             else:
                 text_output = []
                 speech_output = BatchedSpeechOutput(units=[], audio_wavs=[])
@@ -274,7 +233,7 @@ def main() -> None:
                     speech_output,
                 )
 
-            hyps += [str(s) for s in text_output]
+            hyps += [s for s in text_output]
             if args.ref_field is not None and args.ref_field in example:
                 refs += [str(s) for s in example[args.ref_field]]
 

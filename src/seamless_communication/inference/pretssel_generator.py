@@ -18,7 +18,7 @@ from fairseq2.data import (
 )
 from fairseq2.nn.padding import get_seqs_and_padding_mask
 
-from seamless_communication.inference import BatchedSpeechOutput
+from seamless_communication.inference.translator import BatchedSpeechOutput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 
 

@@ -12,7 +12,7 @@ import torch
 from torch.nn import functional as F
 
 
-from seamless_communication.inference import SequenceGeneratorOptions
+from seamless_communication.inference.generator import SequenceGeneratorOptions
 from seamless_communication.toxicity.etox_bad_word_checker import (
     ETOXBadWordChecker,
 )

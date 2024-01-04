@@ -6,9 +6,10 @@
 
 import argparse
 import logging
+from pathlib import Path
+
 import torch
 import torchaudio
-from pathlib import Path
 
 from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
@@ -16,7 +17,6 @@ from seamless_communication.cli.m4t.predict import (
 )
 from seamless_communication.inference import ExpressiveTranslator
 from seamless_communication.store import add_gated_assets
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,8 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Running SeamlessExpressive inference.")
-    parser.add_argument("input", type=str, help="Audio WAV file path.")
+    parser = argparse.ArgumentParser(
+        description="Running SeamlessExpressive inference."
+    )
+    parser.add_argument("input", type=Path, help="Audio WAV file path.")
 
     parser = add_inference_arguments(parser)
     parser.add_argument(
@@ -49,10 +51,10 @@ def main() -> None:
         raise Exception(
             "--tgt_lang, --output_path must be provided for SeamlessExpressive inference."
         )
-        
+
     if args.gated_model_dir:
         add_gated_assets(args.gated_model_dir)
-    
+
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
         dtype = torch.float16
@@ -63,10 +65,7 @@ def main() -> None:
     logger.info(f"Running inference on {device=} with {dtype=}.")
 
     expressive_translator = ExpressiveTranslator(
-        args.model_name,
-        args.vocoder_name,
-        device,
-        dtype
+        args.model_name, args.vocoder_name, device, dtype
     )
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
@@ -77,7 +76,7 @@ def main() -> None:
         f"unit_generation_ngram_filtering={args.unit_generation_ngram_filtering}"
     )
 
-    speech_output, text_output = expressive_translator.predict(
+    text_output, speech_output = expressive_translator.predict(
         args.input,
         args.tgt_lang,
         text_generation_opts,
