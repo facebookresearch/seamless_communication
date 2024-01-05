@@ -11,7 +11,7 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 
-#include <numeric> 
+#include <numeric>
 
 ggml_tensor* ggml_detach(ggml_tensor* a) {
     a->op = GGML_OP_NONE;
@@ -25,12 +25,13 @@ ggml_tensor* ggml_detach(ggml_tensor* a) {
 // when we read garbage data.
 // It also prints memory usage information, which is useful to
 #define DEBUG_MEM_USAGE DEBUG
+size_t MB = 1024 * 1024;
 
 void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
     double mb = 1024.0 * 1024.0;
     printf(
-        "ctx %s: memory used = %8.2f MB, memory reserved = %8.2f Mb\n",
+        "%s: memory used = %8.2f MB, memory reserved = %8.2f Mb\n",
         name.c_str(),
         ggml_used_mem(ctx) / mb,
         ggml_get_mem_size(ctx) / mb
@@ -109,6 +110,9 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
     ggml_context* ctx = model.kv_cache_ctx ? model.kv_cache_ctx : model.ctx;
+    // We need to force allocation here, otherwise the kv_cache buffers can be reused
+    bool no_alloc_save = ggml_get_no_alloc(ctx);
+    ggml_set_no_alloc(ctx, false);
     int n_steps = (*k)->ne[1];
     int k_proj, batch_size;
 
@@ -137,15 +141,15 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
 
     // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
     // we return the Sq slice of the (Sq, Sk) attention mask
-    *self_attn_mask = ggml_slice(
-        model.ctx,
-        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr),
-        1,
-        step_nr - 1,
-        step_nr
-    );
+    if (self_attn_mask != nullptr) {
+        *self_attn_mask = ggml_slice(
+            ctx, ggml_slice(ctx, kv.self_attn_mask, 0, 0, step_nr),
+            1, step_nr - 1, step_nr
+        );
+    }
 
     kv.step_nr = step_nr;
+    ggml_set_no_alloc(ctx, no_alloc_save);
 }
 
 // variant of ggml_get_rows that allows for a with more than 2 dims.
@@ -212,7 +216,7 @@ extern "C" std::int64_t fairseq2_model_layer_config_int(const fairseq2_model& mo
 
 extern "C" void fairseq2_model_free(fairseq2_model* model) {
     if (model->tensors_ctx) ggml_free(model->tensors_ctx);
-    delete model;
+    // delete model;
 }
 
 extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx) {
@@ -634,32 +638,19 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
     // we store the results (fixed) in checkpoint as model.audio_enc_pos_enc_w and load directly.
     ggml_tensor* r = ggml_get_rows(ctx, model.tensors["speech_encoder.pos_enc"], rows);
     r = mul_mat(ctx, model.tensors[prefix + ".sdpa.r_proj.weight"], r);
-    r = ggml_dup(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            r,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S*2-1)),
-                        0, 2, 1, 3));
+    r = ggml_dup(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, r, 0, K_h), 0, 2, 1, 3));
 
     ggml_tensor* u_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.u_bias"], K_h, 1, H);
     ggml_tensor* v_bias = ggml_reshape_3d(ctx, model.tensors[prefix + ".sdpa.v_bias"], K_h, 1, H);
 
     // self_attn: Permute QKV
 
-    ggml_tensor* Q = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Qcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    ggml_tensor* K = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Kcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        0, 2, 1, 3)); // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
-    ggml_tensor* V = ggml_cont(ctx, ggml_permute(ctx,
-                        ggml_cpy(ctx,
-                            Vcur,
-                            ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K_h, H, S)),
-                        1, 2, 0, 3)); // (H * K_h, S) -> (K_h, H, S) -> (H, S, K_h)
+    // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
+    ggml_tensor* Q = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Qcur, 0, K_h), 0, 2, 1, 3));
+    // (H * K_h, S) -> (K_h, H, S) -> (K_h, S, H)
+    ggml_tensor* K = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Kcur, 0, K_h), 0, 2, 1, 3));
+    // (H * K_h, S) -> (K_h, H, S) -> (H, S, K_h)
+    ggml_tensor* V = ggml_cont(ctx, ggml_permute(ctx, ggml_unflatten_1d(ctx, Vcur, 0, K_h), 1, 2, 0, 3));
 
 
     ggml_tensor* q_with_u_bias = ggml_add_inplace(ctx, ggml_dup(ctx, Q), u_bias); // (K_h, S, H)
@@ -667,7 +658,6 @@ extern "C" ggml_tensor* RelativePositionMHA_forward(
 
     ggml_tensor* ac = mul_mat(ctx, K, q_with_u_bias);
     ggml_tensor* bd = mul_mat(ctx, r, q_with_v_bias);
-
 
     // self_attn: shift_bd. Logic follows https://github.com/facebookresearch/fairseq2/blob/main/src/fairseq2/nn/transformer/relative_attention.py#L161
     bd = ggml_dup(ctx, ggml_permute(ctx, bd, 2, 1, 0, 3)); // H, S, 2S-1
@@ -722,6 +712,7 @@ extern "C" ggml_tensor* ConvModule_forward(
         seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
 
         // S x C -> (S+K-1) x C -> K x S x C -> S x C
+
         seqs = ggml_conv_1d(ctx, model.tensors[prefix + ".depthwise_conv.weight"], seqs, 1, 15, 1);
 
         // conv: Custom implementation of batch norm
@@ -1168,7 +1159,7 @@ ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int6
     return y;
 }
 
-void _bootstrap_seqs_and_scores( 
+void _bootstrap_seqs_and_scores(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* full_seqs,
@@ -1213,15 +1204,15 @@ void _bootstrap_seqs_and_scores(
     ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
     int vocab_size = logits->ne[0];
     ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_slice(ctx, logits, 1, 0, 1));
-
-    ggml_cgraph gf = ggml_build_forward(lprobs);
-    ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf, lprobs);
+    ggml_graph_compute_with_ctx(ctx, gf, n_threads);
 
     full_seqs->type = GGML_TYPE_I32;
     job.prefix_seq->type = GGML_TYPE_I32;
     // For LID
     for (size_t i = 0; i < lang_ids.size(); ++i) {
-        ggml_set_f32_1d(lid_scores, i, std::exp(ggml_get_f32_1d(lprobs, lang_ids[i]))); 
+        ggml_set_f32_1d(lid_scores, i, std::exp(ggml_get_f32_1d(lprobs, lang_ids[i])));
     }
 
     // Fetch scores of next steps from "lprobs"
@@ -1240,7 +1231,6 @@ void _bootstrap_seqs_and_scores(
         } else {
             p = ggml_get_i32_1d(job.prefix_seq, i);
         }
-        
         p_score += ggml_get_f32_1d(lprobs, i * vocab_size + p);
         for (int b = 0; b < beam_size; ++b) {
             // scores: (N, S)
@@ -1373,13 +1363,12 @@ ggml_allocr* new_arena_allocr(std::vector<uint8_t>& buffer) {
 
 /// Generates a translation for a single sequence
 /// The results Hypothesis are written inside `result_ctx`.
-/// If <unk> is set as lang_tok, sequence generator first predicts a lang_tok and use it for subsequent decoding. 
 extern "C" Hypothesis* generate_sequence(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    ggml_context* result_ctx, 
+    ggml_context* result_ctx,
     int n_threads
 ) {
     // Pre allocate memory buffers.
@@ -1390,12 +1379,13 @@ extern "C" Hypothesis* generate_sequence(
     // * search_ctx contains tensors that should live for the full search,
     // like encoder kv cache.
     // * step_alloc contains buffer for the forward pass of the model.
-    // TODO: the size allocated should depend on the input length and vocab size
-    std::vector<uint8_t> local_bufs[5] = {
-        std::vector<uint8_t>(128 * 1024 * 1024),  // step_ctx
-        std::vector<uint8_t>(128 * 1024 * 1024),  // prev_step_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // search_ctx
-        std::vector<uint8_t>(256 * 1024 * 1024),  // step_alloc
+    // Split mem_mb into the different context we need to use.
+    int mem_mb = job.opts.mem_mb;
+    std::vector<uint8_t> local_bufs[4] = {
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // step_ctx
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // prev_step_ctx
+        std::vector<uint8_t>(mem_mb * MB * 3 / 10),  // search_ctx
+        std::vector<uint8_t>(mem_mb * MB * 1 / 10),  // step_alloc
     };
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
@@ -1449,6 +1439,8 @@ extern "C" Hypothesis* generate_sequence(
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask, lid_scores, n_threads, lang_ids
     );
+    // Now we will only add self_attn.k_cache and those need to be resorted and copied at every step.
+    model.kv_cache_ctx = nullptr;
 
     // Holds the indices of beams (a beam can occur more than once) that we
     // should continue with in the next step.
@@ -1482,10 +1474,10 @@ extern "C" Hypothesis* generate_sequence(
                 for (int k = 0; k < beam_size; k++) {
                     ggml_set_i32_1d(seqs, k * vocab_size + step_nr, p);
                 }
-            } 
+            }
         }
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
-        
+
         ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
@@ -1504,15 +1496,16 @@ extern "C" Hypothesis* generate_sequence(
 
         // Compute lprobs here so we can modify it in place in the lprob tweaking phase
         // TODO: use ggml properly compute the tweaks
-        ggml_cgraph gf = ggml_build_forward(lprobs);
-        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, &gf);
+        struct ggml_cgraph * gf = ggml_new_graph(step_ctx);
+        ggml_build_forward_expand(gf, lprobs);
+        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, gf);
         GGML_UNUSED(fwd_mem);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
+        ggml_graph_compute_with_ctx(step_ctx, gf, n_threads);
         ggml_detach(lprobs);
         ggml_allocr_reset(step_alloc);
 #if DEBUG_MEM_USAGE
         printf("beam search step %d. Graph.n_nodes: %d.\n", step_nr, gf.n_nodes);
-        printf("  Fwd mem: %.1fMB\n", fwd_mem/1024.0/1024.0);
+        printf("  Fwd mem: %.1fMB, reserved %.1fMb\n", fwd_mem/(double)MB, local_bufs[3].capacity()/(double)MB);
         std::fill(local_bufs[3].begin(), local_bufs[3].end(), 0xAA);
 #endif
         _tweak_lprobs(job, lprobs, step_nr, max_seq_len, vocab_size);
@@ -1532,9 +1525,8 @@ extern "C" Hypothesis* generate_sequence(
             // Make probabilities contain cumulative scores for each hypothesis.
             lprobs = ggml_add_inplace(step_ctx, lprobs, ggml_repeat(step_ctx, last_scores, lprobs));
         }
-
-        gf = ggml_build_forward(lprobs);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
+        ggml_build_forward_expand(gf, lprobs);
+        ggml_graph_compute_with_ctx(step_ctx, gf, n_threads);
 
         // Determine (beam, token) candidates for the next step.
         // (N, 2 x B)
@@ -1569,12 +1561,15 @@ extern "C" Hypothesis* generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         // (B, S), (B) -> (B, S)
+        // don't use allocr API, cause it might reuse a kv cache buffer several time.
+        ggml_set_no_alloc(step_ctx, false);
         ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
-        ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
-        ggml_build_forward_expand(&gf_reorder, new_scores);
-        reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
-        ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
+        struct ggml_cgraph * gf_reorder = ggml_new_graph(step_ctx);
+        ggml_build_forward_expand(gf_reorder, new_seqs);
+        ggml_build_forward_expand(gf_reorder, new_scores);
+        reorder_kv_cache(model, step_ctx, gf_reorder, beam_indices);
+        ggml_graph_compute_with_ctx(step_ctx, gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
 
@@ -1585,7 +1580,7 @@ extern "C" Hypothesis* generate_sequence(
             ((float*)scores->data)[step_nr + 1 + i * max_seq_len] = ggml_get_f32_1d(next_scores, i);
         }
 
-        printf_mem_usage(step_ctx, "step_ctx");
+        printf_mem_usage(step_ctx, "  step_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
 #if DEBUG_MEM_USAGE
@@ -1602,6 +1597,7 @@ end_of_beam_search:
         [](Hypothesis a, Hypothesis b) { return a.score > b.score; }
     );
 
+    printf_mem_usage(search_ctx, "search_ctx");
     fairseq2_kv_cache_reset(model);
     model.ctx = original_ctx;
     return finished_searches_begin;
@@ -1834,8 +1830,7 @@ std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(
         } else {
             curr_token += token;
         }
-        subword_scores.push_back(std::exp(score));
-        
+        subword_scores.push_back(score);
         // Skip the first space outputted.
         auto begin = token.begin();
         if (i == 0 && token.size() > 0 && token[0] == ' ') begin += 1;
@@ -1843,7 +1838,7 @@ std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(
         std::size_t n = token.end() - begin;
         written += n;
         out += n;
-        
+
     }
     if(subword_scores.size() > 0) {
         word_scores.push_back(*std::min_element(subword_scores.begin(), subword_scores.end()));

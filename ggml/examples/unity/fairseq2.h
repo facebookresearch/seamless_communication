@@ -276,6 +276,9 @@ struct SequenceGeneratorOptions {
 
     /// If ``True``, normalizes scores by the length of generated sequences.
     bool normalize_scores = true;
+
+    // memory needed is largely a fn of model size + sentence length and beam_size
+    int mem_mb = 256;
 };
 
 
@@ -315,6 +318,8 @@ extern "C" Hypothesis* generate_sequence(
 );
 
 extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);
+
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out);
+
 std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out);
 

@@ -103,10 +103,10 @@ def download_sample_audio() -> Any:
 def test_convert_linear(tmp_path: Path) -> None:
     module = fairseq2.nn.Linear(16, 24, True)
 
-    layer_config = read_layer_config(module)
+    layer_config = read_layer_config(module, "")
     assert layer_config == {"input_dim": 16, "output_dim": 24}
 
-    module_file = Path("module.ggml")
+    module_file = tmp_path / "module.ggml"
     convert_model(module, module_file)
     g_module = ggml.load_fairseq2_ggml_file(module_file)
 
@@ -114,6 +114,28 @@ def test_convert_linear(tmp_path: Path) -> None:
         assert (
             ggml.fairseq2_model_layer_config_int(g_module.ptr, bytes(k, "ascii")) == v
         )
+
+def test_convert_linear_fp16(tmp_path: Path, ctx: Ctx) -> None:
+    pt_model = torch.nn.ModuleDict({"linear": fairseq2.nn.Linear(16, 24, True)})
+
+    layer_config = read_layer_config(pt_model, "")
+    assert layer_config == {"linear.input_dim": 16, "linear.output_dim": 24}
+
+    ggml_file = tmp_path / "linear.ggml"
+    convert_model(pt_model, ggml_file, fp16=True)
+    assert ggml_file.stat().st_size < (16 * 24 + 24) * 2 * 1.5
+    g_model = ggml.load_fairseq2_ggml_file(ggml_file)
+    ggml.lib.fairseq2_model_set_inference_ctx(g_model.ptr, ctx)
+
+    x = torch.empty((2, 5, 16))
+    torch.nn.init.uniform_(x, -1, 1)
+    y_exp = pt_model.linear(x).numpy()
+    gx = ggml.from_numpy(ctx, x)
+    gy = ggml.forward("Linear", g_model.ptr, "linear", gx)
+    ggml.build_and_compute(ctx, gy)
+    y = ggml.to_numpy(gy)
+
+    assert np.allclose(y_exp, y, atol=1e-3)
 
 
 def test_causal_attention_mask(ctx: Ctx):

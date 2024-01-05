@@ -46,11 +46,10 @@ extern "C" fairseq2_model unity_init_model(const char* model_path) {
 extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, SequenceGeneratorOptions opts, std::string tgt_lang, int n_threads, int memory_mb) {
     Result result;
     // The ctx_size_mb mostly depends of input length and model dim.
-    int ctx_size_mb = 128;
-    auto encoder_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
+    int ctx_size_mb = opts.mem_mb;
+    auto encoder_buf = std::vector<uint8_t>(8 * 1024 * 1024);  // this is only for tensor metadata, it can be small
     auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
     ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
-    char result_str[4096];
     int tgt_lang_idx;
     if (tgt_lang == "unk") {
         tgt_lang_idx = model.vocab.token_to_id["<unk>"];
@@ -67,10 +66,9 @@ extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, Sequ
 
     // Reset the ggml_context
     model.ctx = ctx_from_buffer(encoder_buf);
-    ggml_set_no_alloc(model.ctx, false);
-    struct ggml_tensor * seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, data.size(), 1);
-    memcpy(seqs->data, data.data(), data.size() * sizeof(float));
     ggml_set_no_alloc(model.ctx, true);
+    ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, data.size(), 1);
+    seqs->data = data.data();
 
     // Audio encoder
     ggml_cgraph* gf = unity_speech_encoder(model, seqs);
@@ -86,6 +84,7 @@ extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, Sequ
     ggml_tensor* tokens = ggml_slice(model.ctx, hypo[0].seq, 0, 2, 0);
 
     // Collect result string
+    char result_str[4096];
     std::pair<std::vector<std::string>, std::vector<float>> p = fairseq2_spm_detokenize(&model, tokens, hypo[0].step_scores, (char*)&result_str);
     std::vector<std::string> result_tokens = p.first;
     std::vector<float> word_scores = p.second;
@@ -101,6 +100,11 @@ extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, Sequ
     for (size_t i = 0; i < lang_ids.size(); ++i) {
         lid_scores[model.vocab.id_to_token[lang_ids[i]].text] = ggml_get_f32_1d(hypo[0].lid_scores, i); 
     }
+    
+    result.transcription = result_tokens;
+    result.word_confidence_scores = word_scores;
+    result.lid_scores = lid_scores;
+    result.err = 0;
     
     result.transcription = result_tokens;
     result.word_confidence_scores = word_scores;

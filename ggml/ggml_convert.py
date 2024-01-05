@@ -31,8 +31,10 @@ from fairseq2.models.utils import ModelLoader
 from seamless_communication.models.unity.model import UnitYModel
 
 import ggml
+import re
 
 Preprocessor = Callable[[Any], Any]
+log = logging.getLogger("ggml_convert")
 SMALLER_MODELS = [
     "unity_nano",
     "unity_micro",
@@ -165,8 +167,10 @@ class NllbLikeTokenizerLoader(TokenizerLoaderBase[NllbLikeTokenizer]):
 def convert_model(
     model_name: Union[str, torch.nn.Module],
     out: Optional[Path] = None,
+    layers: str = "",
     hparams: Optional[Dict[str, Any]] = None,
     vocab: Optional[List[Tuple[str, float]]] = None,
+    fp16: bool = False,
 ) -> None:
     if isinstance(model_name, str):
         # Load the corresponding fairseq2 model
@@ -180,7 +184,7 @@ def convert_model(
                 hparams = flatten_config(
                     dataclasses.asdict(model_config), separator="__"
                 )
-                print(hparams)
+                log.info(hparams)
             # Need the diverge here because current default in SC is to convert from fairseq1 ckpt format
             if model_name in SMALLER_MODELS:
                 model = load_unity_model_without_conversion(model_name)
@@ -207,11 +211,12 @@ def convert_model(
         model = model_name
 
     state_dict = model.state_dict()
-    fixup_model(model, state_dict)
-    layer_config = read_layer_config(model)
+    if layers:
+        state_dict = {k: v for k, v in state_dict.items() if re.match(layers, k)}
+    fixup_model(model, state_dict, layer_filter=layers)
+    layer_config = read_layer_config(model, layer_filter=layers)
     vocab = vocab or []
-
-    write_ggml_file(out, hparams, layer_config, vocab, state_dict)
+    write_ggml_file(out, hparams, layer_config, vocab, state_dict, fp16)
 
 
 def _nested_getattr(model: Any, name: str) -> Any:
@@ -224,12 +229,14 @@ def _nested_getattr(model: Any, name: str) -> Any:
     return node
 
 
-def find_children(model: torch.nn.Module, t: type) -> List[Tuple[str, torch.nn.Module]]:
+def find_children(model: torch.nn.Module, t: type, layer_filter: str = "") -> List[Tuple[str, torch.nn.Module]]:
     queue = list(model._modules.items())
     modules = []
     while queue:
         name, node = queue.pop()
         if node is None:
+            continue
+        if layer_filter and not re.match(layer_filter, name):
             continue
         if isinstance(node, t):
             modules.append((name, node))
@@ -239,34 +246,36 @@ def find_children(model: torch.nn.Module, t: type) -> List[Tuple[str, torch.nn.M
     return modules
 
 
-def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor]) -> None:
+def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor], layer_filter: str) -> None:
     # Bake the embedding scaling into the weights
-    frontends = find_children(model, TransformerEmbeddingFrontend)
-    print(
-        "Upgrading the following TransformerEmbeddingFrontend:",
-        [x[0] for x in frontends],
-    )
+    frontends = find_children(model, TransformerEmbeddingFrontend, layer_filter)
+    if frontends:
+        log.info(
+            "Upgrading the following TransformerEmbeddingFrontend: {}",
+            [x[0] for x in frontends],
+        )
     for name, frontend in frontends:
         embed_weights = state_dict[name + ".embed.weight"]
         state_dict[name + ".embed.weight"] = embed_weights * frontend.scale
 
     # Sinusoidal embeddings are typically not saved since they are easily recomputed,
     # but this allows to avoid porting the sinusoidal logic to GGML
-    pos_encoders = find_children(model, SinusoidalPositionEncoder)
-    print(
-        "Upgrading the following SinusoidalPositionEncoder:",
-        [x[0] for x in pos_encoders],
-    )
+    pos_encoders = find_children(model, SinusoidalPositionEncoder, layer_filter)
+    if pos_encoders:
+        log.info(
+            "Upgrading the following SinusoidalPositionEncoder: {}",
+            [x[0] for x in pos_encoders],
+        )
     for name, pos_encoder in pos_encoders:
         assert isinstance(pos_encoder.freqs, torch.Tensor)
         assert name not in state_dict
         state_dict[name] = pos_encoder.freqs
 
-    relative_pos_encs = find_children(model, RelativePositionalEncoding)
+    relative_pos_encs = find_children(model, RelativePositionalEncoding, layer_filter)
     # speech_encoder has several copies of the relative_pos_enc module.
     # For efficiency reasons we only make one copy of it to GGML.
     if relative_pos_encs:
-        print("Merging all speech_encoder RelativePositionalEncoding into one.")
+        log.info("Merging all speech_encoder RelativePositionalEncoding into one.")
         _, rel_pos_enc = relative_pos_encs[0]
         assert isinstance(rel_pos_enc.freqs, torch.Tensor)
         state_dict["speech_encoder.pos_enc"] = rel_pos_enc.freqs
@@ -287,13 +296,14 @@ def write_ggml_file(
     layer_config: Dict[str, Any],
     vocab: List[Tuple[str, float]],
     state_dict: Dict[str, torch.Tensor],
+    fp16: bool,
 ) -> None:
     with out.open("wb") as o:
         write_ggml_header(o)
         write_hparams(o, hparams)
         write_hparams(o, layer_config)
         write_vocab(o, vocab)
-        write_state_dict(o, state_dict)
+        write_state_dict(o, state_dict, fp16)
 
 
 def write_ggml_header(out: BufferedWriter) -> None:
@@ -344,21 +354,40 @@ def write_vocab(out: BufferedWriter, vocab: List[Tuple[str, float]]) -> None:
     write_tensor(out, scores)
 
 
-def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -> None:
+def write_state_dict(
+    out: BufferedWriter, state_dict: Dict[str, torch.Tensor], fp16: bool
+) -> None:
     """Write pytorch state dict.
 
-    :paras state_dict:
+    :params state_dict:
         state dict returned by pytorch model
+    :params fp16:
+        convert float32 tensors to float16 on disk
     """
     out.write(struct.pack("<q", len(state_dict)))
-    # Size of each tensor
-    byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
-    # + tensor overhead
-    byte_size += ggml.ggml_tensor_overhead() * (len(state_dict) + 10)
-    out.write(struct.pack("<q", byte_size))
-    logging.warning(
-        f"Saving a ggml file with {len(state_dict)} tensors, for an estimated amount of {byte_size / (1024**3):.3f} GGML Gb"
-    )
+    # True size of each tensor (before downcasting to float16)
+    true_byte_size = sum(x.numel() * x.element_size() for x in state_dict.values())
+    out.write(struct.pack("<q", true_byte_size))
+
+    GB = 1024**3
+    if not fp16:
+        log.warning(
+            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb"
+        )
+    else:
+
+        def _fp16_byte_size(x: torch.Tensor) -> int:
+            full_byte_size = x.numel() * x.element_size()
+            if fp16 and x.dtype == torch.float32:
+                full_byte_size //= 2
+            return full_byte_size
+
+        # Compressed size
+        compressed_byte_size = sum(_fp16_byte_size(x) for x in state_dict.values())
+        log.warning(
+            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb compressed to {compressed_byte_size / GB:.3f}"
+        )
+
     for key, value in state_dict.items():
         write_string(out, key)
         if key.endswith(".bias") and value.ndim == 1 and "adaptor" not in key:
@@ -368,6 +397,8 @@ def write_state_dict(out: BufferedWriter, state_dict: Dict[str, torch.Tensor]) -
             value = value.squeeze(-1)
         if "depthwise_conv" in key:
             value = value.squeeze(1)
+        if fp16 and value.dtype == torch.float32:
+            value = value.to(torch.float16)
         write_tensor(out, value.contiguous())
 
 
@@ -467,7 +498,7 @@ def flatten_config(
     return __flatten(config)
 
 
-def read_layer_config(model: torch.nn.Module) -> Dict[str, Any]:
+def read_layer_config(model: torch.nn.Module, layer_filter: str) -> Dict[str, Any]:
     layer_config = {}
 
     def _append_node_config(node: Any, prefix: str) -> None:
@@ -485,12 +516,12 @@ def read_layer_config(model: torch.nn.Module) -> Dict[str, Any]:
             try:
                 to_ctype(v)
             except ValueError:
-                logging.warning(f"Skipping layer config {k}={v!r}")
+                log.warning(f"Skipping layer config {k}={v!r}")
                 continue
             layer_config[prefix + k] = v
 
     _append_node_config(model, "")
-    for name, node in find_children(model, torch.nn.Module):
+    for name, node in find_children(model, torch.nn.Module, layer_filter):
         _append_node_config(node, name + ".")
     return layer_config
 

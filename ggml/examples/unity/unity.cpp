@@ -26,6 +26,7 @@ struct unity_params {
         /*len_penalty*/ 1.0,
         /*unk_penalty*/ 0.0,
         /*normalize_scores*/ true,
+        /*mem_mb*/ 512,
     };
     bool verbose = false;
 };
@@ -37,11 +38,12 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    fprintf(stderr, "  -v, --verbose     Print out word level confidence score and LID score", params.verbose);
+    fprintf(stderr, "  -v, --verbose         Print out word level confidence score and LID score (default: off)");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  --text                text output\n");
     fprintf(stderr, "  --beam-size           beam size (default: %d)\n", params.opts.beam_size);
+    fprintf(stderr, "  -M, --mem             memory buffer, increase for long inputs (default: %d)\n", params.opts.mem_mb);
     fprintf(stderr, "\n");
 }
 
@@ -73,8 +75,9 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.opts.beam_size = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
-        
-        }else {
+        } else if (arg == "-M" || arg == "--mem") {
+            params.opts.mem_mb = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else {
             params.files.push_back(std::string(arg));
         }
     }
@@ -96,6 +99,13 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: failed to load model from '%s'\n", __func__, params.model.c_str());
         return 1;
     }
+
+    // The ctx_size_mb mostly depends of input length and model dim.
+    int ctx_size_mb = params.opts.mem_mb;
+    auto encoder_buf = std::vector<uint8_t>(8 * 1024 * 1024); // Only tensor metadata goes in there
+    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024 / 2);
+    ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
+    char result_str[4096];
 
     std::string input;
     bool interactive = params.files.size() == 0;
@@ -127,19 +137,12 @@ int main(int argc, char ** argv) {
             else return 1;
         }
         // Load audio input
-        std::vector<float> data(info.frames * info.channels); // Assume info.channels is always 1
-        sf_readf_float(sndfile, data.data(), info.frames);
-        // Reset the ggml_context
-        // The ctx_size_mb mostly depends of input length and model dim.
-        int ctx_size_mb = 128;
-        auto encoder_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
-        auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
-        ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
-        char result_str[4096];
-        model.ctx = ctx_from_buffer(encoder_buf);
-        ggml_set_no_alloc(model.ctx, false);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
-        ggml_set_no_alloc(model.ctx, true);
+        GGML_ASSERT(info.samplerate == 16000);
+        GGML_ASSERT(info.channels == 1);
+        // stop at 30s. Ideally we should chunk input audio, but this will prevent most obvious OOM.
+        int n_frames = std::min(info.samplerate * 30, (int)info.frames);
+        std::vector<float> data(n_frames * info.channels);
+        sf_readf_float(sndfile, data.data(), n_frames);
 
         Result result = unity_eval(model, data, params.opts, tgt_lang, params.n_threads, ctx_size_mb);
         std::string concat_transcription = std::accumulate(std::next(result.transcription.begin()), result.transcription.end(), result.transcription[0],
