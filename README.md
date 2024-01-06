@@ -161,7 +161,7 @@ Please check out above [section](#seamlessexpressive-models) on how to acquire `
 ### W2v-BERT 2.0 speech encoder
 | Model Name        | #params | checkpoint                                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W2v-BERT 2.0 | 600M    | [🤗 Model card](https://huggingface.co/facebook/conformer-shaw) - [checkpoint](https://huggingface.co/facebook/conformer-shaw/resolve/main/conformer_shaw.pt)
+| W2v-BERT 2.0 | 600M    | [🤗 Model card](https://huggingface.co/facebook/w2v-bert-2.0) - [checkpoint](https://huggingface.co/facebook/w2v-bert-2.0/resolve/main/conformer_shaw.pt)
 
 Here's how you should do a foward pass through the speech encoder:
 
