@@ -6,17 +6,11 @@
 from typing import List
 
 import torch
-from torch.nn import Module
-
-from fairseq2.typing import DataType, Device
-
 from fairseq2.assets import asset_store
-from fairseq2.data import (
-    Collater,
-    SequenceData,
-    VocabularyInfo,
-)
+from fairseq2.data import Collater, SequenceData, VocabularyInfo
 from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.typing import DataType, Device
+from torch.nn import Module
 
 from seamless_communication.inference.translator import BatchedSpeechOutput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
@@ -60,7 +54,6 @@ class PretsselGenerator(Module):
         tgt_lang: str,
         prosody_encoder_input: SequenceData,
     ) -> BatchedSpeechOutput:
-
         units_batch, durations = [], []
         for u in units:
             unit = torch.tensor(u).to(self.unit_eos_token)

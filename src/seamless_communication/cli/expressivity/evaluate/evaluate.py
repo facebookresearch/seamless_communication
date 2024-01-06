@@ -35,7 +35,6 @@ from seamless_communication.cli.m4t.predict import (
 )
 from seamless_communication.inference import BatchedSpeechOutput, ExpressiveTranslator
 from seamless_communication.models.unity import load_unity_unit_tokenizer
-
 from seamless_communication.store import add_gated_assets
 
 logging.basicConfig(
