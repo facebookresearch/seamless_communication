@@ -47,7 +47,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
     // Note this require changing the on disk format
     bool as_float32 = true;
     struct ggml_init_params params = {
-        /*.mem_size   =*/ f32_tensor_size + num_tensor * (int64_t)ggml_tensor_overhead(),
+        /*.mem_size   =*/ f32_tensor_size + (num_tensor + 1) * (int64_t)ggml_tensor_overhead(),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };

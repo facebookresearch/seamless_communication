@@ -459,7 +459,7 @@ class SequenceGeneratorOptions:
     len_penalty: float = 1.0
     unk_penalty: float = 0.0
     normalize_scores: bool = True
-
+    mem_mb: int = 256
 
 @c_struct
 @dataclasses.dataclass

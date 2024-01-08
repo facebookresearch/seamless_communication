@@ -97,7 +97,7 @@ def download_sample_audio() -> Any:
 def test_convert_linear(tmp_path: Path) -> None:
     module = fairseq2.nn.Linear(16, 24, True)
 
-    layer_config = read_layer_config(module)
+    layer_config = read_layer_config(module, "")
     assert layer_config == {"input_dim": 16, "output_dim": 24}
 
     module_file = tmp_path / "module.ggml"
@@ -112,7 +112,7 @@ def test_convert_linear(tmp_path: Path) -> None:
 def test_convert_linear_fp16(tmp_path: Path, ctx: Ctx) -> None:
     pt_model = torch.nn.ModuleDict({"linear": fairseq2.nn.Linear(16, 24, True)})
 
-    layer_config = read_layer_config(pt_model)
+    layer_config = read_layer_config(pt_model, "")
     assert layer_config == {"linear.input_dim": 16, "linear.output_dim": 24}
 
     ggml_file = tmp_path / "linear.ggml"
