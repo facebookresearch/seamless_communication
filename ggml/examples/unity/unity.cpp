@@ -51,7 +51,7 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "  --text                text output\n");
     fprintf(stderr, "  --beam-size           beam size (default: %d)\n", params.opts.beam_size);
     fprintf(stderr, "  -M, --mem             memory buffer, increase for long inputs (default: %d)\n", params.opts.mem_mb);
-    fprintf(stderr, "  --max-audio           max duration of audio in seconds\n", params.max_audio_s);
+    fprintf(stderr, "  --max-audio           max duration of audio in seconds (default: %d)\n", params.max_audio_s);
     fprintf(stderr, "\n");
 }
 
