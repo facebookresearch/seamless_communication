@@ -1523,7 +1523,6 @@ extern "C" Hypothesis* generate_sequence(
         ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
-        // reorder_kv_cache(model, step_ctx, beam_indices, n_threads);
 
         // seqs[:, step_nr + 1] = next_tokens
         // scores[:, step_nr + 1] = next_scores

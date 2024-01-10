@@ -1,0 +1,10 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# MIT_LICENSE file in the root directory of this source tree.
+
+name: conformer_shaw
+model_type: wav2vec2
+model_arch: conformer_shaw_600m
+checkpoint: "https://huggingface.co/facebook/conformer-shaw/resolve/main/conformer_shaw.pt"

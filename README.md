@@ -22,6 +22,9 @@ Seamless is a family of AI models that enable more natural and authentic communi
 ### Blog
 [AI at Meta Blog](https://ai.meta.com/research/seamless-communication/)
 
+## Tutorial
+An exhaustive [tutorial](Seamless_Tutorial.ipynb) given at the NeurIPS 2023 - Seamless EXPO, which is a one-stop shop to learn how to use the entire suite of Seamless models. Please feel free to play with the notebook.
+
 ## SeamlessM4T
 SeamlessM4T is our foundational all-in-one **M**assively **M**ultilingual and **M**ultimodal **M**achine **T**ranslation model delivering high-quality translation for speech and text in nearly 100 languages.
 
@@ -62,8 +65,8 @@ To learn more about SeamlessStreaming models, visit the [SeamlessStreaming READM
 The Seamless model is the unified model for expressive streaming speech-to-speech translations.
 
 ## What's new
-
-
+- [12/18/2023] We are open-sourcing our Conformer-based [W2v-BERT 2.0 speech encoder](#w2v-bert-20-speech-encoder) as described in Section 3.2.1 of the [paper](https://arxiv.org/pdf/2312.05187.pdf), which is at the core of our Seamless models.
+- [12/14/2023] We are releasing the Seamless [tutorial](#tutorial) given at NeurIPS 2023.
 
 # Quick Start
 ## Installation
@@ -105,7 +108,7 @@ For running S2TT/ASR natively (without Python) using GGML, please refer to [the 
 Here’s an example of using the CLI from the root directory to run inference.
 
 ```bash
-expressivity_predict <path_to_input_audio> --tgt_lang <tgt_lang> --model_name seamless_expressivity --vocoder_name vocoder_pretssel --output--path <path_to_save_audio>
+expressivity_predict <path_to_input_audio> --tgt_lang <tgt_lang> --model_name seamless_expressivity --vocoder_name vocoder_pretssel --output_path <path_to_save_audio>
 ```
 
 ### SeamlessStreaming and Seamless Inference
@@ -154,6 +157,51 @@ Please note that SeamlessExpressive is made available under its own [License](SE
 ### Seamless models
 Seamless model is simply the SeamlessStreaming model with the non-expressive `vocoder_v2` swapped out with the expressive `vocoder_pretssel`.
 Please check out above [section](#seamlessexpressive-models) on how to acquire `vocoder_pretssel` checkpoint.
+
+### W2v-BERT 2.0 speech encoder
+| Model Name        | #params | checkpoint                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W2v-BERT 2.0 | 600M    | [🤗 Model card](https://huggingface.co/facebook/conformer-shaw) - [checkpoint](https://huggingface.co/facebook/conformer-shaw/resolve/main/conformer_shaw.pt)
+
+Here's how you should do a foward pass through the speech encoder:
+
+```python
+import torch
+
+from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
+from fairseq2.memory import MemoryBlock
+from fairseq2.nn.padding import get_seqs_and_padding_mask
+from fairseq2.data import Collater
+from pathlib import Path
+from seamless_communication.models.conformer_shaw import load_conformer_shaw_model
+
+
+audio_wav_path, device, dtype = ...
+audio_decoder = AudioDecoder(dtype=torch.float32, device=device)
+fbank_converter = WaveformToFbankConverter(
+    num_mel_bins=80,
+    waveform_scale=2**15,
+    channel_last=True,
+    standardize=True,
+    device=device,
+    dtype=dtype,
+)
+collater = Collater(pad_value=1)
+
+model = load_conformer_shaw_model("conformer_shaw", device=device, dtype=dtype)
+model.eval()
+
+with Path(audio_wav_path).open("rb") as fb:
+    block = MemoryBlock(fb.read())
+
+decoded_audio = audio_decoder(block)
+src = collater(fbank_converter(decoded_audio))["fbank"]
+seqs, padding_mask = get_seqs_and_padding_mask(src)
+
+with torch.inference_mode():
+  seqs, padding_mask = model.encoder_frontend(seqs, padding_mask)
+  seqs, padding_mask = model.encoder(seqs, padding_mask)
+```
 
 ## Evaluation
 
@@ -251,6 +299,7 @@ If you use Seamless in your work or any models/datasets/artifacts published in S
 We have three license categories.
 
 The following non-generative components are MIT licensed as found in [MIT_LICENSE](MIT_LICENSE):
+- [W2v-BERT 2.0 speech encoder](#w2v-bert-20-speech-encoder)
 - Code
 - Text only part of the mExpresso dataset found in the [SeamlessExpressive README](docs/expressive/README.md).
 - UnitY2 forced alignment extractor found in the [UnitY2 Aligner README](docs/m4t/unity2_aligner_README.md).
