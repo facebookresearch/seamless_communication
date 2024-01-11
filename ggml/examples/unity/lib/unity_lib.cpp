@@ -2,6 +2,23 @@
 #include <algorithm>
 
 
+struct ggml_cgraph * unity_text_encoder(
+        fairseq2_model & model,
+        struct ggml_tensor * text_input) {
+    ggml_context* ctx0 = model.ctx;
+    ggml_cgraph* gf = ggml_new_graph(ctx0);
+    ggml_tensor* seqs = TransformerEmbeddingFrontend_forward(model, "text_encoder_frontend", text_input);
+    ggml_tensor* encoder_output = StandardTransformerEncoder_forward(
+        model,
+        "text_encoder",
+        seqs,
+        nullptr  // TODO: handle padding mask
+    );
+    encoder_output = ggml_dup(model.ctx, encoder_output);
+    ggml_build_forward_expand(gf, encoder_output);
+    return gf;
+}
+
 struct ggml_cgraph * unity_speech_encoder(
         fairseq2_model& model,
         struct ggml_tensor * speech_input) {
@@ -43,7 +60,7 @@ extern "C" fairseq2_model unity_init_model(const char* model_path) {
 }
 
 //  struct as return - transcription, CE score, LID 
-extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, SequenceGeneratorOptions opts, std::string tgt_lang, int n_threads, int memory_mb) {
+extern "C" Result unity_eval_speech(fairseq2_model& model, std::vector<float>& data, SequenceGeneratorOptions opts, std::string tgt_lang, int n_threads) {
     Result result;
     // The ctx_size_mb mostly depends of input length and model dim.
     int ctx_size_mb = opts.mem_mb;
@@ -101,10 +118,69 @@ extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, Sequ
         lid_scores[model.vocab.id_to_token[lang_ids[i]].text] = ggml_get_f32_1d(hypo[0].lid_scores, i); 
     }
     
+    
     result.transcription = result_tokens;
     result.word_confidence_scores = word_scores;
     result.lid_scores = lid_scores;
     result.err = 0;
+    ggml_free(model.ctx);
+    ggml_allocr_reset(fwd_alloc);
+    return result;
+}
+
+
+extern "C" Result unity_eval_text(fairseq2_model& model, const std::string& text, SequenceGeneratorOptions opts, std::string tgt_lang, int n_threads) {
+    Result result;
+    // The ctx_size_mb mostly depends of input length and model dim.
+    int ctx_size_mb = opts.mem_mb;
+    auto encoder_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
+    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
+    ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
+    int tgt_lang_idx;
+    auto tgt_lang_ptr = model.vocab.token_to_id.find("__" + tgt_lang + "__"); 
+    if (tgt_lang_ptr == model.vocab.token_to_id.end()) {
+        std::cerr << "Unknown language " << tgt_lang << "\n";
+        result.err = 1;
+        return result;
+    }
+    tgt_lang_idx = tgt_lang_ptr->second;
+
+    // tokenize the input text
+    model.ctx = ctx_from_buffer(encoder_buf);
+    ggml_set_no_alloc(model.ctx, false);
+    ggml_tensor* tokens = ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 64);
+    ggml_set_no_alloc(model.ctx, true);
+    fairseq2_spm_tokenize(&model, text.c_str(), tokens);
+    
+    // Text encoder
+    ggml_cgraph* gf = unity_text_encoder(model, tokens);
+    ggml_allocr_alloc_graph(fwd_alloc, gf);
+    ggml_graph_compute_with_ctx(model.ctx, gf, n_threads);
+    ggml_tensor* encoder_output = gf->nodes[gf->n_nodes - 1];
+    
+    // Beam search decoding
+    const Hypothesis* hypo = unity_decode(model, opts, tgt_lang_idx, encoder_output, n_threads);
+    
+    // Drop language and bos token.
+    ggml_tensor* tgt_tokens = ggml_slice(model.ctx, hypo[0].seq, 0, 2, 0);
+    // Collect result string
+    char result_str[4096];
+
+    std::pair<std::vector<std::string>, std::vector<float>> p = fairseq2_spm_detokenize(&model, tgt_tokens, hypo[0].step_scores, (char*)&result_str);
+    std::vector<std::string> result_tokens = p.first;
+    std::vector<float> word_scores = p.second;
+
+    std::unordered_map<std::string, float> lid_scores;
+    std::vector<int> lang_ids;
+    for (const auto& kv : model.vocab.token_to_id) {
+        if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
+            lang_ids.push_back(kv.second);
+        }
+    }
+    std::sort(lang_ids.begin(), lang_ids.end());
+    for (size_t i = 0; i < lang_ids.size(); ++i) {
+        lid_scores[model.vocab.id_to_token[lang_ids[i]].text] = ggml_get_f32_1d(hypo[0].lid_scores, i); 
+    }
     
     result.transcription = result_tokens;
     result.word_confidence_scores = word_scores;

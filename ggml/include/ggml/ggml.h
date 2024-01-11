@@ -215,13 +215,13 @@
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
 #define GGML_MAX_DIMS           4
-#define GGML_MAX_PARAMS         2048
+#define GGML_MAX_PARAMS         4096
 #define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            10
 #define GGML_MAX_NAME           64
 #define GGML_MAX_OP_PARAMS      64
 #define GGML_DEFAULT_N_THREADS  4
-#define GGML_DEFAULT_GRAPH_SIZE 2048
+#define GGML_DEFAULT_GRAPH_SIZE 4096
 #if UINTPTR_MAX == 0xFFFFFFFF
     #define GGML_MEM_ALIGN 4
 #else

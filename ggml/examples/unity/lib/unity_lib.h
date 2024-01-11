@@ -26,7 +26,13 @@ struct Result {
 
 struct ggml_cgraph * unity_speech_encoder(
     fairseq2_model& model,
-    struct ggml_tensor * speech_input);
+    struct ggml_tensor * speech_input
+);
+
+struct ggml_cgraph * unity_text_encoder(
+    fairseq2_model& model,
+    struct ggml_tensor * text_input
+);
 
 Hypothesis* unity_decode(
         fairseq2_model& model,
@@ -38,4 +44,18 @@ Hypothesis* unity_decode(
 
 extern "C" fairseq2_model unity_init_model(const char* model_path);
 
-extern "C" Result unity_eval(fairseq2_model model, std::vector<float> data, SequenceGeneratorOptions opts, std::string tgt_lang, int n_threads, int memory_gb);
+extern "C" Result unity_eval_speech(
+    fairseq2_model& model, 
+    std::vector<float>& data, 
+    SequenceGeneratorOptions opts, 
+    std::string tgt_lang, 
+    int n_threads
+);
+
+extern "C" Result unity_eval_text(
+    fairseq2_model& model,  
+    const std::string& text, 
+    SequenceGeneratorOptions opts, 
+    std::string tgt_lang, 
+    int n_threads
+);

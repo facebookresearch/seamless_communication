@@ -199,6 +199,13 @@ extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
     ggml_tensor* padding_mask
 );
 
+extern "C" ggml_tensor* StandardTransformerEncoder_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
 extern "C" ggml_tensor* RelativePositionMHA_forward(
     fairseq2_model& model,
     const std::string& prefix,
@@ -317,8 +324,7 @@ extern "C" Hypothesis* generate_sequence(
     int threads
 );
 
-extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);
-
+extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor* out);
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out);
 
 std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out);

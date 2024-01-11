@@ -1580,7 +1580,7 @@ extern "C" Hypothesis* generate_sequence(
             ((float*)scores->data)[step_nr + 1 + i * max_seq_len] = ggml_get_f32_1d(next_scores, i);
         }
 
-        printf_mem_usage(step_ctx, "  step_ctx");
+        printf_mem_usage(step_ctx, "step_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
 #if DEBUG_MEM_USAGE
@@ -1656,7 +1656,7 @@ struct llm_bigram_spm {
 struct llm_tokenizer_spm {
     llm_tokenizer_spm(const llama_vocab & vocab): vocab(vocab) {}
 
-    void tokenize(const std::string& input_text, ggml_tensor& output) {
+    void tokenize(const std::string& input_text, ggml_tensor* output) {
         llama_vocab::id unk_idx = vocab.token_to_id.at("<unk>");
 
         // split string into utf8 chars
@@ -1724,8 +1724,8 @@ struct llm_tokenizer_spm {
             try_add_bigram(bigram.left, left_sym.next);
         }
 
-        llama_vocab::id* out = (llama_vocab::id*)output.data;
-        int out_step = sizeof(llama_vocab::id) / output.nb[0];
+        llama_vocab::id* out = (llama_vocab::id*)output->data;
+        int out_step = sizeof(llama_vocab::id) / output->nb[0];
         int num_tokens = 0;
         for (int i = 0; i > -1; i = symbols[i].next) {
             llm_symbol& symbol = symbols[i];
@@ -1734,7 +1734,7 @@ struct llm_tokenizer_spm {
         }
         *(out + num_tokens * out_step) = vocab.token_to_id.at("</s>");
         num_tokens += 1;
-        output.ne[0] = num_tokens;
+        output->ne[0] = num_tokens;
     }
 
 private:
@@ -1773,7 +1773,7 @@ private:
 };
 
 
-extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out) {
+extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor* out) {
     llm_tokenizer_spm spm = {model->vocab};
     spm.tokenize(std::string(text), out);
 }

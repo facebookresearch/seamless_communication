@@ -13,7 +13,8 @@
 
 struct unity_params {
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
-    std::string model      = "seamlessM4T_medium.ggml"; // model path
+    std::string model = "seamlessM4T_medium.ggml"; // model path
+    std::string input_text = "";
     std::string tgt_lang = "eng";
     std::vector<std::string> files = {};
     bool text = false;
@@ -26,7 +27,7 @@ struct unity_params {
         /*len_penalty*/ 1.0,
         /*unk_penalty*/ 0.0,
         /*normalize_scores*/ true,
-        /*mem_mb*/ 512,
+        /*mem_mb*/ 512
     };
     bool verbose = false;
 };
@@ -37,6 +38,9 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
+    fprintf(stderr, "  -i, --input           Input text for the text-2-text translation\n");
+    fprintf(stderr, "  -l, --tgt-lang        Target translation lang (default: %s\n", params.tgt_lang);
+
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     fprintf(stderr, "  -v, --verbose         Print out word level confidence score and LID score (default: off)");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
@@ -67,6 +71,8 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.n_threads = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else if (arg == "-m" || arg == "--model") {
             params.model = get_next_arg(i, argc, argv, arg, params);
+        } else if (arg == "-i" || arg == "--input") {
+            params.input_text = get_next_arg(i, argc, argv, arg, params);
         } else if (arg == "-l" || arg == "--tgt-lang") {
             params.tgt_lang = get_next_arg(i, argc, argv, arg, params);
         } else if (arg == "--text") {
@@ -108,8 +114,13 @@ int main(int argc, char ** argv) {
     char result_str[4096];
 
     std::string input;
-    bool interactive = params.files.size() == 0;
+    bool interactive = (params.files.size() == 0 && params.input_text.length() == 0);
     auto next_file = params.files.begin();
+
+    // Flag for the input case: true --> s2st, false --> t2tt
+    bool s2st_or_t2tt = true;
+
+    // S2ST
     while (true) {
         if (interactive) {
             std::cout << "\nEnter audio_path and tgt_lang, separated by space (or 'exit' to quit):\n";
@@ -118,7 +129,10 @@ int main(int argc, char ** argv) {
                 break;
             }
         } else {
-            if (next_file == params.files.end()) break;
+            if (params.input_text.length() > 0) {
+                break;
+            }
+            if (next_file == params.files.end() && s2st_or_t2tt) break;
             input = *(next_file++);
         }
         std::istringstream iss(input);
@@ -144,7 +158,7 @@ int main(int argc, char ** argv) {
         std::vector<float> data(n_frames * info.channels);
         sf_readf_float(sndfile, data.data(), n_frames);
 
-        Result result = unity_eval(model, data, params.opts, tgt_lang, params.n_threads, ctx_size_mb);
+        Result result = unity_eval_speech(model, data, params.opts, tgt_lang, params.n_threads);
         std::string concat_transcription = std::accumulate(std::next(result.transcription.begin()), result.transcription.end(), result.transcription[0],
             [](const std::string& a, const std::string& b) {
                 return a + " " + b;
@@ -165,6 +179,18 @@ int main(int argc, char ** argv) {
         } else {
             std::cout << concat_transcription << std::endl;
         }
+    }
+
+    // T2TT
+    if (params.input_text.length() > 0) {
+        // tokenize the input text
+        Result result = unity_eval_text(model, params.input_text, params.opts, params.tgt_lang, params.n_threads);
+        std::string concat_translation = std::accumulate(std::next(result.transcription.begin()), result.transcription.end(), result.transcription[0],
+            [](const std::string& a, const std::string& b) {
+                return a + " " + b;
+            }
+        );
+        std::cout << "Translation: " << concat_translation << std::endl;
     }
 
     return 0;
