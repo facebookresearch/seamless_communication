@@ -34,7 +34,9 @@ struct unity_params {
         /*len_penalty*/ 1.0,
         /*unk_penalty*/ 0.0,
         /*normalize_scores*/ true,
+        /*mem_mb*/ 512,
     };
+    int32_t max_audio_s = 30;
 };
 
 
@@ -48,6 +50,8 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  --text                text output\n");
     fprintf(stderr, "  --beam-size           beam size (default: %d)\n", params.opts.beam_size);
+    fprintf(stderr, "  -M, --mem             memory buffer, increase for long inputs (default: %d)\n", params.opts.mem_mb);
+    fprintf(stderr, "  --max-audio           max duration of audio in seconds (default: %d)\n", params.max_audio_s);
     fprintf(stderr, "\n");
 }
 
@@ -77,6 +81,10 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.text = true;
         } else if (arg == "-b" || arg == "--beam-size") {
             params.opts.beam_size = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-M" || arg == "--mem") {
+            params.opts.mem_mb = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--max-audio") {
+            params.max_audio_s = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else {
             params.files.push_back(std::string(arg));
         }
@@ -136,9 +144,9 @@ int main(int argc, char ** argv) {
     }
 
     // The ctx_size_mb mostly depends of input length and model dim.
-    int ctx_size_mb = 128;
-    auto encoder_buf = std::vector<uint8_t>(128 * 1024 * 1024);
-    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
+    int ctx_size_mb = params.opts.mem_mb;
+    auto encoder_buf = std::vector<uint8_t>(8 * 1024 * 1024); // Only tensor metadata goes in there
+    auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024 / 2);
     ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
     char result_str[4096];
 
@@ -182,16 +190,20 @@ int main(int argc, char ** argv) {
 
         // Reset the ggml_context
         model.ctx = ctx_from_buffer(encoder_buf);
-        ggml_set_no_alloc(model.ctx, false);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, info.frames, info.channels);
         ggml_set_no_alloc(model.ctx, true);
+        GGML_ASSERT(info.samplerate == 16000);
+        GGML_ASSERT(info.channels == 1);
+        // Truncate audio input. Ideally we should chunk it, but this will prevent most obvious OOM.
+        int n_frames = std::min(info.samplerate * params.max_audio_s, (int)info.frames);
+        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_frames, info.channels);
+        ggml_allocr_alloc(fwd_alloc, seqs);
 
         // Load audio input
-        sf_readf_float(sndfile, (float*)seqs->data, info.frames);
+        sf_readf_float(sndfile, (float*)seqs->data, n_frames);
 
         // Audio encoder
         ggml_cgraph* gf = unity_speech_encoder(model, seqs);
-        ggml_allocr_alloc_graph(fwd_alloc, gf);
+        size_t enc_mem_used = ggml_allocr_alloc_graph(fwd_alloc, gf);
         ggml_graph_compute_with_ctx(model.ctx, gf, params.n_threads);
         // encoder_output is valid until we call `ggml_allocr_reset(fwd_alloc)`
         ggml_tensor* encoder_output = gf->nodes[gf->n_nodes - 1];

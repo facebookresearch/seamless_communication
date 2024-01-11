@@ -276,6 +276,9 @@ struct SequenceGeneratorOptions {
 
     /// If ``True``, normalizes scores by the length of generated sequences.
     bool normalize_scores = true;
+
+    // memory needed is largely a fn of model size + sentence length and beam_size
+    int mem_mb = 256;
 };
 
 
