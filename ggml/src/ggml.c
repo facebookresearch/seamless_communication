@@ -1622,7 +1622,6 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "IM2COL",
 
     "CONV_1D",
-    "CONV_1D_GENERIC",
     "CONV_2D",
     
     "CONV_TRANSPOSE_2D",
@@ -1634,8 +1633,8 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CONV_1D_STAGE_1",
     "CONV_1D_STAGE_2",
 
-    "CONV_1D_GENERIC_STAGE_0",
-    "CONV_1D_GENERIC_STAGE_1",
+    "CONV_1D_STAGE_0",
+    "CONV_1D_STAGE_1",
     "UPSCALE",
     "PAD",
     "ARGSORT",
@@ -1719,7 +1718,6 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "alibi(x)",
     "clamp(x)",
     "conv_1d(x)",
-    "conv_1d_generic(x)",
     "conv_2d(x)",
     "conv_transpose_1d(x)",
     "im2col(x)",
@@ -1730,8 +1728,8 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "conv_1d_stage_0(x)",
     "conv_1d_stage_1(x)",
     "conv_1d_stage_2(x)",
-    "conv_1d_generic_stage_0(x)",
-    "conv_1d_generic_stage_1(x)",
+    "conv_1d_stage_0(x)",
+    "conv_1d_stage_1(x)",
     "pad(x)",
     "argsort(x)",
     "leaky_relu(x)",
@@ -1811,10 +1809,10 @@ static void ggml_setup_op_has_task_pass(void) {
         p[GGML_OP_CONV_1D                ] = true;
         p[GGML_OP_CONV_1D_STAGE_0        ] = true;
         p[GGML_OP_CONV_1D_STAGE_1        ] = true;
-        p[GGML_OP_CONV_1D_STAGE_2        ] = true;
-        p[GGML_OP_CONV_1D_GENERIC                ] = true;
-        p[GGML_OP_CONV_1D_GENERIC_STAGE_0        ] = true;
-        p[GGML_OP_CONV_1D_GENERIC_STAGE_1        ] = true;
+        p[GGML_OP_DEPTHWISE_CONV_STAGE_0        ] = true;
+        p[GGML_OP_DEPTHWISE_CONV_STAGE_1        ] = true;
+        p[GGML_OP_DEPTHWISE_CONV_STAGE_2        ] = true;
+        
         p[GGML_OP_CONV_2D                ] = true;
         p[GGML_OP_CONV_TRANSPOSE_2D      ] = true;
         p[GGML_OP_CONV_TRANSPOSE_2D      ] = true;
@@ -5303,7 +5301,7 @@ static int64_t ggml_calc_conv_output_size(int64_t ins, int64_t ks, int s, int p,
     return (ins + 2 * p - d * (ks - 1) - 1) / s + 1;
 }
 
-static struct ggml_tensor * ggml_conv_1d_stage_0(
+static struct ggml_tensor * ggml_depthwise_conv_stage_0(
     struct ggml_context * ctx,
     struct ggml_tensor  * a,
     struct ggml_tensor  * b,
@@ -5318,13 +5316,12 @@ static struct ggml_tensor * ggml_conv_1d_stage_0(
         is_node = true;
     }
 
-    // struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
-    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, b->ne[0]+30, b->ne[1]);
+    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, b->ne[0]+p0*2, b->ne[1]);
 
     int32_t params[] = { s0, p0, d0 };
     ggml_set_op_params(result, params, sizeof(params));
 
-    result->op = GGML_OP_CONV_1D_STAGE_0;
+    result->op = GGML_OP_DEPTHWISE_CONV_STAGE_0;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
@@ -5332,11 +5329,10 @@ static struct ggml_tensor * ggml_conv_1d_stage_0(
     return result;
 }
 
-// ggml_conv_1d_stage_1
-
-static struct ggml_tensor * ggml_conv_1d_stage_1(
+static struct ggml_tensor * ggml_depthwise_conv_stage_1(
     struct ggml_context * ctx,
-    struct ggml_tensor  * a) { 
+    struct ggml_tensor  * a,
+    int p0) { 
 
     bool is_node = false;
 
@@ -5344,19 +5340,17 @@ static struct ggml_tensor * ggml_conv_1d_stage_1(
         GGML_ASSERT(false); 
         is_node = true;
     }
-    // TODO: remove hardcoding 
-    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, 31, a->ne[0]-30, a->ne[1]); // K, S, C
+    int K = p0 * 2 + 1;
+    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, K, a->ne[0]-K+1, a->ne[1]); // K, S, C
 
-    result->op = GGML_OP_CONV_1D_STAGE_1;
+    result->op = GGML_OP_DEPTHWISE_CONV_STAGE_1;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
 
     return result;
 }
 
-// ggml_conv_1d_stage_2
-
-static struct ggml_tensor * ggml_conv_1d_stage_2(
+static struct ggml_tensor * ggml_depthwise_conv_stage_2(
     struct ggml_context * ctx,
     struct ggml_tensor  * a,
     struct ggml_tensor  * b) {
@@ -5369,7 +5363,7 @@ static struct ggml_tensor * ggml_conv_1d_stage_2(
     }
     struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, b->ne[1], b->ne[2]);
 
-    result->op = GGML_OP_CONV_1D_STAGE_2;
+    result->op = GGML_OP_DEPTHWISE_CONV_STAGE_2;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
@@ -5377,56 +5371,11 @@ static struct ggml_tensor * ggml_conv_1d_stage_2(
     return result;
 }
 
-// ggml_conv_1d - THIS IS FOR DEPTHWISE CONV ONLY. 
-// TODO: merge with generic conv1d
-
-// 3 stages: (1) pad (2) unfold (3) mul
-// Python equivalent:
-// def pad(x, K):
-//     C, S = x.shape
-//     padding_offset = K // 2
-//     padded = torch.zeros([C, S + K - 1])
-//     for i in range(C):
-//         for j in range(S):
-//             padded[i][j+padding_offset] = x[i][j]
-//     return padded
-
-// def unfold(x, K):
-//     C, S = x.shape
-//     unfolded_tensor = torch.zeros((C, S-K+1, K))
-//     for c in range(C):
-//         for s in range(S-K+1):
-//             for k in range(K):
-//                 unfolded_tensor[c, s, k] = x[c, s+k]
-//     return unfolded_tensor.permute(2, 0, 1)
-
-// def mul(x, kernel):
-//     K, C, S = x.shape
-//     res = torch.zeros([C, S])
-//     for s in range(S):
-//         for c in range(C):
-//             res[c, s] = torch.sum(x[:, c, s].cpu() * kernel[c, :].cpu())
-//     return res
-
-GGML_API struct ggml_tensor * ggml_conv_1d(
-        struct ggml_context * ctx,
-        struct ggml_tensor  * a,
-        struct ggml_tensor  * b,
-        int                   s0,
-        int                   p0,
-        int                   d0) {
-    struct ggml_tensor * result = ggml_conv_1d_stage_0(ctx, a, b, s0, p0, d0);
-    result = ggml_conv_1d_stage_1(ctx, result);
-    result = ggml_conv_1d_stage_2(ctx, a, result);
-    return result;
-}
-
-
 // im2col: [N, IC, IL] => [N, OL, IC*K]
 // a: [OC，IC, K]
 // b: [N, IC, IL]
 // result: [N, OL, IC*K]
-static struct ggml_tensor * ggml_conv_1d_generic_stage_0(
+static struct ggml_tensor * ggml_conv_1d_stage_0(
     struct ggml_context * ctx,
     struct ggml_tensor  * a,
     struct ggml_tensor  * b,
@@ -5454,7 +5403,7 @@ static struct ggml_tensor * ggml_conv_1d_generic_stage_0(
     int32_t params[] = { s0, p0, d0 };
     ggml_set_op_params(result, params, sizeof(params));
 
-    result->op = GGML_OP_CONV_1D_GENERIC_STAGE_0;
+    result->op = GGML_OP_CONV_1D_STAGE_0;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
@@ -5468,7 +5417,7 @@ static struct ggml_tensor * ggml_conv_1d_generic_stage_0(
 // a: [OC, IC, K]
 // b: [N, OL, IC * K]
 // result: [N, OC, OL]
-static struct ggml_tensor * ggml_conv_1d_generic_stage_1(
+static struct ggml_tensor * ggml_conv_1d_stage_1(
     struct ggml_context * ctx,
     struct ggml_tensor  * a,
     struct ggml_tensor  * b) {
@@ -5488,7 +5437,7 @@ static struct ggml_tensor * ggml_conv_1d_generic_stage_1(
     };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
-    result->op = GGML_OP_CONV_1D_GENERIC_STAGE_1;
+    result->op = GGML_OP_CONV_1D_STAGE_1;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
@@ -5497,15 +5446,51 @@ static struct ggml_tensor * ggml_conv_1d_generic_stage_1(
 }
 
 
-GGML_API struct ggml_tensor * ggml_conv_1d_generic(
+GGML_API struct ggml_tensor * ggml_conv_1d(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
         int                   s0,
         int                   p0,
-        int                   d0) {
-    struct ggml_tensor * result = ggml_conv_1d_generic_stage_0(ctx, a, b, s0, p0, d0);
-    result = ggml_conv_1d_generic_stage_1(ctx, a, result);
+        int                   d0,
+        int                   groups) {
+    struct ggml_tensor * result;
+    if (groups == 1) {
+        result = ggml_conv_1d_stage_0(ctx, a, b, s0, p0, d0);
+        result = ggml_conv_1d_stage_1(ctx, a, result);
+    } else {
+        GGML_ASSERT(groups == a->ne[1]);
+        // 3 stages for depthwise conv: (1) pad (2) unfold (3) mul
+        // Python equivalent:
+        // def pad(x, K):
+        //     C, S = x.shape
+        //     padding_offset = K // 2
+        //     padded = torch.zeros([C, S + K - 1])
+        //     for i in range(C):
+        //         for j in range(S):
+        //             padded[i][j+padding_offset] = x[i][j]
+        //     return padded
+
+        // def unfold(x, K):
+        //     C, S = x.shape
+        //     unfolded_tensor = torch.zeros((C, S-K+1, K))
+        //     for c in range(C):
+        //         for s in range(S-K+1):
+        //             for k in range(K):
+        //                 unfolded_tensor[c, s, k] = x[c, s+k]
+        //     return unfolded_tensor.permute(2, 0, 1)
+
+        // def mul(x, kernel):
+        //     K, C, S = x.shape
+        //     res = torch.zeros([C, S])
+        //     for s in range(S):
+        //         for c in range(C):
+        //             res[c, s] = torch.sum(x[:, c, s].cpu() * kernel[c, :].cpu())
+        //     return res
+        result = ggml_depthwise_conv_stage_0(ctx, a, b, s0, p0, d0);
+        result = ggml_depthwise_conv_stage_1(ctx, result, p0);
+        result = ggml_depthwise_conv_stage_2(ctx, a, result);
+    }
     return result;
 }
 
@@ -5517,7 +5502,7 @@ struct ggml_tensor* ggml_conv_1d_ph(
         struct ggml_tensor  * b,
         int                   s,
         int                   d) {
-    return ggml_conv_1d(ctx, a, b, s, a->ne[0] / 2, d);
+    return ggml_conv_1d(ctx, a, b, s, a->ne[0] / 2, d, 1);
 }
 
 // ggml_conv_transpose_1d
@@ -12162,7 +12147,7 @@ static void ggml_compute_forward_conv_1d_f32(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_0_f32(
+static void ggml_compute_forward_depthwise_conv_stage_0_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12188,9 +12173,10 @@ static void ggml_compute_forward_conv_1d_stage_0_f32(
         return;
     }
     // Padding
+    int p0 = ggml_get_op_params_i32(dst, 1);
     for (int i0 = 0; i0 < ne10; i0++) {
         for (int i1 = 0; i1 < ne11; i1++) {
-            float *output = (float *) ((char *) dst->data + (i0+15)*(dst->nb[0]) + i1 * dst->nb[1]);
+            float *output = (float *) ((char *) dst->data + (i0+p0)*(dst->nb[0]) + i1 * dst->nb[1]);
             float * src = (float *)((char *) src1->data + i0*nb10 + i1*nb11);
             *output = *src;
         }
@@ -12214,7 +12200,7 @@ static void ggml_compute_forward_conv_1d(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_0(
+static void ggml_compute_forward_depthwise_conv_stage_0(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12222,7 +12208,7 @@ static void ggml_compute_forward_conv_1d_stage_0(
     switch(src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_conv_1d_stage_0_f32(params, src0, src1, dst);
+                ggml_compute_forward_depthwise_conv_stage_0_f32(params, src0, src1, dst);
             } break;
         default:
             {
@@ -12231,7 +12217,7 @@ static void ggml_compute_forward_conv_1d_stage_0(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_1_f32(
+static void ggml_compute_forward_depthwise_conv_stage_1_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
               struct ggml_tensor * dst) {
@@ -12263,7 +12249,7 @@ static void ggml_compute_forward_conv_1d_stage_1_f32(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_2_f32(
+static void ggml_compute_forward_depthwise_conv_stage_2_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12304,14 +12290,14 @@ static void ggml_compute_forward_conv_1d_stage_2_f32(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_1(
+static void ggml_compute_forward_depthwise_conv_stage_1(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
               struct ggml_tensor * dst) {
     switch(src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_conv_1d_stage_1_f32(params, src0, dst);
+                ggml_compute_forward_depthwise_conv_stage_1_f32(params, src0, dst);
             } break;
         default:
             {
@@ -12320,7 +12306,7 @@ static void ggml_compute_forward_conv_1d_stage_1(
     }
 }
 
-static void ggml_compute_forward_conv_1d_stage_2(
+static void ggml_compute_forward_depthwise_conv_stage_2(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12328,7 +12314,7 @@ static void ggml_compute_forward_conv_1d_stage_2(
     switch(src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_conv_1d_stage_2_f32(params, src0, src1, dst);
+                ggml_compute_forward_depthwise_conv_stage_2_f32(params, src0, src1, dst);
             } break;
         default:
             {
@@ -12337,9 +12323,9 @@ static void ggml_compute_forward_conv_1d_stage_2(
     }
 }
 
-// ggml_compute_forward_conv_1d_generic
+// ggml_compute_forward_conv_1d
 
-static void ggml_compute_forward_conv_1d_generic_f16_f32(
+static void ggml_compute_forward_conv_1d_f16_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12420,7 +12406,7 @@ static void ggml_compute_forward_conv_1d_generic_f16_f32(
     }
 }
 
-static void ggml_compute_forward_conv_1d_generic_f32(
+static void ggml_compute_forward_depthwise_conv_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12572,7 +12558,7 @@ static void gemm_f16_out_f32(int64_t m, int64_t n, int64_t k,
 // src0: kernel [OC, IC, K]
 // src1: signal [N, IC, IL]
 // dst:  result [N, OL, IC*K]
-static void ggml_compute_forward_conv_1d_generic_stage_0_f32(
+static void ggml_compute_forward_conv_1d_stage_0_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12642,7 +12628,7 @@ static void ggml_compute_forward_conv_1d_generic_stage_0_f32(
 // src0: [OC, IC, K]
 // src1: [N, OL, IC * K]
 // result: [N, OC, OL]
-static void ggml_compute_forward_conv_1d_generic_stage_1_f16(
+static void ggml_compute_forward_conv_1d_stage_1_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12692,7 +12678,7 @@ static void ggml_compute_forward_conv_1d_generic_stage_1_f16(
     }
 }
 
-static void ggml_compute_forward_conv_1d_generic(
+static void ggml_compute_forward_conv_1d_stage_0(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12700,7 +12686,7 @@ static void ggml_compute_forward_conv_1d_generic(
     switch(src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_conv_1d_generic_f32(params, src0, src1, dst);
+                ggml_compute_forward_conv_1d_stage_0_f32(params, src0, src1, dst);
             } break;
         default:
             {
@@ -12709,7 +12695,7 @@ static void ggml_compute_forward_conv_1d_generic(
     }
 }
 
-static void ggml_compute_forward_conv_1d_generic_stage_0(
+static void ggml_compute_forward_conv_1d_stage_1(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
@@ -12717,24 +12703,7 @@ static void ggml_compute_forward_conv_1d_generic_stage_0(
     switch(src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_conv_1d_generic_stage_0_f32(params, src0, src1, dst);
-            } break;
-        default:
-            {
-                GGML_ASSERT(false);
-            } break;
-    }
-}
-
-static void ggml_compute_forward_conv_1d_generic_stage_1(
-        const struct ggml_compute_params * params,
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
-    switch(src0->type) {
-        case GGML_TYPE_F32:
-            {
-                ggml_compute_forward_conv_1d_generic_stage_1_f16(params, src0, src1, dst);
+                ggml_compute_forward_conv_1d_stage_1_f16(params, src0, src1, dst);
             } break;
         default:
             {
@@ -15397,29 +15366,25 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_conv_1d(params, tensor->src[0], tensor->src[1], tensor);
             } break;
+        case GGML_OP_DEPTHWISE_CONV_STAGE_0:
+            {
+                ggml_compute_forward_depthwise_conv_stage_0(params, tensor->src[0], tensor->src[1], tensor);
+            } break;
+        case GGML_OP_DEPTHWISE_CONV_STAGE_1:
+            {
+                ggml_compute_forward_depthwise_conv_stage_1(params, tensor->src[0], tensor);
+            } break;
+        case GGML_OP_DEPTHWISE_CONV_STAGE_2:
+            {
+                ggml_compute_forward_depthwise_conv_stage_2(params, tensor->src[0], tensor->src[1], tensor);
+            } break;
         case GGML_OP_CONV_1D_STAGE_0:
             {
                 ggml_compute_forward_conv_1d_stage_0(params, tensor->src[0], tensor->src[1], tensor);
             } break;
         case GGML_OP_CONV_1D_STAGE_1:
             {
-                ggml_compute_forward_conv_1d_stage_1(params, tensor->src[0], tensor);
-            } break;
-        case GGML_OP_CONV_1D_STAGE_2:
-            {
-                ggml_compute_forward_conv_1d_stage_2(params, tensor->src[0], tensor->src[1], tensor);
-            } break;
-        case GGML_OP_CONV_1D_GENERIC:
-            {
-                ggml_compute_forward_conv_1d_generic(params, tensor->src[0], tensor->src[1], tensor);
-            } break;
-        case GGML_OP_CONV_1D_GENERIC_STAGE_0:
-            {
-                ggml_compute_forward_conv_1d_generic_stage_0(params, tensor->src[0], tensor->src[1], tensor);
-            } break;
-        case GGML_OP_CONV_1D_GENERIC_STAGE_1:
-            {
-                ggml_compute_forward_conv_1d_generic_stage_1(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_conv_1d_stage_1(params, tensor->src[0], tensor->src[1], tensor);
             } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
@@ -16427,15 +16392,15 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
-        case GGML_OP_CONV_1D_STAGE_0:
+        case GGML_OP_DEPTHWISE_CONV_STAGE_0:
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
-        case GGML_OP_CONV_1D_STAGE_1:
+        case GGML_OP_DEPTHWISE_CONV_STAGE_1:
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
-        case GGML_OP_CONV_1D_STAGE_2:
+        case GGML_OP_DEPTHWISE_CONV_STAGE_2:
             {
                 GGML_ASSERT(false); // TODO: not implemented
             } break;
@@ -17200,23 +17165,23 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             {
                 n_tasks = MIN(MIN(4, n_threads), ggml_nrows(node->src[0]));
             } break;
-        case GGML_OP_CONV_1D_STAGE_0:
+        case GGML_OP_DEPTHWISE_CONV_STAGE_0:
                 {
                     n_tasks = n_threads;
                 } break;
+        case GGML_OP_DEPTHWISE_CONV_STAGE_1:
+            {
+                n_tasks = n_threads;
+            } break;
+        case GGML_OP_DEPTHWISE_CONV_STAGE_2:
+            {
+                n_tasks = n_threads;
+            } break;
+        case GGML_OP_CONV_1D_STAGE_0:
+            {
+                n_tasks = n_threads;
+            } break;
         case GGML_OP_CONV_1D_STAGE_1:
-            {
-                n_tasks = n_threads;
-            } break;
-        case GGML_OP_CONV_1D_STAGE_2:
-            {
-                n_tasks = n_threads;
-            } break;
-        case GGML_OP_CONV_1D_GENERIC_STAGE_0:
-            {
-                n_tasks = n_threads;
-            } break;
-        case GGML_OP_CONV_1D_GENERIC_STAGE_1:
         {
             n_tasks = n_threads;
         } break;

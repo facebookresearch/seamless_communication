@@ -421,17 +421,16 @@ extern "C" {
         GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_IM2COL,
         GGML_OP_CONV_1D,
-        GGML_OP_CONV_1D_GENERIC,
         GGML_OP_CONV_2D,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
-        GGML_OP_CONV_1D_STAGE_0,  // internal
-        GGML_OP_CONV_1D_STAGE_1,  // internal
-        GGML_OP_CONV_1D_STAGE_2,  // internal
+        GGML_OP_DEPTHWISE_CONV_STAGE_0,  // internal
+        GGML_OP_DEPTHWISE_CONV_STAGE_1,  // internal
+        GGML_OP_DEPTHWISE_CONV_STAGE_2,  // internal
 
-        GGML_OP_CONV_1D_GENERIC_STAGE_0,
-        GGML_OP_CONV_1D_GENERIC_STAGE_1,  
+        GGML_OP_CONV_1D_STAGE_0,
+        GGML_OP_CONV_1D_STAGE_1,  
         GGML_OP_UPSCALE, // nearest interpolate
         GGML_OP_PAD,
         GGML_OP_ARGSORT,
@@ -1475,21 +1474,15 @@ extern "C" {
             int                  d1,
             bool                 is_2D);
 
-     GGML_API struct ggml_tensor * ggml_conv_1d(
+    GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
             int                   s0,  // stride
             int                   p0,  // padding
-            int                   d0); // dilation
-
-    GGML_API struct ggml_tensor * ggml_conv_1d_generic(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a,
-            struct ggml_tensor  * b,
-            int                   s0,  // stride
-            int                   p0,  // padding
-            int                   d0); // dilation
+            int                   d0,  // dilation
+            int                   groups // Number of blocked connections from input channels to output channels. Now supports 1 and model_dim (depthwise convolution)
+            ); 
 
     // conv_1d with padding = half
     // alias for ggml_conv_1d(a, b, s, a->ne[0]/2, d)
