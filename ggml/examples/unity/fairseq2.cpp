@@ -1176,9 +1176,19 @@ void _bootstrap_seqs_and_scores(
     int max_seq_len = scores->ne[0];
     int beam_size = scores->ne[1];
     GGML_ASSERT(prefix_seq_len > 0);
-    if (prefix_seq_len == 1)
+    if (prefix_seq_len == 1) {
+        // bootstrap all beams in full_seqs with EOS
+        int eos_id = model.vocab.token_to_id["</s>"];
+        if (model.tgt_vocab.id_to_token.size()) {
+            eos_id = model.tgt_vocab.token_to_id["</s>"];
+        }
+        size_t vocab_size = model.tensors["text_decoder_frontend.embed.weight"]->ne[1];
+        for (int k = 0; k < beam_size; k++) {
+            ggml_set_i32_1d(full_seqs, k * vocab_size, eos_id);
+        }
         return;
-
+    }
+        
     ggml_context* ctx = model.ctx;
 
     // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
@@ -1391,13 +1401,15 @@ extern "C" Hypothesis* generate_sequence(
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
     std::vector<int> lang_ids;
-    for (const auto& kv : model.vocab.token_to_id) {
-        if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
-            lang_ids.push_back(kv.second);
+    if (model.hparams["multilingual"] != 0) {
+        for (const auto& kv : model.vocab.token_to_id) {
+            if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
+                lang_ids.push_back(kv.second);
+            }
         }
+        std::sort(lang_ids.begin(), lang_ids.end());
     }
-    std::sort(lang_ids.begin(), lang_ids.end());
-
+    std::cout << "model multilinguality: " << model.hparams["multilingual"] << " (langs)" << std::endl;
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
     std::size_t beam_size = job.opts.beam_size;
@@ -1422,24 +1434,32 @@ extern "C" Hypothesis* generate_sequence(
 
     // Initialize buffers. (B, S)
     ggml_tensor* seqs = ggml_new_tensor_2d(search_ctx, GGML_TYPE_I32, max_seq_len, beam_size);
+    printf("Seqs dim: [%d %d %d]\n", seqs->ne[0], seqs->ne[1], seqs->ne[2]);
     ggml_set_i32(seqs, 0);
     ggml_set_name(seqs, "seqs_0");
     ggml_tensor* scores = ggml_new_tensor_2d(search_ctx, GGML_TYPE_F32, max_seq_len, beam_size);
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
+
     int prefix_seq_len = job.prefix_seq->ne[0];
     int start_step = prefix_seq_len - 1;
-    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
+    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[0]);
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[1]);
     GGML_ASSERT(step_ctx != search_ctx);
     GGML_ASSERT(prev_step_ctx != step_ctx);
     model.ctx = prev_step_ctx;
     // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
     model.kv_cache_ctx = search_ctx;
-    ggml_tensor* lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
+    ggml_tensor* lid_scores;
+    if (lang_ids.size()) {
+        lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
+    } 
+    // Multilingual models: Bootstrap LID scores
     _bootstrap_seqs_and_scores(
         model, job, seqs, scores, encoder_output, encoder_padding_mask, lid_scores, n_threads, lang_ids
     );
+    printf("Seqs dim after bootstrapping: [%d %d %d]\n", seqs->ne[0], seqs->ne[1], seqs->ne[2]);
+
     // Now we will only add self_attn.k_cache and those need to be resorted and copied at every step.
     model.kv_cache_ctx = nullptr;
 
@@ -1463,7 +1483,7 @@ extern "C" Hypothesis* generate_sequence(
         int p;
         if (step_nr == start_step) {
             // Find the most probable lang_tok and assign it to all beams, when prefix_seq[1] is <unk>
-            if (ggml_get_i32_1d(job.prefix_seq, 1) == model.vocab.token_to_id["<unk>"]) {
+            if (lang_ids.size() && ggml_get_i32_1d(job.prefix_seq, 1) == model.vocab.token_to_id["<unk>"]) {
                 float max_lprob = std::numeric_limits<float>::min();
                 for(int j = 0; j < lang_ids.size(); j++) {
                     auto val = ggml_get_f32_1d(lid_scores, j);
@@ -1555,6 +1575,13 @@ extern "C" Hypothesis* generate_sequence(
             ggml_set_f32_1d(beam_indices, ongoing_beams, beam);
             ggml_set_f32_1d(next_tokens, ongoing_beams, token);
             ggml_set_f32_1d(next_scores, ongoing_beams, tok_score);
+            if (model.hparams["multilingual"] == 0) {
+                printf("Token at top%d: %d (%s)\n", i, token, model.tgt_vocab.id_to_token.at(token).text.c_str());
+            } else {
+                printf("Token at top%d: %d (%s)\n", i, token, model.vocab.id_to_token.at(token).text.c_str());
+            }
+            // printf("Seqs dim: [%d %d %d], beam_indices: [%d %d]\n", seqs->ne[0], seqs->ne[1], seqs->ne[2], beam_indices->ne[0], beam_indices->ne[1]);
+
             ongoing_beams += 1;
             if (ongoing_beams >= beam_size) break;
         }
@@ -1564,6 +1591,8 @@ extern "C" Hypothesis* generate_sequence(
         // (B, S), (B) -> (B, S)
         // don't use allocr API, cause it might reuse a kv cache buffer several time.
         ggml_set_no_alloc(step_ctx, false);
+        printf("Seqs dim before getting rows step %d: [%d %d %d]\n", step_nr, seqs->ne[0], seqs->ne[1], seqs->ne[2]);
+
         ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
         struct ggml_cgraph * gf_reorder = ggml_new_graph(step_ctx);
@@ -1572,6 +1601,9 @@ extern "C" Hypothesis* generate_sequence(
         reorder_kv_cache(model, step_ctx, gf_reorder, beam_indices);
         ggml_graph_compute_with_ctx(step_ctx, gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
+        
+        printf("Seqs dim after detach step %d: [%d %d %d]\n", step_nr, seqs->ne[0], seqs->ne[1], seqs->ne[2]);
+
         scores = ggml_detach(new_scores);
 
         // seqs[:, step_nr + 1] = next_tokens

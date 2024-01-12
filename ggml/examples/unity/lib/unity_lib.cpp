@@ -46,14 +46,13 @@ Hypothesis* unity_decode(
         /*eos_idx*/model.vocab.token_to_id["</s>"],
         /*num_threads*/n_threads,
     };
-    // In multilingual models such as seamlessM4T, unity or NLLB, the EOS and langtok
-    // are fed as prompt for the generator
+    int prefix_seq_len = model.hparams["multilingual"] ? 2 : 1;
+    FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, prefix_seq_len));
+    ((int *)prefix_seq->data)[0]  = job.eos_idx;
     if (model.hparams["multilingual"] != 0) {
-        FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
-        ((int *)prefix_seq->data)[0]  = job.eos_idx;
         ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
-        job.prefix_seq = prefix_seq;
     }
+    job.prefix_seq = prefix_seq;
     return generate_sequence(model, job, encoder_output, nullptr, model.ctx, n_threads);
 }
 
@@ -177,20 +176,21 @@ extern "C" Result unity_eval_text(fairseq2_model& model, const std::string& text
     std::vector<float> word_scores = p.second;
 
     std::unordered_map<std::string, float> lid_scores;
-    std::vector<int> lang_ids;
-    for (const auto& kv : model.vocab.token_to_id) {
-        if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
-            lang_ids.push_back(kv.second);
+    if (model.hparams["multilingual"] != 0) {
+        std::vector<int> lang_ids;
+        for (const auto& kv : model.vocab.token_to_id) {
+            if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
+                lang_ids.push_back(kv.second);
+            }
         }
+        std::sort(lang_ids.begin(), lang_ids.end());
+        for (size_t i = 0; i < lang_ids.size(); ++i) {
+            lid_scores[model.vocab.id_to_token[lang_ids[i]].text] = ggml_get_f32_1d(hypo[0].lid_scores, i); 
+        }
+        result.lid_scores = lid_scores;
     }
-    std::sort(lang_ids.begin(), lang_ids.end());
-    for (size_t i = 0; i < lang_ids.size(); ++i) {
-        lid_scores[model.vocab.id_to_token[lang_ids[i]].text] = ggml_get_f32_1d(hypo[0].lid_scores, i); 
-    }
-    
     result.transcription = result_tokens;
     result.word_confidence_scores = word_scores;
-    result.lid_scores = lid_scores;
     result.err = 0;
     ggml_free(model.ctx);
     ggml_allocr_reset(fwd_alloc);
