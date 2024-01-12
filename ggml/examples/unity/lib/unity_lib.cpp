@@ -46,12 +46,14 @@ Hypothesis* unity_decode(
         /*eos_idx*/model.vocab.token_to_id["</s>"],
         /*num_threads*/n_threads,
     };
-    FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
-    ((int *)prefix_seq->data)[0]  = job.eos_idx;
-if (model.hparams["multilingual"] != 0) {
-    ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
-}
-    job.prefix_seq = prefix_seq;
+    // In multilingual models such as seamlessM4T, unity or NLLB, the EOS and langtok
+    // are fed as prompt for the generator
+    if (model.hparams["multilingual"] != 0) {
+        FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
+        ((int *)prefix_seq->data)[0]  = job.eos_idx;
+        ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
+        job.prefix_seq = prefix_seq;
+    }
     return generate_sequence(model, job, encoder_output, nullptr, model.ctx, n_threads);
 }
 
