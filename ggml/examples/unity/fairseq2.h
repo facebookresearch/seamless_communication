@@ -97,7 +97,11 @@ struct fairseq2_model {
     // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
     std::unordered_map<std::string, std::int64_t> layer_config = {};
 
+// Vocabulary for text transcription and translation APIs
     llama_vocab vocab;
+
+    // Optional target vocabulary for bilingual models
+    llama_vocab tgt_vocab;
 
     // KV cache for attention layers
     mutable std::unordered_map<std::string, KeyValueTensor> kv_cache = {};

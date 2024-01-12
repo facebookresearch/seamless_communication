@@ -48,7 +48,9 @@ Hypothesis* unity_decode(
     };
     FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
     ((int *)prefix_seq->data)[0]  = job.eos_idx;
+if (model.hparams["multilingual"] != 0) {
     ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
+}
     job.prefix_seq = prefix_seq;
     return generate_sequence(model, job, encoder_output, nullptr, model.ctx, n_threads);
 }
@@ -137,13 +139,15 @@ extern "C" Result unity_eval_text(fairseq2_model& model, const std::string& text
     auto encoder_fwd_buf = std::vector<uint8_t>(ctx_size_mb * 1024 * 1024);
     ggml_allocr* fwd_alloc = ggml_allocr_new(encoder_fwd_buf.data(), encoder_fwd_buf.capacity(), 8);
     int tgt_lang_idx;
-    auto tgt_lang_ptr = model.vocab.token_to_id.find("__" + tgt_lang + "__"); 
-    if (tgt_lang_ptr == model.vocab.token_to_id.end()) {
-        std::cerr << "Unknown language " << tgt_lang << "\n";
-        result.err = 1;
-        return result;
+    if (model.hparams["multilingual"] != 0) {
+        auto tgt_lang_ptr = model.vocab.token_to_id.find("__" + tgt_lang + "__"); 
+        if (tgt_lang_ptr == model.vocab.token_to_id.end()) {
+            std::cerr << "Unknown language " << tgt_lang << "\n";
+            result.err = 1;
+            return result;
+        }
+        tgt_lang_idx = tgt_lang_ptr->second;
     }
-    tgt_lang_idx = tgt_lang_ptr->second;
 
     // tokenize the input text
     model.ctx = ctx_from_buffer(encoder_buf);

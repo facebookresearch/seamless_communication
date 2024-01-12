@@ -1781,15 +1781,16 @@ extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, g
 
 
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out) {
-    int eos_idx = model->vocab.token_to_id["</s>"];
+    bool no_tgt_vocab = model->tgt_vocab.id_to_token.empty();
+    int eos_idx = no_tgt_vocab ? model->vocab.token_to_id["</s>"] : model->tgt_vocab.token_to_id["</s>"];
     int sent_len = tokens->ne[0];
     std::size_t written = 0;
+std::vector<llama_vocab::token_data> id_to_token = no_tgt_vocab ? model->vocab.id_to_token : model->tgt_vocab.id_to_token;
     for (int i = 0; i < sent_len; ++i) {
         int id = ggml_get_i32_1d(tokens, i);
         // Don't print the EOS token but only if it appear at the end.
         if (i == sent_len - 1 && eos_idx == id) break;
-
-        std::string token = model->vocab.id_to_token.at(id).text;
+        std::string token = no_tgt_vocab ? model->vocab.id_to_token.at(id).text : model->tgt_vocab.id_to_token.at(id).text;
         // Skip the first space outputted.
         auto begin = token.begin();
         if (i == 0 && token.size() > 0 && token[0] == ' ') begin += 1;
@@ -1804,8 +1805,13 @@ extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tenso
 
 
 // TODO: Unify with the above?
-std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out) {
-    int eos_idx = model->vocab.token_to_id["</s>"];
+std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(
+        fairseq2_model* model,
+        ggml_tensor* tokens,
+        ggml_tensor* scores,
+        char* out) {
+    bool no_tgt_vocab = model->tgt_vocab.id_to_token.empty();
+    int eos_idx = no_tgt_vocab ? model->vocab.token_to_id["</s>"] : model->tgt_vocab.token_to_id["</s>"];
     int sent_len = tokens->ne[0];
     std::size_t written = 0;
     std::vector<float> word_scores;

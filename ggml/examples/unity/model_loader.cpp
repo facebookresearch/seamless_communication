@@ -219,5 +219,6 @@ extern "C" int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname)
     loader.load_hparams(model.layer_config, fin);
     loader.load_vocab(model.vocab, fin);
     loader.load_model_weights(model, fin);
+    loader.load_vocab(model.tgt_vocab, fin);
     return 0;
 }
