@@ -1467,10 +1467,9 @@ extern "C" Hypothesis* generate_sequence(
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
 
-    int prefix_seq_len = job.prefix_seq->ne[0];
-    int start_step = prefix_seq_len - 1;
-    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[1]);
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[0]);
+    int start_step = 1;
+    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);	    
     GGML_ASSERT(step_ctx != search_ctx);
     GGML_ASSERT(prev_step_ctx != step_ctx);
     model.ctx = prev_step_ctx;
