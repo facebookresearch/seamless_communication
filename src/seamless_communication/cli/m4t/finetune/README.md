@@ -105,8 +105,8 @@ torchrun \
    --learning_rate 1e-6 \
    --warmup_steps 100 \
    --max_epochs 10 \
-   --patience 3 \
-   --model_name seamlessM4T_large \
+   --patience 5 \
+   --model_name seamlessM4T_v2_large \
    --save_model_to $DATASET_DIR/checkpoint.pt
 ```
 
@@ -114,20 +114,29 @@ Excerpt from an example finetuning log:
 
 ```
 ...
-2023-08-21 14:46:16,936 INFO -- trainer.1100368: Eval after 300 updates: loss=8.7755 best_loss=8.7755 patience_steps_left=3
-2023-08-21 14:46:16,936 INFO -- trainer.1100368: Saving model
-2023-08-21 14:46:35,863 INFO -- trainer.1100368: Epoch 006 / update 00310: train loss=16.3768 last lr=5.68E-08
-2023-08-21 14:46:42,610 INFO -- trainer.1100368: Epoch 006 / update 00320: train loss=16.3730 last lr=5.59E-08
-2023-08-21 14:46:48,285 INFO -- trainer.1100368: Epoch 006 / update 00330: train loss=16.4598 last lr=5.50E-08
-2023-08-21 14:46:54,390 INFO -- trainer.1100368: Epoch 006 / update 00340: train loss=16.4218 last lr=5.42E-08
-2023-08-21 14:47:08,461 INFO -- trainer.1100368: Epoch 006 / update 00350: train loss=16.3906 last lr=5.35E-08
-2023-08-21 14:47:09,067 INFO -- trainer.1100368: Run evaluation
-2023-08-21 14:47:19,205 INFO -- trainer.1100368: Eval after 350 updates: loss=8.7462 best_loss=8.7462 patience_steps_left=3
-2023-08-21 14:47:19,205 INFO -- trainer.1100368: Saving model
-2023-08-21 14:47:44,981 INFO -- trainer.1100368: Epoch 007 / update 00360: train loss=16.4267 last lr=5.27E-08
-2023-08-21 14:47:51,383 INFO -- trainer.1100368: Epoch 007 / update 00370: train loss=16.3630 last lr=5.20E-08
-2023-08-21 14:47:58,305 INFO -- trainer.1100368: Epoch 007 / update 00380: train loss=16.3666 last lr=5.13E-08
-2023-08-21 14:48:04,396 INFO -- trainer.1100368: Epoch 007 / update 00390: train loss=16.3605 last lr=5.06E-08
-2023-08-21 14:48:10,630 INFO -- trainer.1100368: Epoch 007 / update 00400: train loss=16.3518 last lr=5.00E-08
+2024-01-17 03:13:12,608 INFO -- trainer: Eval after 200 updates: loss=4.5721 best_loss=4.4743 patience_steps_left=7
+2024-01-17 03:13:19,859 INFO -- trainer: Epoch 004 / update 00210: train loss=4.4922 last lr=6.90E-07
+2024-01-17 03:13:27,946 INFO -- trainer: Epoch 004 / update 00220: train loss=4.4694 last lr=6.74E-07
+2024-01-17 03:13:36,320 INFO -- trainer: Epoch 004 / update 00230: train loss=4.4760 last lr=6.59E-07
+2024-01-17 03:14:08,554 INFO -- trainer: Epoch 005 / update 00240: train loss=4.3438 last lr=6.45E-07
+2024-01-17 03:14:16,529 INFO -- trainer: Epoch 005 / update 00250: train loss=4.2979 last lr=6.32E-07
+2024-01-17 03:14:17,382 INFO -- trainer: Run evaluation
+2024-01-17 03:14:31,172 INFO -- trainer: Eval after 250 updates: loss=4.4967 best_loss=4.4743 patience_steps_left=6
+2024-01-17 03:14:38,497 INFO -- trainer: Epoch 005 / update 00260: train loss=4.2690 last lr=6.20E-07
+2024-01-17 03:14:46,505 INFO -- trainer: Epoch 005 / update 00270: train loss=4.2489 last lr=6.09E-07
+2024-01-17 03:14:54,796 INFO -- trainer: Epoch 005 / update 00280: train loss=4.2422 last lr=5.98E-07
+2024-01-17 03:15:02,976 INFO -- trainer: Epoch 005 / update 00290: train loss=4.1874 last lr=5.87E-07
+2024-01-17 03:15:34,510 INFO -- trainer: Epoch 006 / update 00300: train loss=4.1768 last lr=5.77E-07
+2024-01-17 03:15:35,329 INFO -- trainer: Run evaluation
+2024-01-17 03:15:49,634 INFO -- trainer: Eval after 300 updates: loss=4.4688 best_loss=4.4688 patience_steps_left=10
+2024-01-17 03:15:49,634 INFO -- trainer: Saving model
+2024-01-17 03:16:08,825 INFO -- trainer: Epoch 006 / update 00310: train loss=4.1509 last lr=5.68E-07
+2024-01-17 03:16:16,979 INFO -- trainer: Epoch 006 / update 00320: train loss=4.0949 last lr=5.59E-07
+2024-01-17 03:16:25,142 INFO -- trainer: Epoch 006 / update 00330: train loss=4.1053 last lr=5.50E-07
+2024-01-17 03:16:32,966 INFO -- trainer: Epoch 006 / update 00340: train loss=4.1237 last lr=5.42E-07
+2024-01-17 03:16:53,995 INFO -- trainer: Epoch 006 / update 00350: train loss=4.0980 last lr=5.35E-07
+2024-01-17 03:16:54,690 INFO -- trainer: Run evaluation
+2024-01-17 03:17:08,073 INFO -- trainer: Eval after 350 updates: loss=4.4463 best_loss=4.4463 patience_steps_left=10
+2024-01-17 03:17:08,074 INFO -- trainer: Saving model
 ...
 ```
