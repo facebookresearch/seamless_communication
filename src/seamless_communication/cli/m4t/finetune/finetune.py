@@ -126,6 +126,7 @@ def main() -> None:
     args = init_parser().parse_args()
     dist_utils.init_distributed([logger, trainer.logger])
     device = torch.device("cuda")
+    float_dtype = torch.float16
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
     finetune_params = trainer.FinetuneParams(
@@ -143,12 +144,19 @@ def main() -> None:
     )
     logger.info(f"Finetune params: {finetune_params}")
     model: UnitYModel = load_unity_model(
-        args.model_name, device=finetune_params.device, dtype=torch.float16
+        args.model_name, device=torch.device("cpu"), dtype=float_dtype
     )
-    logger.info(f"Model {model}")
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    assert model.t2u_model is not None
-    assert model.t2u_model.target_vocab_info == unit_tokenizer.vocab_info
+    # (optional) delete unused params to reduce GPU memory consumption
+    if (
+        finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT
+        and model.t2u_model is not None
+    ):
+        model.t2u_model = None
+    if model.text_encoder is not None:
+        model.text_encoder = None
+    model = model.to(finetune_params.device)
+    logger.info(f"Model {model}")
 
     train_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
@@ -157,6 +165,8 @@ def main() -> None:
             batch_size=finetune_params.train_batch_size,
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
+            max_audio_length_sec=15.0,
+            float_dtype=float_dtype,
         ),
         dataset_manifest_path=args.train_dataset,
     )
@@ -167,6 +177,8 @@ def main() -> None:
             batch_size=finetune_params.eval_batch_size,
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
+            max_audio_length_sec=100.0,
+            float_dtype=float_dtype,
         ),
         dataset_manifest_path=args.eval_dataset,
     )

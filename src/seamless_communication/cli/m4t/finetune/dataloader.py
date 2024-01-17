@@ -13,11 +13,11 @@ from typing import Any, Dict, Iterable, List, Optional
 import numpy as np
 import torch
 import torchaudio
-import torchaudio.compliance.kaldi as ta_kaldi
 from datasets import Dataset
 from datasets.distributed import split_dataset_by_node
 from fairseq2.data.text import TextTokenEncoder
 from fairseq2.models.nllb import NllbTokenizer
+from fairseq2.data.audio import WaveformToFbankConverter
 from torch import Tensor
 from torch.nn.functional import pad as pad_tensor
 from torch.utils.data import DataLoader
@@ -69,6 +69,10 @@ class BatchingConfig:
     """The pad index to use in fbanks batching."""
 
     batch_size: int = 5
+    """Fixed batch size to use"""
+
+    max_audio_length_sec: float = 15.0
+    """ Drop samples with source audio sample length above the threshold."""
 
     rank: int = 0
     """The rank of this worker in the process group."""
@@ -83,11 +87,13 @@ class BatchingConfig:
     """Select between fp16/fp32 for float tensors """
 
 
-def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
+def worker_init_fn(worker_id: int) -> None:
+    np.random.seed(np.random.get_state()[1][0] + worker_id)  # type: ignore
 
 
 class UnitYDataLoader:
+    SAMPLE_RATE = 16_000
+
     def __init__(
         self,
         text_tokenizer: NllbTokenizer,
@@ -100,9 +106,17 @@ class UnitYDataLoader:
         self.unit_tokenizer = unit_tokenizer
         self.unit_encoders_per_lang: Dict[str, UnitTokenEncoder] = {}
         self.batching_config = batching_config
+        self._fbank_extract_params = {
+            "num_mel_bins": 80,
+            "waveform_scale": 32768,
+            "channel_last": True,
+            "standardize": True,
+            "device": torch.device("cpu"),
+            "dtype": self.batching_config.float_dtype,
+        }
         self.dataset = self._load_manifest(dataset_manifest_path)
 
-    def get_dataloader(self) -> DataLoader:
+    def get_dataloader(self) -> DataLoader[SeqsBatch]:
         subset = split_dataset_by_node(
             self.dataset,
             rank=self.batching_config.rank,
@@ -122,8 +136,21 @@ class UnitYDataLoader:
         return self.get_dataloader().__iter__()
 
     def _get_source_fbank(self, sample: LangPairSample) -> Tensor:
-        audio_input = torchaudio.load(sample.source.audio_local_path)[0]
-        return ta_kaldi.fbank(audio_input, num_mel_bins=80)
+        wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
+        assert (
+            int(sample_rate) == self.SAMPLE_RATE
+        ), f"sample != {self.SAMPLE_RATE}, please resample"
+        assert len(wav.shape) in (1, 2)
+        if len(wav.shape) == 1:
+            wav = wav.unsqueeze(-1)
+        elif wav.shape[0] <= 2:  # channel is first, should be second
+            wav = wav.transpose(0, 1)
+        return WaveformToFbankConverter(**self._fbank_extract_params)(  # type: ignore
+            {
+                "waveform": wav,
+                "sample_rate": self.SAMPLE_RATE,
+            }
+        )["fbank"]
 
     def _get_tokenized_target_text(self, sample: LangPairSample) -> Tensor:
         """Expected sequence is [<eos>, <lang_tok> , ..text tokens.., <eos>]"""
@@ -163,10 +190,25 @@ class UnitYDataLoader:
             padded_tensors.append(pad_tensor(tensor, padding, "constant", pad_value))
         return torch.stack([tensor for tensor in padded_tensors], dim=0)
 
+    def _is_long_src_audio(self, sample: LangPairSample) -> bool:
+        wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
+        length_s: float = max(wav.shape) / sample_rate
+        return length_s > self.batching_config.max_audio_length_sec
+
     def _prepare_batch(self, raw_samples: List[Dict[str, Any]]) -> MultimodalSeqsBatch:
         samples = [LangPairSample.from_json(sample) for sample in raw_samples]
         # input speech
+        #  - filter long audio samples
+        filtered_samples = [sample for sample in samples if not self._is_long_src_audio(sample)]
+        samples = filtered_samples if filtered_samples else [samples[0]]  # keep at least one sample
         src_tokens_list = [self._get_source_fbank(sample) for sample in samples]
+        #  - filter NaNs in fbanks
+        with_nans = [fbank.isnan().any().item() for fbank in src_tokens_list]
+        samples = [sample for sample, skip in zip(samples, with_nans) if not skip]
+        assert len(samples) > 0
+        src_tokens_list = [
+            src_toks for src_toks, skip in zip(src_tokens_list, with_nans) if not skip
+        ]
         src_tokens = self._batch_tensors(
             src_tokens_list, pad_value=self.batching_config.fbank_feats_pad_idx
         ).to(self.batching_config.float_dtype)
