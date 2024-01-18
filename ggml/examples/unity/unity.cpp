@@ -85,8 +85,6 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.verbose = true;
         } else if (arg == "-M" || arg == "--mem") {
             params.opts.mem_mb = std::stoi(get_next_arg(i, argc, argv, arg, params));
-        } else if (arg == "--max-audio") {
-            params.max_audio_s = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else {
             params.files.push_back(std::string(arg));
         }
