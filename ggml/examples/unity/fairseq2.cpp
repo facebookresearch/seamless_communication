@@ -58,7 +58,6 @@ extern "C" void fairseq2_kv_cache_alloc(fairseq2_model& model, ggml_context* kv_
     // Note: we only allocate the masks, proper kv cache allocation is delayed.
     GGML_ASSERT(kv_cache_ctx);
     GGML_ASSERT(!ggml_get_no_alloc(kv_cache_ctx));  // We need to be able to alloc the kv_cache buffers
-    model.kv_cache_ctx = kv_cache_ctx;
     auto attn_glob = "text_decoder.*_attn.k_proj.weight";
     FORCE_ALLOC(self_attn_mask, kv_cache_ctx, ggml_new_tensor_2d(kv_cache_ctx, GGML_TYPE_F32, max_seq_len, max_seq_len));
     self_attn_mask = ggml_diag_mask_inf_inplace(kv_cache_ctx, self_attn_mask, 0);
@@ -109,7 +108,7 @@ inline ggml_tensor* ggml_unsqueeze(ggml_context* ctx, ggml_tensor* x, int dim) {
 void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, ggml_tensor** k, ggml_tensor** v, ggml_tensor** self_attn_mask) {
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
-    ggml_context* ctx = model.kv_cache_ctx ? model.kv_cache_ctx : model.ctx;
+    ggml_context* ctx = model.ctx;
     // We need to force allocation here, otherwise the kv_cache buffers can be reused
     bool no_alloc_save = ggml_get_no_alloc(ctx);
     ggml_set_no_alloc(ctx, false);
@@ -434,7 +433,7 @@ extern "C" ggml_tensor* MultiheadAttention_forward(
             if (kv_cache.step_nr == 0) {
                 // If possible we use the ctx dedicated to kv_cache here,
                 // because the enc dec attention is typically long lived.
-                if (model.kv_cache_ctx) model.ctx = model.kv_cache_ctx;
+                if (model.enc_kv_cache_ctx) model.ctx = model.enc_kv_cache_ctx;
                 k = Linear_forward(model, prefix + ".k_proj", keys);
                 ggml_set_name(k, "k");
                 v = Linear_forward(model, prefix + ".v_proj", values);
@@ -1202,24 +1201,15 @@ void _bootstrap_seqs_and_scores(
     int max_seq_len = scores->ne[0];
     int beam_size = scores->ne[1];
     GGML_ASSERT(prefix_seq_len > 0);
+    ggml_context* ctx = model.ctx;
     if (prefix_seq_len == 1) {
-        // bootstrap all beams in full_seqs with EOS
-        // This is equivalent to:
-        // // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
-        // because in normal case: prefix_seq[0] = EOS
-        // 
-        int eos_id = model.vocab.token_to_id["</s>"];
-        if (model.tgt_vocab.id_to_token.size()) {
-            eos_id = model.tgt_vocab.token_to_id["</s>"];
-        }
-        size_t vocab_size = model.tensors["text_decoder_frontend.embed.weight"]->ne[1];
-        for (int k = 0; k < beam_size; k++) {
-            ggml_set_i32_1d(full_seqs, k * vocab_size, eos_id);
-        }
+        // We only have one token in prefix, we won't compute decoding scores,
+        // we just need to copy the token to seqs.
+        // Note: it also means the enc_kv_cache will be populated later.
+        ggml_tensor* seqs = ggml_slice(ctx, full_seqs, 0, 0, prefix_seq_len);
+        ggml_set_i32(seqs, ggml_get_i32_1d(job.prefix_seq, 0));
         return;
     }
-        
-    ggml_context* ctx = model.ctx;
 
     // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
     ggml_tensor* seqs = ggml_slice(ctx, full_seqs, 0, 0, prefix_seq_len);
@@ -1473,13 +1463,13 @@ extern "C" Hypothesis* generate_sequence(
 
     int prefix_seq_len = job.prefix_seq->ne[0];
     int start_step = prefix_seq_len - 1;
-    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
-    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);	    
+    ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step + 1) % 2]);
+    ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
     GGML_ASSERT(step_ctx != search_ctx);
     GGML_ASSERT(prev_step_ctx != step_ctx);
     model.ctx = prev_step_ctx;
     // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
-    model.kv_cache_ctx = search_ctx;
+    model.enc_kv_cache_ctx = search_ctx;
     ggml_tensor* lid_scores;
     if (lang_ids.size()) {
         lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
@@ -1489,9 +1479,6 @@ extern "C" Hypothesis* generate_sequence(
         model, job, seqs, scores, encoder_output, encoder_padding_mask, lid_scores, n_threads, lang_ids
     );
     printf("Seqs dim after bootstrapping: [%d %d %d]\n", seqs->ne[0], seqs->ne[1], seqs->ne[2]);
-
-    // Now we will only add self_attn.k_cache and those need to be resorted and copied at every step.
-    model.kv_cache_ctx = nullptr;
 
     // Holds the indices of beams (a beam can occur more than once) that we
     // should continue with in the next step.

@@ -110,7 +110,7 @@ struct fairseq2_model {
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
     ggml_context* ctx = nullptr;
 
-    ggml_context* kv_cache_ctx = nullptr;
+    ggml_context* enc_kv_cache_ctx = nullptr;
 };
 
 double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name);
