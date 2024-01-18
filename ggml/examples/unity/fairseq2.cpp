@@ -11,6 +11,8 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 
+#include <numeric>
+
 ggml_tensor* ggml_detach(ggml_tensor* a) {
     a->op = GGML_OP_NONE;
     std::fill(a->src, a->src + GGML_MAX_SRC, nullptr);
@@ -108,9 +110,6 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
     KeyValueTensor& kv = model.kv_cache[prefix];
     int step_nr = kv.step_nr;
     ggml_context* ctx = model.kv_cache_ctx ? model.kv_cache_ctx : model.ctx;
-    // We need to force allocation here, otherwise the kv_cache buffers can be reused
-    bool no_alloc_save = ggml_get_no_alloc(ctx);
-    ggml_set_no_alloc(ctx, false);
     int n_steps = (*k)->ne[1];
     int k_proj, batch_size;
 
@@ -139,15 +138,15 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
 
     // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
     // we return the Sq slice of the (Sq, Sk) attention mask
-    if (self_attn_mask != nullptr) {
-        *self_attn_mask = ggml_slice(
-            ctx, ggml_slice(ctx, kv.self_attn_mask, 0, 0, step_nr),
-            1, step_nr - 1, step_nr
-        );
-    }
+    *self_attn_mask = ggml_slice(
+        model.ctx,
+        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr),
+        1,
+        step_nr - 1,
+        step_nr
+    );
 
     kv.step_nr = step_nr;
-    ggml_set_no_alloc(ctx, no_alloc_save);
 }
 
 // variant of ggml_get_rows that allows for a with more than 2 dims.
@@ -214,7 +213,7 @@ extern "C" std::int64_t fairseq2_model_layer_config_int(const fairseq2_model& mo
 
 extern "C" void fairseq2_model_free(fairseq2_model* model) {
     if (model->tensors_ctx) ggml_free(model->tensors_ctx);
-    delete model;
+    // delete model;
 }
 
 extern "C" void fairseq2_model_set_inference_ctx(fairseq2_model* model, ggml_context* ctx) {
@@ -594,11 +593,7 @@ extern "C" ggml_tensor* WaveformToFbank_forward(
     output = ggml_norm(ctx, output, 1e-5);
     output = ggml_dup(ctx, ggml_transpose(ctx, output));
     if (output->ne[1] % 2 == 1) {
-        ggml_tensor* remove_last = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, output->ne[1]-1);
-        for (int i = 0; i < output->ne[1]-1; ++i) {
-            ((int32_t *) remove_last->data)[i] = i;
-        }
-        output = ggml_get_rows(ctx, output, remove_last);
+        output = ggml_dup(ctx, ggml_slice(ctx, output, 1, 0, output->ne[1]-1));
     }
     output = ggml_reshape_2d(ctx, output, output->ne[0] * 2, output->ne[1] / 2);
     return output;
@@ -714,7 +709,9 @@ extern "C" ggml_tensor* ConvModule_forward(
         seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
 
         // S x C -> (S+K-1) x C -> K x S x C -> S x C
-        seqs = ggml_conv_1d(ctx, model.tensors[prefix + ".depthwise_conv.weight"], seqs, 1, 15, 1);
+        int K = model.tensors[prefix + ".depthwise_conv.weight"]->ne[0];
+
+        seqs = ggml_conv_1d(ctx, model.tensors[prefix + ".depthwise_conv.weight"], seqs, 1, K / 2, 1, seqs->ne[1]);
 
         // conv: Custom implementation of batch norm
         seqs = ggml_batch_norm(ctx, seqs, model.tensors[prefix + ".batch_norm.weight"], model.tensors[prefix + ".batch_norm.bias"], model.tensors[prefix + ".batch_norm.running_mean"], model.tensors[prefix + ".batch_norm.running_var"], 1e-5);
@@ -813,14 +810,14 @@ extern "C" ggml_tensor* StandardConformerEncoderAdaptorLayer_forward(
     ggml_tensor* residual = seqs;
     residual = LayerNorm_forward(model, prefix + ".residual_layer_norm", residual);
     residual = ggml_dup(ctx, ggml_permute(ctx, residual, 1, 0, 2, 3));
-    residual = ggml_conv_1d_generic(ctx, model.tensors[prefix + ".residual_conv.weight"], residual, 8, 4, 1);
+    residual = ggml_conv_1d(ctx, model.tensors[prefix + ".residual_conv.weight"], residual, 8, 4, 1, 1);
     residual = ggml_dup(ctx, ggml_permute(ctx, residual, 1, 0, 2, 3));
     residual = ggml_add_inplace(ctx, ggml_repeat(ctx, model.tensors[prefix + ".residual_conv.bias"], residual), residual);
     residual = ggml_glu(ctx, residual);
 
     seqs = LayerNorm_forward(model, prefix + ".self_attn_layer_norm", seqs);
     seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
-    seqs = ggml_conv_1d_generic(ctx, model.tensors[prefix + ".self_attn_conv.weight"], seqs, 8, 4, 1);
+    seqs = ggml_conv_1d(ctx, model.tensors[prefix + ".self_attn_conv.weight"], seqs, 8, 4, 1, 1);
     seqs = ggml_dup(ctx, ggml_permute(ctx, seqs, 1, 0, 2, 3));
     seqs = ggml_add_inplace(ctx, seqs, ggml_repeat(ctx, model.tensors[prefix + ".self_attn_conv.bias"], seqs));
     seqs = ggml_glu(ctx, seqs);
@@ -1160,22 +1157,31 @@ ggml_tensor* ggml_expand_2d(ggml_context* ctx, ggml_tensor* x, int64_t ne0, int6
     return y;
 }
 
-extern "C" void _bootstrap_seqs_and_scores(
+void _bootstrap_seqs_and_scores(
     fairseq2_model& model,
     const SequenceGeneratorJob& job,
     ggml_tensor* full_seqs,
     ggml_tensor* scores,
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
-    int n_threads
+    ggml_tensor* lid_scores,
+    int n_threads,
+    const std::vector<int>& lang_ids
 ) {
+    // Returns LID score map
     int prefix_seq_len = job.prefix_seq->ne[0];
     int max_seq_len = scores->ne[0];
     int beam_size = scores->ne[1];
     GGML_ASSERT(prefix_seq_len > 0);
-    if (prefix_seq_len == 1)
+    if (prefix_seq_len == 1) {
+        // bootstrap all beams in full_seqs with EOS
+        size_t vocab_size = model.tensors["text_decoder_frontend.embed.weight"]->ne[1];
+        for (int k = 0; k < beam_size; k++) {
+            // We start with 1 and ignore step 0 in bilingual models
+            ggml_set_i32_1d(full_seqs, 1 + k * vocab_size, job.eos_idx);
+        }
         return;
-
+    }   
     ggml_context* ctx = model.ctx;
 
     // full_seqs[:, : prefix_seq_len] = job.prefix_seq;
@@ -1202,14 +1208,33 @@ extern "C" void _bootstrap_seqs_and_scores(
     ggml_tensor* logits = Linear_forward(model, "final_proj", decoder_output);
     int vocab_size = logits->ne[0];
     ggml_tensor* lprobs = ggml_log_softmax(ctx, ggml_slice(ctx, logits, 1, 0, 1));
+    struct ggml_cgraph * gf = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf, lprobs);
+    ggml_graph_compute_with_ctx(ctx, gf, n_threads);
 
-    ggml_cgraph gf = ggml_build_forward(lprobs);
-    ggml_graph_compute_with_ctx(ctx, &gf, n_threads);
+    full_seqs->type = GGML_TYPE_I32;
+    job.prefix_seq->type = GGML_TYPE_I32;
+    // For LID
+    for (size_t i = 0; i < lang_ids.size(); ++i) {
+        ggml_set_f32_1d(lid_scores, i, std::exp(ggml_get_f32_1d(lprobs, lang_ids[i]))); 
+    }
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
     for (int i = 1; i < prefix_seq_len; ++i) {
-        int p = ggml_get_i32_1d(job.prefix_seq, i);
+        int p;
+        if (ggml_get_i32_1d(job.prefix_seq, i) == model.vocab.token_to_id["<unk>"]) {
+            // If tgt_lang is unk, use the most probable lang tag predicted by model
+            int max_value = std::numeric_limits<float>::min();
+            for (int j = 0; j < lang_ids.size(); j++) {
+                if(ggml_get_f32_1d(lprobs, lang_ids[j]) > max_value) {
+                    max_value = ggml_get_f32_1d(lprobs, lang_ids[j]);
+                    p = lang_ids[j];
+                }
+            }
+        } else {
+            p = ggml_get_i32_1d(job.prefix_seq, i);
+        }
         p_score += ggml_get_f32_1d(lprobs, i * vocab_size + p);
         for (int b = 0; b < beam_size; ++b) {
             // scores: (N, S)
@@ -1290,6 +1315,7 @@ void _finalize_hypothesis(
     float eos_score,
     ggml_tensor* seqs, // (beam_size, seq_len)
     ggml_tensor* scores, // (beam_size, seq_len)
+    ggml_tensor* lid_scores,
     Hypothesis* hypothesis
 ) {
     ggml_tensor* seq = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, step_nr + 2);
@@ -1317,6 +1343,7 @@ void _finalize_hypothesis(
         // Skip first EOS since it is always 0 and skews normalization.
         eos_score /= (float)std::pow((step_nr + 1), job.opts.len_penalty);
     hypothesis->score = eos_score;
+    hypothesis->lid_scores = lid_scores;
 }
 
 // Uses ggml_context to store any object.
@@ -1366,6 +1393,15 @@ extern "C" Hypothesis* generate_sequence(
     };
     ggml_allocr* step_alloc = new_arena_allocr(local_bufs[3]);
 
+    std::vector<int> lang_ids;
+    if (job.prefix_seq->ne[0] > 1) {
+        for (const auto& kv : model.vocab.token_to_id) {
+            if (kv.first.substr(0, 2) == "__" && kv.first.substr(kv.first.size() - 2) == "__") {
+                lang_ids.push_back(kv.second);
+            }
+        }
+        std::sort(lang_ids.begin(), lang_ids.end());
+    }
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
     size_t vocab_size = embed->ne[1];
     std::size_t beam_size = job.opts.beam_size;
@@ -1395,10 +1431,7 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* scores = ggml_new_tensor_2d(search_ctx, GGML_TYPE_F32, max_seq_len, beam_size);
     ggml_set_name(scores, "scores_0");
     ggml_set_f32(scores, 0.0);
-
-    int prefix_seq_len = job.prefix_seq->ne[0];
-    int start_step = prefix_seq_len - 1;
-
+    int start_step = 1;
     ggml_context* prev_step_ctx = ctx_from_buffer(local_bufs[(start_step - 1) % 2]);
     ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
     GGML_ASSERT(step_ctx != search_ctx);
@@ -1406,11 +1439,15 @@ extern "C" Hypothesis* generate_sequence(
     model.ctx = prev_step_ctx;
     // search_ctx because we need encoder_decoder_attn.k_cache to survive for the full search
     model.kv_cache_ctx = search_ctx;
+    ggml_tensor* lid_scores;
+    if (lang_ids.size()) {
+        lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
+    } 
+    
+    // Multilingual models: Bootstrap LID scores
     _bootstrap_seqs_and_scores(
-        model, job, seqs, scores, encoder_output, encoder_padding_mask, n_threads
+        model, job, seqs, scores, encoder_output, encoder_padding_mask, lid_scores, n_threads, lang_ids
     );
-    // Now we will only add self_attn.k_cache and those need to be resorted and copied at every step.
-    model.kv_cache_ctx = nullptr;
 
     // Holds the indices of beams (a beam can occur more than once) that we
     // should continue with in the next step.
@@ -1428,8 +1465,26 @@ extern "C" Hypothesis* generate_sequence(
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         model.ctx = step_ctx;
         ggml_set_no_alloc(step_ctx, true); // Use allocr for the model forward pass
+        float max_lprob;
+        int p;
+        if (step_nr == start_step) {
+            // Find the most probable lang_tok and assign it to all beams, when prefix_seq[1] is <unk>
+            if (lang_ids.size() && ggml_get_i32_1d(job.prefix_seq, 1) == model.vocab.token_to_id["<unk>"]) {
+                float max_lprob = std::numeric_limits<float>::min();
+                for(int j = 0; j < lang_ids.size(); j++) {
+                    auto val = ggml_get_f32_1d(lid_scores, j);
+                    if (val > max_lprob) {
+                        max_lprob = val;
+                        p = lang_ids[j];
+                    }
+                }
+                for (int k = 0; k < beam_size; k++) {
+                    ggml_set_i32_1d(seqs, k * vocab_size + step_nr, p);
+                }
+            }
+        }
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
-
+        
         ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
@@ -1448,10 +1503,11 @@ extern "C" Hypothesis* generate_sequence(
 
         // Compute lprobs here so we can modify it in place in the lprob tweaking phase
         // TODO: use ggml properly compute the tweaks
-        ggml_cgraph gf = ggml_build_forward(lprobs);
-        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, &gf);
+        struct ggml_cgraph * gf = ggml_new_graph(step_ctx);
+        ggml_build_forward_expand(gf, lprobs);
+        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, gf);
         GGML_UNUSED(fwd_mem);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
+        ggml_graph_compute_with_ctx(step_ctx, gf, n_threads);
         ggml_detach(lprobs);
         ggml_allocr_reset(step_alloc);
 #if DEBUG_MEM_USAGE
@@ -1476,9 +1532,8 @@ extern "C" Hypothesis* generate_sequence(
             // Make probabilities contain cumulative scores for each hypothesis.
             lprobs = ggml_add_inplace(step_ctx, lprobs, ggml_repeat(step_ctx, last_scores, lprobs));
         }
-
-        gf = ggml_build_forward(lprobs);
-        ggml_graph_compute_with_ctx(step_ctx, &gf, n_threads);
+        ggml_build_forward_expand(gf, lprobs);
+        ggml_graph_compute_with_ctx(step_ctx, gf, n_threads);
 
         // Determine (beam, token) candidates for the next step.
         // (N, 2 x B)
@@ -1497,7 +1552,7 @@ extern "C" Hypothesis* generate_sequence(
             bool eos = token == job.eos_idx;
             eos &= tok_score != -INFINITY;
             if (eos) {
-                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, finished_searches++);
+                _finalize_hypothesis(job, result_ctx, step_nr, beam, token, tok_score, seqs, scores, lid_scores, finished_searches++);
                 if (finished_searches == finished_searches_end)
                     goto end_of_beam_search;
                 continue;
@@ -1513,14 +1568,13 @@ extern "C" Hypothesis* generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         // (B, S), (B) -> (B, S)
-        // don't use allocr API, cause it might reuse a kv cache buffer several time.
-        ggml_set_no_alloc(step_ctx, false);
         ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
-        ggml_cgraph gf_reorder = ggml_build_forward(new_seqs);
-        ggml_build_forward_expand(&gf_reorder, new_scores);
-        reorder_kv_cache(model, step_ctx, &gf_reorder, beam_indices);
-        ggml_graph_compute_with_ctx(step_ctx, &gf_reorder, n_threads);
+        struct ggml_cgraph * gf_reorder = ggml_new_graph(step_ctx);
+        ggml_build_forward_expand(gf_reorder, new_seqs);
+        ggml_build_forward_expand(gf_reorder, new_scores);
+        reorder_kv_cache(model, step_ctx, gf_reorder, beam_indices);
+        ggml_graph_compute_with_ctx(step_ctx, gf_reorder, n_threads);
         seqs = ggml_detach(new_seqs);
         scores = ggml_detach(new_scores);
 
@@ -1531,7 +1585,7 @@ extern "C" Hypothesis* generate_sequence(
             ((float*)scores->data)[step_nr + 1 + i * max_seq_len] = ggml_get_f32_1d(next_scores, i);
         }
 
-        printf_mem_usage(step_ctx, "  step_ctx");
+        printf_mem_usage(step_ctx, "step_ctx");
         ggml_free(prev_step_ctx);
         prev_step_ctx = step_ctx;
 #if DEBUG_MEM_USAGE
@@ -1607,7 +1661,7 @@ struct llm_bigram_spm {
 struct llm_tokenizer_spm {
     llm_tokenizer_spm(const llama_vocab & vocab): vocab(vocab) {}
 
-    void tokenize(const std::string& input_text, ggml_tensor& output) {
+    void tokenize(const std::string& input_text, ggml_tensor* output) {
         llama_vocab::id unk_idx = vocab.token_to_id.at("<unk>");
 
         // split string into utf8 chars
@@ -1675,8 +1729,8 @@ struct llm_tokenizer_spm {
             try_add_bigram(bigram.left, left_sym.next);
         }
 
-        llama_vocab::id* out = (llama_vocab::id*)output.data;
-        int out_step = sizeof(llama_vocab::id) / output.nb[0];
+        llama_vocab::id* out = (llama_vocab::id*)output->data;
+        int out_step = sizeof(llama_vocab::id) / output->nb[0];
         int num_tokens = 0;
         for (int i = 0; i > -1; i = symbols[i].next) {
             llm_symbol& symbol = symbols[i];
@@ -1685,7 +1739,7 @@ struct llm_tokenizer_spm {
         }
         *(out + num_tokens * out_step) = vocab.token_to_id.at("</s>");
         num_tokens += 1;
-        output.ne[0] = num_tokens;
+        output->ne[0] = num_tokens;
     }
 
 private:
@@ -1724,21 +1778,23 @@ private:
 };
 
 
-extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out) {
+extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor* out) {
     llm_tokenizer_spm spm = {model->vocab};
     spm.tokenize(std::string(text), out);
 }
 
+
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out) {
-    int eos_idx = model->vocab.token_to_id["</s>"];
+    bool no_tgt_vocab = model->tgt_vocab.id_to_token.empty();
+    int eos_idx = no_tgt_vocab ? model->vocab.token_to_id["</s>"] : model->tgt_vocab.token_to_id["</s>"];
     int sent_len = tokens->ne[0];
     std::size_t written = 0;
+    std::vector<llama_vocab::token_data> id_to_token = no_tgt_vocab ? model->vocab.id_to_token : model->tgt_vocab.id_to_token;
     for (int i = 0; i < sent_len; ++i) {
         int id = ggml_get_i32_1d(tokens, i);
         // Don't print the EOS token but only if it appear at the end.
         if (i == sent_len - 1 && eos_idx == id) break;
-
-        std::string token = model->vocab.id_to_token.at(id).text;
+        std::string token = no_tgt_vocab ? model->vocab.id_to_token.at(id).text : model->tgt_vocab.id_to_token.at(id).text;
         // Skip the first space outputted.
         auto begin = token.begin();
         if (i == 0 && token.size() > 0 && token[0] == ' ') begin += 1;
@@ -1749,4 +1805,57 @@ extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tenso
     }
     *out = '0';
     return written;
+}
+
+
+// TODO: Unify with the above?
+std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(
+        fairseq2_model* model,
+        ggml_tensor* tokens,
+        ggml_tensor* scores,
+        char* out) {
+    bool no_tgt_vocab = model->tgt_vocab.id_to_token.empty();
+    int eos_idx = no_tgt_vocab ? model->vocab.token_to_id["</s>"] : model->tgt_vocab.token_to_id["</s>"];
+    int sent_len = tokens->ne[0];
+    std::size_t written = 0;
+    std::vector<float> word_scores;
+    std::vector<float> subword_scores;
+    std::vector<std::string> result_text;
+    std::string curr_token = "";
+    for (int i = 0; i < sent_len; ++i) {
+        int id = ggml_get_i32_1d(tokens, i);
+        // Don't print the EOS token but only if it appear at the end.
+        if (i == sent_len - 1 && eos_idx == id) break;
+
+        std::string token = no_tgt_vocab ? model->vocab.id_to_token.at(id).text : model->tgt_vocab.id_to_token.at(id).text;
+        float score = ggml_get_f32_1d(scores, i+2); // 2 is prefix size
+        if(token[0] == ' ') {
+            // reset word score
+            if(subword_scores.size() > 0) {
+                float avg = std::accumulate(subword_scores.begin(), subword_scores.end(), 0.0f) / subword_scores.size();
+                word_scores.push_back(avg);
+                subword_scores.clear();
+                result_text.push_back(curr_token);
+            }
+            curr_token = token.substr(1);
+        } else {
+            curr_token += token;
+        }
+        subword_scores.push_back(score);
+        // Skip the first space outputted.
+        auto begin = token.begin();
+        if (i == 0 && token.size() > 0 && token[0] == ' ') begin += 1;
+        std::copy(begin, token.end(), out);
+        std::size_t n = token.end() - begin;
+        written += n;
+        out += n;
+        
+    }
+    if(subword_scores.size() > 0) {
+        word_scores.push_back(*std::min_element(subword_scores.begin(), subword_scores.end()));
+        subword_scores.clear();
+        result_text.push_back(curr_token);
+    }
+    *out = '0';
+    return std::make_pair(result_text, word_scores);
 }

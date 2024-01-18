@@ -282,7 +282,7 @@ class NativeObj:
         cls._cache[kind] = (alloc_fn, free_fn)
         return (alloc_fn, free_fn)
 
-    def __init__(self, kind: str, ptr: ctypes.c_void_p = NULL):
+    def __init__(self, kind: str, ptr: ctypes.c_void_p = NULLPTR):
         self.kind = kind
         alloc_fn, self._free_fn = self._init_c_func(kind)
         self.ptr = alloc_fn() if ptr is None else ptr
@@ -292,7 +292,7 @@ class NativeObj:
         if self.ptr is not None:
             self._free_fn(self.ptr)
             # print(f"freeing {self}")
-            self.ptr = NULL
+            self.ptr = NULLPTR
 
     def __enter__(self) -> ctypes.c_void_p:
         return self.ptr

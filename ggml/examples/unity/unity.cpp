@@ -4,24 +4,17 @@
 #include "math.h"
 #include "model_loader.h"
 #include "fairseq2.h"
-
-#include <thread>
-#include <cassert>
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <map>
-#include <string>
-#include <vector>
-#include <iostream>
+#include "lib/unity_lib.h"
 #include <sndfile.h>
 #include <cstdlib>
 #include "ggml-alloc.h"
+#include <numeric>
+#include <algorithm>
 
 struct unity_params {
     int32_t n_threads = std::min(4, (int32_t) std::thread::hardware_concurrency());
-    std::string model      = "seamlessM4T_medium.ggml"; // model path
+    std::string model = "seamlessM4T_medium.ggml"; // model path
+    std::string input_text = "";
     std::string tgt_lang = "eng";
     std::vector<std::string> files = {};
     bool text = false;
@@ -34,9 +27,9 @@ struct unity_params {
         /*len_penalty*/ 1.0,
         /*unk_penalty*/ 0.0,
         /*normalize_scores*/ true,
-        /*mem_mb*/ 512,
+        /*mem_mb*/ 512
     };
-    int32_t max_audio_s = 30;
+    bool verbose = false;
 };
 
 
@@ -45,13 +38,16 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
+    fprintf(stderr, "  -i, --input           Input text for the text-2-text translation\n");
+    fprintf(stderr, "  -l, --tgt-lang        Target translation lang (default: %s\n", params.tgt_lang);
+
     fprintf(stderr, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    fprintf(stderr, "  -v, --verbose         Print out word level confidence score and LID score (default: off)");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
     fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stderr, "  --text                text output\n");
     fprintf(stderr, "  --beam-size           beam size (default: %d)\n", params.opts.beam_size);
     fprintf(stderr, "  -M, --mem             memory buffer, increase for long inputs (default: %d)\n", params.opts.mem_mb);
-    fprintf(stderr, "  --max-audio           max duration of audio in seconds (default: %d)\n", params.max_audio_s);
     fprintf(stderr, "\n");
 }
 
@@ -75,56 +71,23 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.n_threads = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else if (arg == "-m" || arg == "--model") {
             params.model = get_next_arg(i, argc, argv, arg, params);
+        } else if (arg == "-i" || arg == "--input") {
+            params.input_text = get_next_arg(i, argc, argv, arg, params);
         } else if (arg == "-l" || arg == "--tgt-lang") {
             params.tgt_lang = get_next_arg(i, argc, argv, arg, params);
         } else if (arg == "--text") {
             params.text = true;
         } else if (arg == "-b" || arg == "--beam-size") {
             params.opts.beam_size = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "-v" || arg == "--verbose") {
+            params.verbose = true;
         } else if (arg == "-M" || arg == "--mem") {
             params.opts.mem_mb = std::stoi(get_next_arg(i, argc, argv, arg, params));
-        } else if (arg == "--max-audio") {
-            params.max_audio_s = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else {
             params.files.push_back(std::string(arg));
         }
     }
     return true;
-}
-
-struct ggml_cgraph * unity_speech_encoder(
-        fairseq2_model& model,
-        struct ggml_tensor * speech_input) {
-    ggml_context* ctx0 = model.ctx;
-    ggml_cgraph* gf = ggml_new_graph(ctx0);
-    ggml_tensor* seqs = StandardConformerEncoder_forward(model, "speech_encoder", speech_input, nullptr);
-    seqs = ggml_dup(model.ctx, seqs);
-    ggml_build_forward_expand(gf, seqs);
-    return gf;
-}
-
-
-Hypothesis* unity_decode(
-        fairseq2_model& model,
-        const SequenceGeneratorOptions& opts,
-        int tgt_lang_idx,
-        ggml_tensor* encoder_output,
-        int n_threads
-) {
-    SequenceGeneratorJob job = {
-        opts,
-        /*prefix_seq*/ nullptr,
-        /*pad_idx*/model.vocab.token_to_id["<pad>"],
-        /*unk_idx*/model.vocab.token_to_id["<unk>"],
-        /*bos_idx*/model.vocab.token_to_id["<s>"],
-        /*eos_idx*/model.vocab.token_to_id["</s>"],
-        /*num_threads*/n_threads,
-    };
-    FORCE_ALLOC(prefix_seq, model.ctx, ggml_new_tensor_1d(model.ctx, GGML_TYPE_I32, 2));
-    ((int *)prefix_seq->data)[0]  = job.eos_idx;
-    ((int *)prefix_seq->data)[1]  = tgt_lang_idx;
-    job.prefix_seq = prefix_seq;
-    return generate_sequence(model, job, encoder_output, nullptr, model.ctx, n_threads);
 }
 
 int main(int argc, char ** argv) {
@@ -151,8 +114,13 @@ int main(int argc, char ** argv) {
     char result_str[4096];
 
     std::string input;
-    bool interactive = params.files.size() == 0;
+    bool interactive = (params.files.size() == 0 && params.input_text.length() == 0);
     auto next_file = params.files.begin();
+
+    // Flag for the input case: true --> s2st, false --> t2tt
+    bool s2st_or_t2tt = true;
+
+    // S2ST
     while (true) {
         if (interactive) {
             std::cout << "\nEnter audio_path and tgt_lang, separated by space (or 'exit' to quit):\n";
@@ -161,7 +129,10 @@ int main(int argc, char ** argv) {
                 break;
             }
         } else {
-            if (next_file == params.files.end()) break;
+            if (params.input_text.length() > 0) {
+                break;
+            }
+            if (next_file == params.files.end() && s2st_or_t2tt) break;
             input = *(next_file++);
         }
         std::istringstream iss(input);
@@ -179,46 +150,47 @@ int main(int argc, char ** argv) {
             if (interactive) continue;
             else return 1;
         }
-        auto tgt_lang_ptr = model.vocab.token_to_id.find("__" + tgt_lang + "__");
-        if (tgt_lang_ptr == model.vocab.token_to_id.end()) {
-            std::cerr << "Unknown language " << tgt_lang << "\n";
-            if (interactive) continue;
-            else return 2;
-        }
-        int tgt_lang_idx = tgt_lang_ptr->second;
-
-
-        // Reset the ggml_context
-        model.ctx = ctx_from_buffer(encoder_buf);
-        ggml_set_no_alloc(model.ctx, true);
+        // Load audio input
         GGML_ASSERT(info.samplerate == 16000);
         GGML_ASSERT(info.channels == 1);
-        // Truncate audio input. Ideally we should chunk it, but this will prevent most obvious OOM.
-        int n_frames = std::min(info.samplerate * params.max_audio_s, (int)info.frames);
-        ggml_tensor* seqs = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_frames, info.channels);
-        ggml_allocr_alloc(fwd_alloc, seqs);
+        // stop at 30s. Ideally we should chunk input audio, but this will prevent most obvious OOM.
+        int n_frames = std::min(info.samplerate * 30, (int)info.frames);
+        std::vector<float> data(n_frames * info.channels);
+        sf_readf_float(sndfile, data.data(), n_frames);
 
-        // Load audio input
-        sf_readf_float(sndfile, (float*)seqs->data, n_frames);
+        Result result = unity_eval_speech(model, data, params.opts, tgt_lang, params.n_threads);
+        std::string concat_transcription = std::accumulate(std::next(result.transcription.begin()), result.transcription.end(), result.transcription[0],
+            [](const std::string& a, const std::string& b) {
+                return a + " " + b;
+            }
+        );
+        if (params.verbose) {
+            std::cout << "Final transcription: " << concat_transcription << std::endl;
+            std::cout << std::endl;
+            std::cout << "Word level confidence score:" << std::endl;
+            for (size_t i = 0; i < result.transcription.size(); ++i) {
+                std::cout << "Word: " << result.transcription[i] << " | Score: " << result.word_confidence_scores[i] << std::endl;
+            }
+            std::cout << std::endl;
+            std::cout << "LID scores: " << std::endl;
+            for (const auto& kv : result.lid_scores) {
+                std::cout << "Language: " << kv.first << "| Score: " << kv.second << std::endl;
+            }
+        } else {
+            std::cout << concat_transcription << std::endl;
+        }
+    }
 
-        // Audio encoder
-        ggml_cgraph* gf = unity_speech_encoder(model, seqs);
-        size_t enc_mem_used = ggml_allocr_alloc_graph(fwd_alloc, gf);
-        ggml_graph_compute_with_ctx(model.ctx, gf, params.n_threads);
-        // encoder_output is valid until we call `ggml_allocr_reset(fwd_alloc)`
-        ggml_tensor* encoder_output = gf->nodes[gf->n_nodes - 1];
-
-        // Beam search decoding
-        const Hypothesis* result = unity_decode(model, params.opts, tgt_lang_idx, encoder_output, params.n_threads);
-    
-        // Drop language and bos token.
-        ggml_tensor* tokens = ggml_slice(model.ctx, result[0].seq, 0, 2, 0);
-
-        // Collect result string
-        int n = fairseq2_spm_detokenize(&model, tokens, (char*)&result_str);
-        std::cout << std::string((char*)&result_str, n) << std::endl;
-        ggml_free(model.ctx);
-        ggml_allocr_reset(fwd_alloc);
+    // T2TT
+    if (params.input_text.length() > 0) {
+        // tokenize the input text
+        Result result = unity_eval_text(model, params.input_text, params.opts, params.tgt_lang, params.n_threads);
+        std::string concat_translation = std::accumulate(std::next(result.transcription.begin()), result.transcription.end(), result.transcription[0],
+            [](const std::string& a, const std::string& b) {
+                return a + " " + b;
+            }
+        );
+        std::cout << "Translation: " << concat_translation << std::endl;
     }
 
     return 0;
