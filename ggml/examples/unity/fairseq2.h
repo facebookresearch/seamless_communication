@@ -97,7 +97,11 @@ struct fairseq2_model {
     // Normally those can be inferred from hparams, but it avoids doing this logic in GGML
     std::unordered_map<std::string, std::int64_t> layer_config = {};
 
+    // Vocabulary for text transcription and translation APIs
     llama_vocab vocab;
+
+    // Optional target vocabulary for bilingual models
+    llama_vocab tgt_vocab;
 
     // KV cache for attention layers
     mutable std::unordered_map<std::string, KeyValueTensor> kv_cache = {};
@@ -106,7 +110,7 @@ struct fairseq2_model {
     // TODO: is this the best place to store this or should we also pass this to all forward methods ?
     ggml_context* ctx = nullptr;
 
-    ggml_context* kv_cache_ctx = nullptr;
+    ggml_context* enc_kv_cache_ctx = nullptr;
 };
 
 double fairseq2_model_layer_config_double(const fairseq2_model& model, std::string name);
@@ -193,6 +197,13 @@ extern "C" ggml_tensor* TransformerEmbeddingFrontend_forward(
 );
 
 extern "C" ggml_tensor* StandardTransformerEncoderLayer_forward(
+    fairseq2_model& model,
+    const std::string& prefix,
+    ggml_tensor* seqs,
+    ggml_tensor* padding_mask
+);
+
+extern "C" ggml_tensor* StandardTransformerEncoder_forward(
     fairseq2_model& model,
     const std::string& prefix,
     ggml_tensor* seqs,
@@ -302,6 +313,9 @@ struct Hypothesis {
 
     /// The score of each individual sequence step.
     ggml_tensor* step_scores;
+
+    /// The score of each lang tok at first decoding step, serving as LID 
+    ggml_tensor* lid_scores;
 };
 
 
@@ -311,8 +325,10 @@ extern "C" Hypothesis* generate_sequence(
     ggml_tensor* encoder_output,
     ggml_tensor* encoder_padding_mask,
     ggml_context* result_ctx,
-    int n_threads
+    int threads
 );
 
-extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor& out);
+extern "C" void fairseq2_spm_tokenize(fairseq2_model* model, const char* text, ggml_tensor* out);
 extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, char* out);
+
+std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(fairseq2_model* model, ggml_tensor* tokens, ggml_tensor* scores, char* out);

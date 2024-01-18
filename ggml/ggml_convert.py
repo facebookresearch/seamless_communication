@@ -6,54 +6,330 @@
 
 import dataclasses
 import logging
-import math
 import struct
 from enum import Enum
 from io import BufferedWriter
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Mapping, Tuple, Union, Sequence, Set, final
+import re
 
 import torch
 from fairseq2.assets import AssetCard
 from fairseq2.models.transformer.frontend import TransformerEmbeddingFrontend
 from fairseq2.nn import SinusoidalPositionEncoder
 from fairseq2.nn.transformer import RelativePositionalEncoding
-from seamless_communication.models import unity
+from fairseq2.data.text import SentencePieceEncoder, SentencePieceTokenizerBase
+from fairseq2.data.typing import PathLike
+from fairseq2.typing import Device, finaloverride
+from fairseq2.models.utils import TokenizerLoaderBase, ModelLoader
+from fairseq2.models.utils.checkpoint import convert_model_state_dict
+from fairseq2.assets import asset_store, download_manager
 
 import ggml
-import re
 
 Preprocessor = Callable[[Any], Any]
 log = logging.getLogger("ggml_convert")
 
 
+class ModelType(str, Enum):
+    AUTO = "auto"  # inferred from the model name
+    UNITY = "unity"
+    NLLB = "nllb"
+    MT = "bitext"
+    MTS = "bitext_scripted"
+
+
+UNITY_SMALLER_MODELS = [
+    "unity_nano",
+    "unity_micro",
+]  # Trained with fairseq2, with custom dict (not original NLLB ones)
+
+
+NLLB_2_UNITY_KEYMAP = {
+    r"^encoder_frontend\.": r"text_encoder_frontend.",
+    r"^encoder\."         : r"text_encoder.",
+    r"^decoder\."         : r"text_decoder.",
+    r"^decoder_frontend\.": r"text_decoder_frontend.",
+}
+
+
+@final
+class NllbLikeTokenizer(SentencePieceTokenizerBase):
+    """The only difference between this class and NllbTokenizer is it doesn't add a <pad> to control symbol list.
+    Since NllbTokenizer is defined as final, we couldn't inherit from it directly. So copying ~everything"""
+
+    langs: Set[str]
+    default_lang: str
+
+    def __init__(
+        self, pathname: PathLike, langs: Sequence[str], default_lang: str
+    ) -> None:
+        """
+        :param pathname:
+            The pathname of the SentencePiece model file.
+        :param langs:
+            The list of supported languages.
+        :param default_lang:
+            The fall-back language if no language is specified.
+        """
+        # Each language is represented by a `__lang__` control symbol.
+        control_symbols = [f"__{lang}__" for lang in langs]
+
+        # Internal control symbols that are not relevant for eval use.
+        control_symbols.extend(["<MINED_DATA>", "<MMT_BT_DATA>", "<SMT_BT_DATA>"])
+        super().__init__(pathname, control_symbols)
+
+        self.langs = set(langs)
+
+        self.default_lang = default_lang
+
+    @finaloverride
+    def create_encoder(
+        self,
+        *,
+        task: Optional[str] = None,
+        lang: Optional[str] = None,
+        mode: Optional[str] = None,
+        device: Optional[Device] = None,
+        pin_memory: bool = False,
+    ) -> SentencePieceEncoder:
+        """Create a token encoder.
+
+        :param task:
+            Must be 'translation'. If ``None``, defaults to 'translation'.
+        :param lang:
+            A language from :attr:`langs`. If ``None``, defaults to
+            :attr:`default_lang`.
+        :param mode:
+            Must be 'source' or 'target'. Set to 'source' if ``lang`` is the
+            source language; set to 'target' if ``lang`` is the target language.
+            If ``None``, defaults to 'source'.
+        :param device:
+            The device on which to construct tensors.
+        :param pin_memory:
+            If ``True``, uses pinned memory while constructing tensors.
+        """
+        if task is not None and task != "translation":
+            raise ValueError(f"`task` must be 'translation', but is '{task}' instead.")
+
+        if lang is None:
+            lang = self.default_lang
+
+        if lang not in self.langs:
+            raise ValueError(
+                f"`lang` must be a supported language, but is '{lang}' instead."
+            )
+
+        if mode is None or mode == "source":
+            # NLLB models expect a language token in place of BOS in source
+            # sequences.
+            prefix_tokens = [f"__{lang}__"]
+            suffix_tokens = ["</s>"]
+        elif mode == "source_mining":
+            prefix_tokens = [f"__{lang}__", "<MINED_DATA>"]
+            suffix_tokens = ["</s>"]
+        elif mode == "source_mmt_bt":
+            prefix_tokens = [f"__{lang}__", "<MMT_BT_DATA>"]
+            suffix_tokens = ["</s>"]
+        elif mode == "source_smt_bt":
+            prefix_tokens = [f"__{lang}__", "<SMT_BT_DATA>"]
+            suffix_tokens = ["</s>"]
+        elif mode == "target":
+            # Target sequences are expected to start with an EOS, followed by
+            # the language token.
+            prefix_tokens = ["</s>", f"__{lang}__"]
+            suffix_tokens = []
+        else:
+            raise ValueError(
+                f"`mode` must be 'source' or 'target', but is '{mode}' instead."
+            )
+
+        return SentencePieceEncoder(
+            self.model,
+            prefix_tokens=prefix_tokens,
+            suffix_tokens=suffix_tokens,
+            device=device,
+            pin_memory=pin_memory,
+        )
+
+
+@final
+class NllbLikeTokenizerLoader(TokenizerLoaderBase[NllbLikeTokenizer]):
+    """Loads tokenizers used by NLLB models."""
+
+    @finaloverride
+    def _load(self, pathname: Path, card: AssetCard) -> NllbLikeTokenizer:
+        langs = card.field("langs").as_list(str)
+
+        default_lang = card.field("default_lang").as_(str)
+
+        return NllbLikeTokenizer(pathname, langs, default_lang)
+
+
+def convert_state_dict(
+    state_dict: Dict[str, Any], key_map: Optional[Mapping[str, str]] = None
+) -> Dict[str, Any]:
+
+    if key_map is None:
+        return state_dict
+    
+    state_dict = convert_model_state_dict(state_dict, key_map=key_map)
+
+    # We use the built-in version attribute of `torch.nn.Module`.
+    try:
+        del state_dict["encoder.version"]
+    except KeyError:
+        pass
+    try:
+        del state_dict["decoder.version"]
+    except KeyError:
+        pass
+
+    try:
+        del state_dict["encoder.embed_positions._float_tensor"]
+    except KeyError:
+        pass
+    try:
+        del state_dict["decoder.embed_positions._float_tensor"]
+    except KeyError:
+        pass
+
+    return state_dict
+
+
+def convert_unity_model(
+    model_name: str,
+    hparams: Optional[Dict[str, Any]] = None,
+):
+    from seamless_communication.models import unity
+    from seamless_communication.models.unity.builder import UnitYConfig, create_unity_model
+    from seamless_communication.models.unity.model import UnitYModel
+
+    load_unity_model_without_conversion = ModelLoader[UnitYModel, UnitYConfig](
+        asset_store,
+        download_manager,
+        unity.load_unity_config,
+        create_unity_model,
+        None,
+        restrict_checkpoints=False,
+    )
+
+    model_config = unity.load_unity_config(model_name)
+    hparams = flatten_config(
+        dataclasses.asdict(model_config), separator="__", overrides=hparams
+    )
+    hparams["multilingual"] = True
+    log.info(hparams)
+    # Need the diverge here because current default in SC is to convert from fairseq1 ckpt format
+    if model_name in UNITY_SMALLER_MODELS:
+        model = load_unity_model_without_conversion(model_name)
+        tokenizer = NllbLikeTokenizerLoader(asset_store, download_manager)(model_name)
+    else:
+        model = unity.load_unity_model(model_name)
+        tokenizer = unity.load_unity_text_tokenizer(model_name)
+
+    vocab = read_vocab(tokenizer)
+
+    return model, hparams, vocab
+
+
+def convert_nllb_model(
+    model_name: str,
+    hparams: Optional[Dict[str, Any]] = None,
+):
+    from fairseq2.models.nllb.loader import load_nllb_tokenizer, load_nllb_model, load_nllb_config
+
+    model_config = load_nllb_config(model_name)
+    hparams = flatten_config(
+        dataclasses.asdict(model_config), separator="__", overrides=hparams,
+    )
+    hparams["multilingual"] = True
+
+    model = load_nllb_model(model_name)
+    tokenizer = load_nllb_tokenizer(model_name)
+    vocab = read_vocab(tokenizer)
+
+    return model, hparams, vocab
+
+
+def convert_bitext_model(
+    model_name: str,
+    hparams: Optional[Dict[str, Any]] = None,
+):
+    from mt import load_mt_model, load_vocab  #, test_mt
+
+    hparams = hparams or {}
+    hparams["multilingual"] = False
+    model = load_mt_model(model_name)
+    src_vocab, src_spm = load_vocab(model_name, "src")
+    tgt_vocab, tgt_spm = load_vocab(model_name, "tgt")
+
+    # test_mt(model, src_spm, tgt_spm)
+
+    return model, hparams, src_vocab, tgt_vocab
+
+
 def convert_model(
     model_name: Union[str, torch.nn.Module],
     out: Optional[Path] = None,
+    model_type: ModelType = ModelType.AUTO,
     layers: str = "",
     hparams: Optional[Dict[str, Any]] = None,
-    vocab: Optional[List[Tuple[str, float]]] = None,
     fp16: bool = False,
 ) -> None:
+    """
+    Entry function for converting different kinds of model into GGML file. Supported model checkpoints:
+        - unity models
+        - nllb models
+        - Bilingual encoder-decoder model (Pytorch) with separate vocabulary for src and tgt languages
+        - Bilingual encoder-decoder model (torchscript)
+    Args:
+        model_name: name of a registered model (discoverable in a fairseq2 asset), path to a checkpoint,\
+            or the model object passed directly
+        out: path to store the converted .ggml model. If None, the ggml model is stored in the same place\
+            as input model
+        model_type: type of the model (or inferred from the name, only applied to nllb, unity and seamless)
+        layers: wildcard patterns to filter the layers from the model. Does not applied to scripted models
+        hparams: override the hparams in the model with the user-defined values
+        vocab: Path to  vocabulary files (in case not bundled with the model checkpoint)
+        extra_vocab: Path to additional vocabulary files (used in bilingual models with explicit tgt languages)
+        fp16: Save to .GGML float16 tensors instead of float32
+    """
+
+    key_map: Optional[Dict[str, str]] = None
+    tgt_vocab: Optional[List[Tuple[str, float]]] = None
     if isinstance(model_name, str):
         # Load the corresponding fairseq2 model
         if out is None:
             out = Path(model_name).with_suffix(".ggml")
 
-        # The type of model depends on the name
-        if "unity" in model_name or "seamlessM4T" in model_name:
-            if hparams is None:
-                model_config = unity.load_unity_config(model_name)
-                hparams = flatten_config(
-                    dataclasses.asdict(model_config), separator="__"
-                )
-                log.info(hparams)
-            model = unity.load_unity_model(model_name)
-            if vocab is None:
-                tokenizer = unity.load_unity_text_tokenizer(model_name)
-                vocab = read_vocab(tokenizer)
-        else:
-            raise ValueError(f"Unsupported model type: {model_name}")
+        # Reason the model architecture from the model name or user input
+        try:
+            if model_type == ModelType.AUTO:
+                if "unity" in model_name or "seamlessM4T" in model_name:
+                    model_type = ModelType.UNITY
+                elif "nllb" in model_name:
+                    model_type = ModelType.NLLB
+
+            assert (
+                model_type != ModelType.AUTO
+            ), "Cannot infer model type from the `model_name`. Please specify `model_type`"
+
+            if model_type == ModelType.UNITY:
+                model, hparams, vocab = convert_unity_model(model_name, hparams=hparams)
+            elif model_type == ModelType.NLLB:
+                model, hparams, vocab = convert_nllb_model(model_name, hparams=hparams)
+                key_map = NLLB_2_UNITY_KEYMAP
+            elif model_type == ModelType.MTS:
+                # TODO: implement the EdgeML model conversion here
+                raise NotImplementedError("Scripted model conversion not implemented yet")
+            
+            # Bilingual non-scripted model
+            else:
+                model, hparams, vocab, tgt_vocab = convert_bitext_model(model_name, hparams=hparams)
+                key_map = NLLB_2_UNITY_KEYMAP
+        except Exception as exc:
+            raise ValueError(f"Error in loading model: {model_name}") from exc
     else:
         # Use the model passed explicitly
         assert (
@@ -66,19 +342,12 @@ def convert_model(
     if layers:
         state_dict = {k: v for k, v in state_dict.items() if re.match(layers, k)}
     fixup_model(model, state_dict, layer_filter=layers)
-    layer_config = read_layer_config(model, layer_filter=layers)
+    state_dict = convert_state_dict(state_dict, key_map=key_map)
+    layer_config = read_layer_config(model, layer_filter=layers, key_map=key_map)
+
     vocab = vocab or []
-    write_ggml_file(out, hparams, layer_config, vocab, state_dict, fp16)
-
-
-def _nested_getattr(model: Any, name: str) -> Any:
-    parts = name.split(".")
-    node = model
-    for part in parts:
-        node = getattr(node, part)
-        if node is None:
-            return None
-    return node
+    tgt_vocab = tgt_vocab or []
+    write_ggml_file(out, hparams, layer_config, state_dict=state_dict, vocab=vocab, tgt_vocab=tgt_vocab, fp16=fp16)
 
 
 def find_children(model: torch.nn.Module, t: type, layer_filter: str = "") -> List[Tuple[str, torch.nn.Module]]:
@@ -133,15 +402,6 @@ def fixup_model(model: torch.nn.Module, state_dict: Dict[str, torch.Tensor], lay
         state_dict["speech_encoder.pos_enc"] = rel_pos_enc.freqs
 
 
-def convert_to_fp16(state_dict: Dict[str, torch.Tensor]) -> None:
-    for k in state_dict:
-        v = state_dict[k]
-        if v.dtype != torch.float32:
-            # ignore int tensors
-            continue
-        state_dict[k] = v.to(torch.float16)
-
-
 def read_vocab(tokenizer: Any) -> List[Tuple[str, float]]:
     vocab_info = tokenizer.vocab_info
     vocab = [
@@ -155,9 +415,10 @@ def write_ggml_file(
     out: Path,
     hparams: Dict[str, Any],
     layer_config: Dict[str, Any],
-    vocab: List[Tuple[str, float]],
     state_dict: Dict[str, torch.Tensor],
-    fp16: bool,
+    vocab: List[Tuple[str, float]],
+    tgt_vocab: Optional[List[Tuple[str, float]]] = None,  # tgt_vocab for bilingual models
+    fp16: bool = False,
 ) -> None:
     with out.open("wb") as o:
         write_ggml_header(o)
@@ -165,6 +426,7 @@ def write_ggml_file(
         write_hparams(o, layer_config)
         write_vocab(o, vocab)
         write_state_dict(o, state_dict, fp16)
+        write_vocab(o, tgt_vocab)
 
 
 def write_ggml_header(out: BufferedWriter) -> None:
@@ -199,6 +461,9 @@ def write_hparams(out: BufferedWriter, hparams: Dict[str, Any]) -> None:
 
 def write_vocab(out: BufferedWriter, vocab: List[Tuple[str, float]]) -> None:
     out.write(struct.pack("<q", len(vocab)))
+
+    if len(vocab) == 0:
+        return
 
     # Write all words concatenated in a buffer
     words = [bytes(w, "utf8") for w, score in vocab]
@@ -246,10 +511,12 @@ def write_state_dict(
         # Compressed size
         compressed_byte_size = sum(_fp16_byte_size(x) for x in state_dict.values())
         log.warning(
-            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb compressed to {compressed_byte_size / GB:.3f}"
+            f"Saving a ggml file with {len(state_dict)} tensors, totalling {true_byte_size / GB:.3f}Gb"
+            f". Compressed to {compressed_byte_size / GB:.3f}Gb"
         )
 
     for key, value in state_dict.items():
+        # Rename the layers to make it look like "unity-arch"
         write_string(out, key)
         if key.endswith(".bias") and value.ndim == 1 and "adaptor" not in key:
             # GGML broadcasting isn't as strong as numpy
@@ -324,7 +591,7 @@ def torch_to_ggml_type(dtype: torch.dtype) -> int:
 def flatten_config(
     config: Dict[str, Any],
     separator: str,
-    config_preprocessor: Optional[Preprocessor] = None,
+    overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Flatten nested dictionnary
 
@@ -339,9 +606,6 @@ def flatten_config(
         flat dictionnary
     """
 
-    if config_preprocessor is None:
-        config_preprocessor = lambda x: x
-
     def __flatten(config: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
         result = {}
         for key in config:
@@ -350,16 +614,22 @@ def flatten_config(
                 nested_result = __flatten(config[key], f"{new_key}{separator}")
                 result.update(nested_result)
             else:
-                new_config = config_preprocessor(config[key])
+                new_config = config[key]
                 if new_config is not None:
                     result[new_key] = config[key]
 
         return result
 
-    return __flatten(config)
+    res_config = __flatten(config)
+    if overrides:
+        return {**res_config, **overrides}
+    else:
+        return res_config
 
 
-def read_layer_config(model: torch.nn.Module, layer_filter: str) -> Dict[str, Any]:
+def read_layer_config(
+    model: torch.nn.Module, layer_filter: str, key_map: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
     layer_config = {}
 
     def _append_node_config(node: Any, prefix: str) -> None:
@@ -384,6 +654,15 @@ def read_layer_config(model: torch.nn.Module, layer_filter: str) -> Dict[str, An
     _append_node_config(model, "")
     for name, node in find_children(model, torch.nn.Module, layer_filter):
         _append_node_config(node, name + ".")
+
+    key_map = key_map or {}
+    keys_to_replace = []
+    for k, v in layer_config.items():
+        for old_pattern, replacement in key_map.items():
+            if (new_key := re.sub(old_pattern, replacement, k)) != k:
+                keys_to_replace.append((k, new_key))
+    for old_key, new_key in keys_to_replace:
+        layer_config[new_key] = layer_config.pop(old_key)
     return layer_config
 
 
