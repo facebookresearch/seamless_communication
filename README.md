@@ -303,7 +303,8 @@ The following non-generative components are MIT licensed as found in [MIT_LICENS
 - Code
 - Text only part of the mExpresso dataset found in the [SeamlessExpressive README](docs/expressive/README.md).
 - UnitY2 forced alignment extractor found in the [UnitY2 Aligner README](docs/m4t/unity2_aligner_README.md).
-- Speech toxicity tool with the etox dataset found in the [Toxicity README](src/seamless_communication/cli/toxicity).
+- Speech toxicity tool with the etox dataset found in the [ETOX README](src/seamless_communication/cli/toxicity/etox).
+- MuTox: Universal MUltilingual Audio-based TOXicity Dataset and Zero-shot Detector [Mutox README](src/seamless_communication/cli/toxicity/mutox)
 
 The following models are CC-BY-NC 4.0 licensed as found in the [LICENSE](LICENSE):
 - SeamlessM4T models (v1 and v2).
