@@ -25,8 +25,6 @@ public:
     void load_vocab(llama_vocab& vocab, std::ifstream &fin);
 
 private:
-    ggml_tensor * next_tensor(std::ifstream &fin, fairseq2_model &model);
-
     std::string get_name(std::ifstream &fin);
 };
 

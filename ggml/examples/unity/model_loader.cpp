@@ -1,5 +1,5 @@
-#include <string>
 #include "model_loader.h"
+#include <string>
 
 #define DEBUG_MODEL_LOAD 0
 
@@ -133,7 +133,10 @@ void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
 
     std::int64_t vocab_size = 0;
     fin.read(reinterpret_cast<char*>(&vocab_size), sizeof(vocab_size));
-    GGML_ASSERT(fin.gcount() == 8);
+    // GGML_ASSERT(fin.gcount() == 8);
+    if (vocab_size == 0) {
+        return;
+    }
 
     vocab.token_to_id.reserve(vocab_size);
     vocab.id_to_token.reserve(vocab_size);
@@ -219,5 +222,8 @@ extern "C" int load_fairseq2_ggml_file(fairseq2_model& model, const char* fname)
     loader.load_hparams(model.layer_config, fin);
     loader.load_vocab(model.vocab, fin);
     loader.load_model_weights(model, fin);
+    
+    // load optional target vocabulary in cases of bilingual models
+    loader.load_vocab(model.tgt_vocab, fin);
     return 0;
 }

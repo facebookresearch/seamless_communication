@@ -11,8 +11,7 @@ To build the interactive console for S2TT & ASR,
 
 cd seamless_communication/ggml
 mkdir build; cd build
-cmake \
-    -DGGML_OPENBLAS=ON \
+cmake -DGGML_OPENBLAS=ON \
     -DBUILD_SHARED_LIBS=On \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DCMAKE_CXX_FLAGS="-g2 -fno-omit-frame-pointer" \
@@ -20,8 +19,6 @@ cmake \
 make -j4 unity # Interactive Console
 
 ```
-Note that `-DGGML_OPENBLAS=ON` is not necessary on macOS.
-
 For more build commands see [Makefile](Makefile). 
 
 ## CLI usage
@@ -34,7 +31,7 @@ In the console, enter the path of local waveform file and target language, separ
 Converted ggml models could be downloaded from 
 |SeamlessM4T_large | SeamlessM4T_medium | 
 |-------- | -------- | 
-| [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
+| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
 
 ## Fairseq2 model conversion 
 Models from fairseq2 checkpoints could be converted to ggml automatically with [ggml_convert.py](ggml_convert.py). 
