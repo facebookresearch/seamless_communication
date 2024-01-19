@@ -29,6 +29,7 @@ struct unity_params {
         /*normalize_scores*/ true,
         /*mem_mb*/ 512
     };
+    int32_t max_audio_s = 30;
     bool verbose = false;
 };
 
@@ -48,6 +49,7 @@ void unity_print_usage(int /*argc*/, char ** argv, const unity_params & params) 
     fprintf(stderr, "  --text                text output\n");
     fprintf(stderr, "  --beam-size           beam size (default: %d)\n", params.opts.beam_size);
     fprintf(stderr, "  -M, --mem             memory buffer, increase for long inputs (default: %d)\n", params.opts.mem_mb);
+    fprintf(stderr, " --max-audio max duration of audio in seconds (default: %d)\n", params.max_audio_s);
     fprintf(stderr, "\n");
 }
 
@@ -83,6 +85,8 @@ bool unity_params_parse(int argc, char ** argv, unity_params & params) {
             params.verbose = true;
         } else if (arg == "-M" || arg == "--mem") {
             params.opts.mem_mb = std::stoi(get_next_arg(i, argc, argv, arg, params));
+        } else if (arg == "--max-audio") {
+            params.max_audio_s = std::stoi(get_next_arg(i, argc, argv, arg, params));
         } else {
             params.files.push_back(std::string(arg));
         }
@@ -153,8 +157,8 @@ int main(int argc, char ** argv) {
         // Load audio input
         GGML_ASSERT(info.samplerate == 16000);
         GGML_ASSERT(info.channels == 1);
-        // stop at 30s. Ideally we should chunk input audio, but this will prevent most obvious OOM.
-        int n_frames = std::min(info.samplerate * 30, (int)info.frames);
+        // Truncate audio input. Ideally we should chunk it, but this will prevent most obvious OOM.
+        int n_frames = std::min(info.samplerate * params.max_audio_s, (int)info.frames);
         std::vector<float> data(n_frames * info.channels);
         sf_readf_float(sndfile, data.data(), n_frames);
 
