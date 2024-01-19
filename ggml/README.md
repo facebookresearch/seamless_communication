@@ -29,9 +29,11 @@ OPENBLAS_NUM_THREADS=8 ./bin/unity --model seamlessM4T_medium.ggml
 In the console, enter the path of local waveform file and target language, separated by space. Note that the first run would include some “warm up” time so could be slow. 
 
 Converted ggml models could be downloaded from 
-|SeamlessM4T_large | SeamlessM4T_medium | 
-|-------- | -------- | 
-| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  
+|SeamlessM4T_large | SeamlessM4T_medium | NLLB_dense_1b | NLLB_distill_600m |
+|-------- | -------- | ------- | ------- |
+| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  [model](dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_1b.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_distill_600m.ggml)
+
+For more details of NLLB models, please check https://github.com/facebookresearch/fairseq/tree/nllb.
 
 ## Fairseq2 model conversion 
 Models from fairseq2 checkpoints could be converted to ggml automatically with [ggml_convert.py](ggml_convert.py). 
