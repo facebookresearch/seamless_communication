@@ -1,4 +1,4 @@
-gradio~=4.5.0
+gradio
 omegaconf~=2.3.0
 torch~=2.1.0
 torchaudio~=2.1.0
