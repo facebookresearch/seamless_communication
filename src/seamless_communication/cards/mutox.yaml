@@ -1,0 +1,11 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+name: mutox
+model_type: mutox_classifier
+model_arch: mutox
+checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/mutox.pt"
+input_size: 1024

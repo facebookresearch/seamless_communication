@@ -27,6 +27,7 @@ setup(
         "librosa",
         "openai-whisper",
         "simuleval~=1.1.3",
+        "sonar-space==0.2.*",
         "soundfile",
         "scipy",
         "torchaudio",
