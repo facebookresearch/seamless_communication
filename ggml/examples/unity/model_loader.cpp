@@ -47,7 +47,7 @@ model_loader::load_model_weights(fairseq2_model &model, std::ifstream &fin)
     // Note this require changing the on disk format
     bool as_float32 = true;
     struct ggml_init_params params = {
-        /*.mem_size   =*/ f32_tensor_size + (num_tensor + 1) * (int64_t)ggml_tensor_overhead(),
+        /*.mem_size   =*/ static_cast<size_t>(f32_tensor_size + (num_tensor + 1) * (int64_t)ggml_tensor_overhead()),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
@@ -144,7 +144,7 @@ void model_loader::load_vocab(llama_vocab& vocab, std::ifstream &fin)
     std::string packed_vocab = get_name(fin);
     std::int64_t ctx_size = vocab_size * sizeof(float) + vocab_size + 2 * ggml_tensor_overhead();
     ctx_size *= 2;
-    ggml_context* ctx = ggml_init(ggml_init_params{ctx_size, nullptr, false});
+    ggml_context* ctx = ggml_init(ggml_init_params{static_cast<size_t>(ctx_size), nullptr, false});
     ggml_tensor* lengths_tensor = load_tensor_value(fin, ctx, true);
     std::int8_t* lengths = (std::int8_t*)lengths_tensor->data;
     ggml_tensor* scores_tensor = load_tensor_value(fin, ctx, true);
