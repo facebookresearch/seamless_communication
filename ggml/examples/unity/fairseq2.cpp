@@ -25,7 +25,7 @@ ggml_tensor* ggml_detach(ggml_tensor* a) {
 // when we read garbage data.
 // It also prints memory usage information, which is useful to
 #define DEBUG_MEM_USAGE DEBUG
-size_t MB = 1024 * 1024;
+std::size_t MB = 1024 * 1024;
 
 void printf_mem_usage(ggml_context* ctx, std::string name) {
 #if DEBUG_MEM_USAGE
@@ -861,9 +861,9 @@ ggml_tensor* ggml_slice(
 
 
     ne[axis] = end - start;
-    size_t offset = a->nb[axis] * start;
+    std::size_t offset = a->nb[axis] * start;
 
-    size_t* nb = a->nb;
+    std::size_t* nb = a->nb;
     ggml_tensor* result = ggml_view_4d(ctx, a, ne[0], ne[1], ne[2], ne[3], nb[1], nb[2], nb[3], offset);
     ggml_format_name(result, "%s [(%d)%ld:%ld]", a->name, axis, start, end);
     result->n_dims = a->n_dims;
@@ -886,8 +886,8 @@ ggml_tensor* ggml_select(
 
     std::copy(a->ne + axis + 1, a->ne + GGML_MAX_DIMS, ne + axis);
 
-    size_t offset = a->nb[axis] * index;
-    size_t* nb = a->nb;
+    std::size_t offset = a->nb[axis] * index;
+    std::size_t* nb = a->nb;
     GGML_ASSERT(GGML_MAX_DIMS == 4);
     ggml_tensor* result = ggml_view_3d(ctx, a, ne[0], ne[1], ne[2], nb[1], nb[2], offset);
     ggml_format_name(result, "%s [(%d)%ld]", a->name, axis, index);
@@ -1216,18 +1216,18 @@ void _bootstrap_seqs_and_scores(
     full_seqs->type = GGML_TYPE_I32;
     job.prefix_seq->type = GGML_TYPE_I32;
     // For LID
-    for (size_t i = 0; i < lang_ids.size(); ++i) {
+    for (std::size_t i = 0; i < lang_ids.size(); ++i) {
         ggml_set_f32_1d(lid_scores, i, std::exp(ggml_get_f32_1d(lprobs, lang_ids[i])));
     }
 
     // Fetch scores of next steps from "lprobs"
     float p_score = 0;
     for (int i = 1; i < prefix_seq_len; ++i) {
-        int p;
+        int p = 0;
         if (ggml_get_i32_1d(job.prefix_seq, i) == model.vocab.token_to_id["<unk>"]) {
             // If tgt_lang is unk, use the most probable lang tag predicted by model
             int max_value = std::numeric_limits<float>::min();
-            for (int j = 0; j < lang_ids.size(); j++) {
+            for (std::size_t j = 0; j < lang_ids.size(); j++) {
                 if(ggml_get_f32_1d(lprobs, lang_ids[j]) > max_value) {
                     max_value = ggml_get_f32_1d(lprobs, lang_ids[j]);
                     p = lang_ids[j];
@@ -1273,7 +1273,7 @@ void _tweak_lprobs(const SequenceGeneratorJob& job, ggml_tensor* lprobs, int ste
     // Do not allow EOS before reaching the minimum sequence length.
     if (step_nr < job.opts.min_seq_len) {
         // lprobs[:, :, self.eos_idx] = -INFINITY;
-        for (size_t i = 0; i < beam_size; ++i)
+        for (std::size_t i = 0; i < beam_size; ++i)
             ggml_set_f32_1d(lprobs, vocab_size * i + eos_idx, -INFINITY);
     }
 
@@ -1281,8 +1281,8 @@ void _tweak_lprobs(const SequenceGeneratorJob& job, ggml_tensor* lprobs, int ste
     if (step_nr == max_seq_len - 2) {
         // lprobs[:, :, : self.eos_idx]       = -torch.inf
         // lprobs[:, :,   self.eos_idx + 1 :] = -torch.inf
-        for (size_t b = 0; b < beam_size; ++b) {
-            size_t t = 0;
+        for (std::size_t b = 0; b < beam_size; ++b) {
+            std::size_t t = 0;
             for (t = 0; t < eos_idx; ++t)
                 ggml_set_f32_1d(lprobs, vocab_size * b + t, -INFINITY);
             for (t = eos_idx + 1; t < vocab_size; ++t)
@@ -1292,14 +1292,14 @@ void _tweak_lprobs(const SequenceGeneratorJob& job, ggml_tensor* lprobs, int ste
 
     // Never allow PAD.
     std::size_t pad_idx = job.pad_idx;
-    for (size_t i = 0; i < beam_size; ++i)
+    for (std::size_t i = 0; i < beam_size; ++i)
         ggml_set_f32_1d(lprobs, vocab_size * i + pad_idx, -INFINITY);
 
     // Apply UNK penalty.
     if (job.unk_idx >= 0 && job.opts.unk_penalty != 0) {
         // lprobs[:, :, self.unk_idx] -= self.opts.unk_penalty
         auto lprobs_raw = ggml_get_data_f32(lprobs);
-        for (size_t i = 0; i < beam_size; ++i)
+        for (std::size_t i = 0; i < beam_size; ++i)
             lprobs_raw[vocab_size * i + job.unk_idx] -= job.opts.unk_penalty;
     }
 }
@@ -1354,7 +1354,7 @@ void _finalize_hypothesis(
 
 ggml_context* ctx_from_buffer(std::vector<uint8_t>& buffer) {
     return ggml_init({
-        /*.mem_size   =*/ static_cast<int64_t>(buffer.capacity()),
+        /*.mem_size   =*/ static_cast<std::size_t>(buffer.capacity()),
         /*.mem_buffer =*/ buffer.data(),
         /*.no_alloc   =*/ false,
     });
@@ -1404,7 +1404,7 @@ extern "C" Hypothesis* generate_sequence(
         std::sort(lang_ids.begin(), lang_ids.end());
     }
     ggml_tensor* embed = model.tensors["text_decoder_frontend.embed.weight"];
-    size_t vocab_size = embed->ne[1];
+    std::size_t vocab_size = embed->ne[1];
     std::size_t beam_size = job.opts.beam_size;
     ggml_detach(encoder_output);
     int source_seq_len = encoder_output->ne[1];
@@ -1438,7 +1438,7 @@ extern "C" Hypothesis* generate_sequence(
     ggml_context* step_ctx = ctx_from_buffer(local_bufs[start_step % 2]);
     GGML_ASSERT(step_ctx != search_ctx);
     model.enc_kv_cache_ctx = search_ctx;
-    ggml_tensor* lid_scores;
+    ggml_tensor* lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, 1); // Dummy initialization to get rid of warnings
     if (lang_ids.size()) {
         lid_scores = ggml_new_tensor_1d(result_ctx, GGML_TYPE_F32, lang_ids.size());
     } 
@@ -1463,20 +1463,19 @@ extern "C" Hypothesis* generate_sequence(
     for (int step_nr = start_step; step_nr < max_seq_len - 1; ++step_nr) {
         model.ctx = step_ctx;
         ggml_set_no_alloc(step_ctx, true); // Use allocr for the model forward pass
-        float max_lprob;
-        int p;
+        int p = 0;
         if (step_nr == start_step) {
             // Find the most probable lang_tok and assign it to all beams, when prefix_seq[1] is <unk>
             if (lang_ids.size() && ggml_get_i32_1d(job.prefix_seq, 1) == model.vocab.token_to_id["<unk>"]) {
                 float max_lprob = std::numeric_limits<float>::min();
-                for(int j = 0; j < lang_ids.size(); j++) {
+                for(std::size_t j = 0; j < lang_ids.size(); j++) {
                     auto val = ggml_get_f32_1d(lid_scores, j);
                     if (val > max_lprob) {
                         max_lprob = val;
                         p = lang_ids[j];
                     }
                 }
-                for (int k = 0; k < beam_size; k++) {
+                for (std::size_t k = 0; k < beam_size; k++) {
                     ggml_set_i32_1d(seqs, k * vocab_size + step_nr, p);
                 }
             }
@@ -1503,7 +1502,7 @@ extern "C" Hypothesis* generate_sequence(
         // TODO: use ggml properly compute the tweaks
         struct ggml_cgraph * gf = ggml_new_graph(step_ctx);
         ggml_build_forward_expand(gf, lprobs);
-        size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, gf);
+        std::size_t fwd_mem = ggml_allocr_alloc_graph(step_alloc, gf);
         GGML_UNUSED(fwd_mem);
         ggml_graph_compute_with_ctx(step_ctx, gf, n_threads);
         ggml_detach(lprobs);
@@ -1631,14 +1630,14 @@ struct llm_symbol {
     index prev;
     index next;
     const char * text;
-    size_t n;
+    std::size_t n;
     llama_vocab::id id;
 };
 
 static_assert(std::is_trivially_copyable<llm_symbol>::value, "llm_symbol is not trivially copyable");
 
-static size_t utf8_len(char src) {
-    const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+static std::size_t utf8_len(char src) {
+    const std::size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
     return lookup[highbits];
 }
@@ -1654,7 +1653,7 @@ struct llm_bigram_spm {
     llm_symbol::index left;
     llm_symbol::index right;
     float score;
-    size_t size;
+    std::size_t size;
     llama_vocab::id id;
 };
 
@@ -1666,7 +1665,7 @@ struct llm_tokenizer_spm {
 
         // split string into utf8 chars
         int index = 0;
-        size_t offs = 0;
+        std::size_t offs = 0;
         // This is kind of annoying, but needed because with SPM,
         // characters following a space have a special meaning.
         // And the algorithm rely on substrings to do the lookups.
@@ -1675,8 +1674,8 @@ struct llm_tokenizer_spm {
         if (need_extra_space) text = " " + text;
 
         while (offs < text.size()) {
-            size_t len = utf8_len(text[offs]);
-            size_t n = std::min(len, text.size() - offs);
+            std::size_t len = utf8_len(text[offs]);
+            std::size_t n = std::min(len, text.size() - offs);
 
             auto token = vocab.token_to_id.find(std::string(text, offs, n));
             llama_vocab::id id = token == vocab.token_to_id.end() ? unk_idx : token->second;
@@ -1693,7 +1692,7 @@ struct llm_tokenizer_spm {
         }
 
         // seed the work queue with all possible 2-character tokens.
-        for (size_t i = 1; i < symbols.size(); ++i) {
+        for (std::size_t i = 1; i < symbols.size(); ++i) {
             try_add_bigram(i - 1, i);
         }
 
@@ -1757,7 +1756,7 @@ private:
         }
 
         llama_vocab::id id = token->second;
-        if (static_cast<size_t>(id) >= vocab.id_to_token.size()) {
+        if (static_cast<std::size_t>(id) >= vocab.id_to_token.size()) {
             return;
         }
 

@@ -6,7 +6,7 @@
 The project is still active in development. Contributions are welcome!
 
 ## Build
-To build the interactive console for S2TT & ASR, 
+To build the interactive console for S2TT & ASR & T2TT, 
 ```
 
 cd seamless_communication/ggml
@@ -22,11 +22,22 @@ make -j4 unity # Interactive Console
 For more build commands see [Makefile](Makefile). 
 
 ## CLI usage
+### S2TT
 Command to launch an interactive console for S2TT & ASR, note that the model already includes vocabulary needed to detokenize. 
 ```
 OPENBLAS_NUM_THREADS=8 ./bin/unity --model seamlessM4T_medium.ggml
 ```
-In the console, enter the path of local waveform file and target language, separated by space. Note that the first run would include some “warm up” time so could be slow. 
+In the console, enter "wav_file tgt_lang" - the path of local waveform file and target language, separated by space. Note that the first run would include some “warm up” time so could be slow. 
+
+### T2TT
+Launching command:
+```
+OPENBLAS_NUM_THREADS=8 ./bin/unity --model nllb-200_dense_1b.ggml --text
+```
+In the console, enter "input_text tgt_lang" - input text and target langauge, separated by space. Note that the language code should align with [NLLB BCP-47 code](https://github.com/facebookresearch/flores/blob/main/flores200/README.md#languages-in-flores-200), NOT 3-letter language code as S2TT task with Seamless. Unifying this is on todo list. 
+
+
+### Model downloads 
 
 Converted ggml models could be downloaded from 
 |SeamlessM4T_large | SeamlessM4T_medium | NLLB_dense_1b | NLLB_distill_600m |
