@@ -20,6 +20,7 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
+from scipy.ndimage import gaussian_filter
 
 import torch
 import torch.nn as nn
@@ -205,7 +206,13 @@ class Transcriber(nn.Module):
 
     @classmethod
     def _extract_timestamps(
-        cls, attn_weights, n_scores, audio_len, median_filter_width, use_dtw
+        cls,
+        attn_weights,
+        n_scores,
+        audio_len,
+        filter_width,
+        filter_type,
+        use_dtw,
     ) -> List[float]:
         attn_weights = attn_weights[:n_scores]  # matching lengths
 
@@ -213,8 +220,13 @@ class Transcriber(nn.Module):
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
         attn_weights = attn_weights / attn_weights.sum(axis=0, keepdims=1)  # normalize
-        if median_filter_width > 0:
-            attn_weights = medfilt2d(attn_weights, kernel_size=(1, median_filter_width))
+        if filter_width > 0:
+            if filter_type == "median":
+                attn_weights = medfilt2d(attn_weights, kernel_size=(1, filter_width))
+            elif filter_type == "gaussian":
+                attn_weights = gaussian_filter(
+                    attn_weights, sigma=1, axes=(1), radius=filter_width // 2
+                )
         if not use_dtw:  # longest increasing subsequence
             col_maxes = np.argmax(attn_weights, axis=0)
             lis_input = [
@@ -267,40 +279,13 @@ class Transcriber(nn.Module):
         ]
         return word_stats
 
-    @classmethod
-    def _join_transcriptions(
-        cls, transcriptions: List[Transcription], seconds_per_chunk: int
-    ) -> Transcription:
-        # Set global timestamp
-        # Remove first and last token from chunks except very first and very last
-        for tr_idx, transcription in enumerate(transcriptions):
-            tokens = transcription.tokens
-            if tr_idx != 0 and len(tokens) > 0:
-                tokens.pop(0)
-            if tr_idx != len(transcriptions) - 1 and len(tokens) > 0:
-                tokens.pop(-1)
-
-            for tk_idx in range(len(tokens)):
-                tokens[tk_idx].time_s += tr_idx * seconds_per_chunk / 2
-
-            transcriptions[tr_idx].tokens = tokens
-
-        tokens = []
-        last_timestamp = -1
-        for transcription in transcriptions:
-            for token in transcription.tokens:
-                if token.time_s > last_timestamp:
-                    tokens.append(token)
-                    last_timestamp = token.time_s
-
-        return Transcription(tokens)
-
     def run_inference(
         self,
         fbanks: torch.Tensor,
         src_lang: str,
         length_seconds: float,
-        median_filter_width: int,
+        filter_width: int,
+        filter_type: str,
         use_dtw: bool,
         rerun_decoder: bool,
         gen_opts: Dict,
@@ -348,7 +333,8 @@ class Transcriber(nn.Module):
             enc_dec_attn_scores,
             len(step_scores),
             length_seconds,
-            median_filter_width,
+            filter_width,
+            filter_type,
             use_dtw,
         )
         pieces = [
@@ -364,11 +350,11 @@ class Transcriber(nn.Module):
         self,
         audio: Union[str, Tensor],
         src_lang: str,
-        median_filter_width: int = 0,
+        filter_width: int = 0,
+        filter_type: str = "",
         sample_rate: int = 16000,
         use_dtw: bool = False,
         rerun_decoder: bool = True,
-        seconds_per_chunk: int = 10,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -383,10 +369,10 @@ class Transcriber(nn.Module):
         :param use_dtw:
             Use Dynamic Time Warping to extract timestamps
             rather than default Longest Increasing Subsequence
-        :param median_filter_width:
-            Window size for padding weights tensor.
-        :param seconds_per_chunk:
-            Chunk length to split audio into.
+        :param filter_width:
+            Window size to padding weights tensor.
+        :param filter_type:
+            Filter algorithm to pad weights tensor (`""`, `"median"`, `"gaussian"`).
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
 
@@ -397,52 +383,26 @@ class Transcriber(nn.Module):
             with Path(audio).open("rb") as fb:
                 block = MemoryBlock(fb.read())
             decoded_audio = self.decode_audio(block)
-            audio = decoded_audio["waveform"]
-            sample_rate = decoded_audio["sample_rate"]
-            audio_format = decoded_audio["format"]
         else:
-            audio_format = -1
+            decoded_audio = {
+                "waveform": audio,
+                "sample_rate": sample_rate,
+                "format": -1,
+            }
 
-        if seconds_per_chunk <= 0:
-            print(
-                f"Invalid argument chunk_seconds={seconds_per_chunk}, "
-                f"defaulting to {10}"
-            )
-            seconds_per_chunk = 10
+        src = self.convert_to_fbank(decoded_audio)["fbank"]
 
-        samples_per_chunk = int(sample_rate * seconds_per_chunk)
-        total_sample_count = audio.size(0)
-        chunks = []
-        sample_idx = 0
-        audio = torch.squeeze(audio, 1)
-        while sample_idx < total_sample_count:
-            chunks.append(
-                audio[sample_idx : sample_idx + samples_per_chunk].unsqueeze(1)
-            )
-            sample_idx += samples_per_chunk // 2
+        length_seconds = (
+            decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
+        )
 
-        overlapping_transcriptions = []
-        for chunk in chunks:
-            src = self.convert_to_fbank(
-                {
-                    "waveform": chunk,
-                    "sample_rate": sample_rate,
-                    "format": audio_format,
-                }
-            )["fbank"]
-
-            length_seconds = chunk.size(0) / sample_rate
-
-            overlapping_transcriptions.append(
-                self.run_inference(
-                    src,
-                    src_lang,
-                    length_seconds,
-                    median_filter_width,
-                    use_dtw,
-                    rerun_decoder,
-                    sequence_generator_options,
-                )
-            )
-
-        return self._join_transcriptions(overlapping_transcriptions, seconds_per_chunk)
+        return self.run_inference(
+            src,
+            src_lang,
+            length_seconds,
+            filter_width,
+            filter_type,
+            use_dtw,
+            rerun_decoder,
+            sequence_generator_options,
+        )
