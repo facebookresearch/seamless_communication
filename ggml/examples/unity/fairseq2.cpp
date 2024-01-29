@@ -148,6 +148,7 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
     }
 
     kv.step_nr = step_nr;
+    ggml_set_no_alloc(ctx, no_alloc_save);
 }
 
 // variant of ggml_get_rows that allows for a with more than 2 dims.
@@ -1800,7 +1801,6 @@ extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tenso
         std::size_t n = token.end() - begin;
         written += n;
         out += n;
-
     }
     *out = '0';
     return written;
@@ -1848,6 +1848,7 @@ std::pair<std::vector<std::string>, std::vector<float>> fairseq2_spm_detokenize(
         std::size_t n = token.end() - begin;
         written += n;
         out += n;
+
     }
     if(subword_scores.size() > 0) {
         word_scores.push_back(*std::min_element(subword_scores.begin(), subword_scores.end()));
