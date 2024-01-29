@@ -140,13 +140,12 @@ void append_to_prev_kv(const fairseq2_model& model, const std::string& prefix, g
 
     // qk is (B * H, Sq, Sk) == (B*H, 1, Sk) in incremental mode
     // we return the Sq slice of the (Sq, Sk) attention mask
-    *self_attn_mask = ggml_slice(
-        model.ctx,
-        ggml_slice(model.ctx, kv.self_attn_mask, 0, 0, step_nr),
-        1,
-        step_nr - 1,
-        step_nr
-    );
+    if (self_attn_mask != nullptr) {
+        *self_attn_mask = ggml_slice(
+            ctx, ggml_slice(ctx, kv.self_attn_mask, 0, 0, step_nr),
+            1, step_nr - 1, step_nr
+        );
+    }
 
     kv.step_nr = step_nr;
 }
@@ -1481,7 +1480,7 @@ extern "C" Hypothesis* generate_sequence(
             }
         }
         ggml_tensor* prev_token = ggml_slice(step_ctx, seqs, 0, step_nr, step_nr + 1);
-        
+
         ggml_tensor* decoder_input = TransformerEmbeddingFrontend_forward(model, "text_decoder_frontend", prev_token);
         ggml_tensor* decoder_output = StandardTransformerDecoder_forward(
             model,
@@ -1565,6 +1564,8 @@ extern "C" Hypothesis* generate_sequence(
         // Reorder beams in the `seq` and `score` buffers. The same beam can
         // be selected more than once.
         // (B, S), (B) -> (B, S)
+        // don't use allocr API, cause it might reuse a kv cache buffer several time.
+        ggml_set_no_alloc(step_ctx, false);
         ggml_tensor* new_seqs = ggml_get_rows(step_ctx, seqs, beam_indices);
         ggml_tensor* new_scores = ggml_get_rows(step_ctx, scores, beam_indices);
         struct ggml_cgraph * gf_reorder = ggml_new_graph(step_ctx);
@@ -1799,6 +1800,7 @@ extern "C" std::size_t fairseq2_spm_detokenize(fairseq2_model* model, ggml_tenso
         std::size_t n = token.end() - begin;
         written += n;
         out += n;
+
     }
     *out = '0';
     return written;
