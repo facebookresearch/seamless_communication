@@ -20,7 +20,6 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
-from scipy.ndimage import gaussian_filter
 
 import torch
 import torch.nn as nn
@@ -211,7 +210,6 @@ class Transcriber(nn.Module):
         n_scores,
         audio_len,
         filter_width,
-        filter_type,
         use_dtw,
     ) -> List[float]:
         attn_weights = attn_weights[:n_scores]  # matching lengths
@@ -220,13 +218,7 @@ class Transcriber(nn.Module):
         num_encoder_steps = len(attn_weights[0])
         attn_weights = np.array(attn_weights)
         attn_weights = attn_weights / attn_weights.sum(axis=0, keepdims=1)  # normalize
-        if filter_width > 0:
-            if filter_type == "median":
-                attn_weights = medfilt2d(attn_weights, kernel_size=(1, filter_width))
-            elif filter_type == "gaussian":
-                attn_weights = gaussian_filter(
-                    attn_weights, sigma=1, axes=(1), radius=filter_width // 2
-                )
+        attn_weights = medfilt2d(attn_weights, kernel_size=(filter_width, filter_width))
         if not use_dtw:  # longest increasing subsequence
             col_maxes = np.argmax(attn_weights, axis=0)
             lis_input = [
@@ -285,7 +277,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         length_seconds: float,
         filter_width: int,
-        filter_type: str,
         use_dtw: bool,
         rerun_decoder: bool,
         gen_opts: Dict,
@@ -334,7 +325,6 @@ class Transcriber(nn.Module):
             len(step_scores),
             length_seconds,
             filter_width,
-            filter_type,
             use_dtw,
         )
         pieces = [
@@ -350,8 +340,7 @@ class Transcriber(nn.Module):
         self,
         audio: Union[str, Tensor],
         src_lang: str,
-        filter_width: int = 0,
-        filter_type: str = "",
+        filter_width: int = 3,
         sample_rate: int = 16000,
         use_dtw: bool = False,
         rerun_decoder: bool = True,
@@ -371,8 +360,6 @@ class Transcriber(nn.Module):
             rather than default Longest Increasing Subsequence
         :param filter_width:
             Window size to padding weights tensor.
-        :param filter_type:
-            Filter algorithm to pad weights tensor (`""`, `"median"`, `"gaussian"`).
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
 
@@ -401,7 +388,6 @@ class Transcriber(nn.Module):
             src_lang,
             length_seconds,
             filter_width,
-            filter_type,
             use_dtw,
             rerun_decoder,
             sequence_generator_options,
