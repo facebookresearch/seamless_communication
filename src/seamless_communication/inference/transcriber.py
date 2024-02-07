@@ -171,11 +171,10 @@ class Transcriber(nn.Module):
     def _extract_timestamps(
         cls,
         attn_weights,
-        n_scores,
         audio_len,
         filter_width,
     ) -> List[float]:
-        attn_weights = attn_weights[:n_scores]  # matching lengths
+        attn_weights = [attn_line[1:-1] for attn_line in attn_weights][1:]
 
         num_out_tokens = len(attn_weights)
         num_encoder_steps = len(attn_weights[0])
@@ -259,7 +258,6 @@ class Transcriber(nn.Module):
         enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
         token_timestamps = self._extract_timestamps(
             enc_dec_attn_scores,
-            len(step_scores),
             length_seconds,
             filter_width,
         )
