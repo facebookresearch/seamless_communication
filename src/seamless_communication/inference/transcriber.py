@@ -290,7 +290,7 @@ class Transcriber(nn.Module):
         :param sample_rate:
             Sample rate of the audio Tensor.
         :param filter_width:
-            Window size to padding weights tensor.
+            Window size to pad weights tensor.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
 
