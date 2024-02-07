@@ -14,7 +14,6 @@ from fairseq2.generation import (
     SequenceGeneratorOutput,
 )
 from fairseq2.memory import MemoryBlock
-from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
 from fairseq2.typing import DataType, Device
 
@@ -236,7 +235,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         length_seconds: float,
         filter_width: int,
-        rerun_decoder: bool,
         gen_opts: Dict,
     ) -> Transcription:
         prefix = self.tokenizer.create_encoder(
@@ -255,25 +253,6 @@ class Transcriber(nn.Module):
             prompt_seqs=prefix.unsqueeze(0),
             prompt_padding_mask=None,
         )
-
-        if rerun_decoder:
-            self.enc_dec_attn_collector.reset()
-
-            tokens = output.hypotheses[0][0].seq
-            tokens_padding_mask = PaddingMask(
-                seq_lens=torch.LongTensor([tokens.shape[-1]]),
-                batch_seq_len=tokens.shape[-1],
-            )
-            seqs, padding_mask = self.s2t.decoder_frontend(
-                seqs=tokens.unsqueeze(0),
-                padding_mask=tokens_padding_mask,
-            )
-            self.s2t.decoder(
-                seqs=seqs,
-                padding_mask=padding_mask,
-                encoder_output=output.encoder_output,
-                encoder_padding_mask=output.encoder_padding_mask,
-            )
 
         token_ids = output.hypotheses[0][0].seq.squeeze(0)[prefix_len:].tolist()
         step_scores = output.hypotheses[0][0].step_scores[prefix_len:].tolist()
@@ -299,7 +278,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
-        rerun_decoder: bool = True,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -341,6 +319,5 @@ class Transcriber(nn.Module):
             src_lang,
             length_seconds,
             filter_width,
-            rerun_decoder,
             sequence_generator_options,
         )
