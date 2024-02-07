@@ -101,13 +101,22 @@ class Transcriber(nn.Module):
         self.encoder_layers = encoder_layers
         self.decoder_layers = decoder_layers
         self.depthwise_conv_kernel_size = depthwise_conv_kernel_size
-        self.tokenizer = load_unity_text_tokenizer(model_name_or_card)
+        self.tokenizer = (
+            model_name_or_card[1]
+            if isinstance(model_name_or_card, tuple)
+            else load_unity_text_tokenizer(model_name_or_card)
+        )
         self.decoder_vocab_info = self.tokenizer.vocab_info
         self.langs = self.tokenizer.langs
 
-        model = self.load_model_for_inference(
-            load_unity_model, model_name_or_card, device, dtype
+        model = (
+            model_name_or_card[0]
+            if isinstance(model_name_or_card, tuple)
+            else self.load_model_for_inference(
+                load_unity_model, model_name_or_card, device, dtype
+            )
         )
+
         self.s2t = UnitYX2TModel(
             encoder_frontend=model.speech_encoder_frontend,
             encoder=model.speech_encoder,
