@@ -168,41 +168,6 @@ class Transcriber(nn.Module):
             seq.append(arr[idx])
         return (maximum, reversed(seq))
 
-    @staticmethod
-    def generate_dtw(
-        arr: np.array,
-    ) -> List[Tuple[int, int]]:
-        n = arr.shape[0]
-        m = arr.shape[1]
-        c = np.ones((n + 1, m + 1)) * np.inf
-        t = np.array([[(0, 0)] * (m + 1)] * (n + 1))
-        c[0, 0] = 0
-        for i in range(n):
-            for j in range(m):
-                prev_xy = c[i, j]
-                prev_x = c[i, j + 1]
-                prev_y = c[i + 1, j]
-                if prev_xy < prev_x and prev_xy < prev_y:
-                    c[i + 1, j + 1] = arr[i, j] + prev_xy
-                    t[i + 1, j + 1] = (1, 1)
-                elif prev_x < prev_xy and prev_x < prev_y:
-                    c[i + 1, j + 1] = arr[i, j] + prev_x
-                    t[i + 1, j + 1] = (1, 0)
-                else:
-                    c[i + 1, j + 1] = arr[i, j] + prev_y
-                    t[i + 1, j + 1] = (0, 1)
-
-        path = []
-        i, j = n, m
-        t[0, :] = (0, 1)
-        t[:, 0] = (1, 0)
-        while i > 0 or j > 0:
-            path.append((i - 1, j - 1))
-            i -= t[i, j][0]
-            j -= t[i, j][1]
-
-        return path[::-1]
-
     @classmethod
     def _extract_timestamps(
         cls,
@@ -210,7 +175,6 @@ class Transcriber(nn.Module):
         n_scores,
         audio_len,
         filter_width,
-        use_dtw,
     ) -> List[float]:
         attn_weights = attn_weights[:n_scores]  # matching lengths
 
@@ -219,22 +183,17 @@ class Transcriber(nn.Module):
         attn_weights = np.array(attn_weights)
         attn_weights = attn_weights / attn_weights.sum(axis=0, keepdims=1)  # normalize
         attn_weights = medfilt2d(attn_weights, kernel_size=(filter_width, filter_width))
-        if not use_dtw:  # longest increasing subsequence
-            col_maxes = np.argmax(attn_weights, axis=0)
-            lis_input = [
-                (out_tok_idx, -enc_bin_idx)
-                for enc_bin_idx, out_tok_idx in enumerate(col_maxes)
-            ]
-            tok_idx_to_start_enc_bin_idx = {
-                out_tok_idx: -enc_bin_idx
-                for out_tok_idx, enc_bin_idx in cls.generate_lis(lis_input)[1]
-            }
-        else:  # dynamic time warping
-            dtw_path = cls.generate_dtw(-attn_weights)
-            tok_idx_to_start_enc_bin_idx = {
-                out_tok_idx: enc_bin_idx
-                for out_tok_idx, enc_bin_idx in reversed(dtw_path)
-            }
+
+        # find timestamps using longest increasing subsequence algo
+        col_maxes = np.argmax(attn_weights, axis=0)
+        lis_input = [
+            (out_tok_idx, -enc_bin_idx)
+            for enc_bin_idx, out_tok_idx in enumerate(col_maxes)
+        ]
+        tok_idx_to_start_enc_bin_idx = {
+            out_tok_idx: -enc_bin_idx
+            for out_tok_idx, enc_bin_idx in cls.generate_lis(lis_input)[1]
+        }
         prev_start = 0
         starts = []
         for tok_idx in range(num_out_tokens):
@@ -277,7 +236,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         length_seconds: float,
         filter_width: int,
-        use_dtw: bool,
         rerun_decoder: bool,
         gen_opts: Dict,
     ) -> Transcription:
@@ -325,7 +283,6 @@ class Transcriber(nn.Module):
             len(step_scores),
             length_seconds,
             filter_width,
-            use_dtw,
         )
         pieces = [
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
@@ -342,7 +299,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
-        use_dtw: bool = False,
         rerun_decoder: bool = True,
         **sequence_generator_options: Dict,
     ) -> Transcription:
@@ -355,9 +311,6 @@ class Transcriber(nn.Module):
             Source language of audio.
         :param sample_rate:
             Sample rate of the audio Tensor.
-        :param use_dtw:
-            Use Dynamic Time Warping to extract timestamps
-            rather than default Longest Increasing Subsequence
         :param filter_width:
             Window size to padding weights tensor.
         :params **sequence_generator_options:
@@ -388,7 +341,6 @@ class Transcriber(nn.Module):
             src_lang,
             length_seconds,
             filter_width,
-            use_dtw,
             rerun_decoder,
             sequence_generator_options,
         )
