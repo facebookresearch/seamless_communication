@@ -239,7 +239,6 @@ class Transcriber(nn.Module):
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
         ).prefix_indices
-        prefix_len = len(prefix.tolist())
         generator = BeamSearchSeq2SeqGenerator(
             model=self.s2t,
             **gen_opts,
@@ -253,9 +252,9 @@ class Transcriber(nn.Module):
             prompt_padding_mask=None,
         )
 
-        token_ids = output.hypotheses[0][0].seq.squeeze(0)[prefix_len:].tolist()
-        step_scores = output.hypotheses[0][0].step_scores[prefix_len:].tolist()
-        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[prefix_len - 1 :]
+        token_ids = output.hypotheses[0][0].seq.squeeze(0).tolist()
+        step_scores = output.hypotheses[0][0].step_scores.tolist()
+        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores
         token_timestamps = self._extract_timestamps(
             enc_dec_attn_scores,
             length_seconds,
