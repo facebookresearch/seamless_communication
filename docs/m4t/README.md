@@ -268,7 +268,6 @@ The `target` column specifies whether a language is supported as target speech (
 | eus  | Basque                 | Latn       | Sp, Tx | Tx     |
 | fin  | Finnish                | Latn       | Sp, Tx | Sp, Tx |
 | fra  | French                 | Latn       | Sp, Tx | Sp, Tx |
-| fuv  | Nigerian Fulfulde      | Latn       | Sp, Tx | Tx     |
 | gaz  | West Central Oromo     | Latn       | Sp, Tx | Tx     |
 | gle  | Irish                  | Latn       | Sp, Tx | Tx     |
 | glg  | Galician               | Latn       | Sp, Tx | Tx     |
