@@ -38,7 +38,7 @@ class EncDecAttentionsCollect(AttentionWeightHook):
 
     def __call__(self, m, attn, attn_weights) -> None:
         if attn_weights.shape[-2] > 1:
-            val = torch.clone(attn_weights).detach().squeeze(0).sum(dim=0).tolist()
+            val = torch.clone(attn_weights).detach().sum(dim=0).squeeze(0).tolist()
             self.attn_scores.extend(val)
         else:
             val = (
@@ -252,9 +252,9 @@ class Transcriber(nn.Module):
             prompt_padding_mask=None,
         )
 
-        token_ids = output.hypotheses[0][0].seq.squeeze(0).tolist()
-        step_scores = output.hypotheses[0][0].step_scores.tolist()
-        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores
+        token_ids = output.hypotheses[0][0].seq.squeeze(0).tolist()[:-1]
+        step_scores = output.hypotheses[0][0].step_scores.tolist()[:-1]
+        enc_dec_attn_scores = self.enc_dec_attn_collector.attn_scores[:-1]
         token_timestamps = self._extract_timestamps(
             enc_dec_attn_scores,
             length_seconds,
@@ -264,7 +264,9 @@ class Transcriber(nn.Module):
             self.tokenizer.model.index_to_token(token_id) for token_id in token_ids
         ]
         stats = self._collect_word_level_stats(
-            pieces=pieces, token_timestamps=token_timestamps, step_scores=step_scores
+            pieces=pieces,
+            token_timestamps=token_timestamps[: len(pieces)],
+            step_scores=step_scores,
         )
         return Transcription(stats)
 
