@@ -239,8 +239,11 @@ class Transcriber(nn.Module):
         prefix = self.tokenizer.create_encoder(
             mode="target", lang=src_lang
         ).prefix_indices
+        beam_size = gen_opts.get("beam_size") or 1  # set to 1 by default
+        gen_opts.pop("beam_size", None)
         generator = BeamSearchSeq2SeqGenerator(
             model=self.s2t,
+            beam_size=beam_size,
             **gen_opts,
         )
 
@@ -265,7 +268,7 @@ class Transcriber(nn.Module):
         ]
         stats = self._collect_word_level_stats(
             pieces=pieces,
-            token_timestamps=token_timestamps[: len(pieces)],
+            token_timestamps=token_timestamps,
             step_scores=step_scores,
         )
         return Transcription(stats)
