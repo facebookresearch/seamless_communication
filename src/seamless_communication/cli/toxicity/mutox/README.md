@@ -70,7 +70,7 @@ You can also check the mutox example notebook in this directory.
 
 ## Dataset
 
-The dataset is available in this [file](https://dl.fbaipublicfiles.com/seamless/datasets/mutox.csv). The dataset is licensed under the MIT license (see MIT_LICENSE
+The dataset is available in this [tsv file](https://dl.fbaipublicfiles.com/seamless/datasets/mutox.tsv). The dataset is licensed under the MIT license (see MIT_LICENSE
 file at the root of seamless_communication).
 
 ## Citation
