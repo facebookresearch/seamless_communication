@@ -6,7 +6,7 @@
 
 import math
 import warnings
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypeVar
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import torch
 from fairseq2.typing import DataType, Device

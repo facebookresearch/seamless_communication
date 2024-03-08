@@ -83,7 +83,7 @@ class BatchingConfig:
     """Select between fp16/fp32 for float tensors """
 
 
-def worker_init_fn(worker_id):
+def worker_init_fn(worker_id) -> None:
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 

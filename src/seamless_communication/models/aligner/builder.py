@@ -10,9 +10,9 @@ from typing import Optional, Union
 import torch
 from fairseq2.assets.card import AssetCard
 from fairseq2.data.vocabulary_info import VocabularyInfo
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.nn.embedding import StandardEmbedding, init_scaled_embedding
-from fairseq2.typing import DataType, Device
+from fairseq2.typing import CPU, DataType, Device
 
 from seamless_communication.models.aligner.model import (
     UnitY2AlignmentEncoder,
@@ -56,7 +56,7 @@ class UnitY2AlignmentConfig:
     alignment_frontend_config: UnitY2AlignmentFrontendConfig
 
 
-aligner_archs = ArchitectureRegistry[UnitY2AlignmentConfig]("unity2_aligner")
+aligner_archs = ModelArchitectureRegistry[UnitY2AlignmentConfig]()
 
 aligner_arch = aligner_archs.decorator
 
@@ -90,14 +90,14 @@ def _aligner_nar_t2u() -> UnitY2AlignmentConfig:
 class UnitY2AlignmentBuilder:
     config: UnitY2AlignmentConfig
     device: Optional[Device]
-    dtype: DataType
+    dtype: Optional[DataType]
 
     def __init__(
         self,
         config: UnitY2AlignmentConfig,
         *,
         device: Optional[Device] = None,
-        dtype: DataType = torch.float32,
+        dtype: Optional[DataType] = torch.float32,
     ) -> None:
         """
         :param config:
@@ -155,7 +155,8 @@ class UnitY2AlignmentBuilder:
             dropout=cfg.dropout,
             temperature=cfg.temperature,
             reduction_factor=cfg.reduction_factor,
-            dtype=self.dtype,
+            device=self.device or CPU,
+            dtype=self.dtype or torch.float32,
         )
         alignment_encoder.training = training
 
@@ -165,7 +166,7 @@ class UnitY2AlignmentBuilder:
 def create_unity2_alignment_model(
     config: UnitY2AlignmentConfig,
     device: Optional[Device] = None,
-    dtype: DataType = torch.float32,
+    dtype: Optional[DataType] = torch.float32,
 ) -> UnitY2AlignmentModel:
     """Create a UnitY model.
 

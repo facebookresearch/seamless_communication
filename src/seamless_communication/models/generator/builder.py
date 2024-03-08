@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from fairseq2.data import VocabularyInfo
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.nn.embedding import StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import Linear
@@ -110,8 +110,7 @@ class VocoderConfig:
     gcmvn_stats: Dict[str, List]  # type: ignore[type-arg]
 
 
-vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_pretssel")
-
+vocoder_archs = ModelArchitectureRegistry[VocoderConfig]()
 
 vocoder_arch = vocoder_archs.decorator
 

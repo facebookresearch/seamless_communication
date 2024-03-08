@@ -22,7 +22,7 @@ setup(
     license="Creative Commons",
     install_requires=[
         "datasets",
-        "fairseq2==0.2.*",
+#        "fairseq2==0.2.*",
         "fire",
         "librosa",
         "openai-whisper",

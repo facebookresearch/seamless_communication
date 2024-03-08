@@ -9,7 +9,7 @@ from typing import Optional, Tuple, final
 from fairseq2.nn.normalization import LayerNorm
 from fairseq2.nn.padding import PaddingMask, apply_padding_mask
 from fairseq2.nn.transformer import MultiheadAttention, create_standard_layer_norm
-from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.typing import DataType, Device, override
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU
 
@@ -71,7 +71,7 @@ class Conv1dBlock(Module):
             dtype=dtype,
         )
 
-    @finaloverride
+    @override
     def forward(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
         seqs = apply_padding_mask(seqs, padding_mask)
@@ -173,7 +173,7 @@ class FeedForwardTransformerLayer(Module):
         else:
             self.register_module("film", None)
 
-    @finaloverride
+    @override
     def forward(
         self,
         seqs: Tensor,

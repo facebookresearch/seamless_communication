@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 name: vocoder_pretssel_16khz
-model_type: vocoder_pretssel
+model_family: vocoder_pretssel
 model_arch: 16khz
 checkpoint: "https://github.com/facebookresearch/seamless_communication;gated=true"
 sample_rate: 16000

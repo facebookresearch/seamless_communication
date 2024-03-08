@@ -4,32 +4,26 @@
 # This source code is licensed under the BSD-style license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
+from pathlib import Path
 from typing import Optional, Sequence, Set, final
 
 from fairseq2.data.text import (
-    SentencePieceDecoder,
+    SentencePieceTokenizer,
     SentencePieceEncoder,
-    SentencePieceModel,
-    TextTokenDecoder,
-    TextTokenEncoder,
-    TextTokenizer,
-    vocab_info_from_sentencepiece,
 )
-from fairseq2.data.typing import PathLike
-from fairseq2.typing import Device, finaloverride
+from fairseq2.typing import Device, override
 
 
 @final
-class SPMTokenizer(TextTokenizer):
+class SPMTokenizer(SentencePieceTokenizer):
     """Represents standard SPM-based tokenizer used in MT tasks"""
 
-    model: SentencePieceModel
     langs: Set[str]
     prepend_target_langtok_to_target: bool
 
     def __init__(
         self,
-        pathname: PathLike,
+        path: Path,
         langs: Sequence[str],
         prepend_target_langtok_to_target: bool = True,
     ) -> None:
@@ -41,20 +35,19 @@ class SPMTokenizer(TextTokenizer):
         :param default_lang:
             The fall-back language if no language is specified.
         """
-        self.langs = set(langs)
-        self.prepend_target_langtok_to_target = prepend_target_langtok_to_target
-
         # Each language is represented by a `__lang__` control symbol.
         control_symbols = [self._lang_tok_to_internal(lang) for lang in sorted(langs)]
-        self.model = SentencePieceModel(pathname, control_symbols)
-        vocab_info = vocab_info_from_sentencepiece(self.model)
-        super().__init__(vocab_info)
+
+        super().__init__(path, control_symbols)
+
+        self.langs = set(langs)
+        self.prepend_target_langtok_to_target = prepend_target_langtok_to_target
 
     @classmethod
     def _lang_tok_to_internal(cls, lang: str) -> str:
         return f"__{lang}__"
 
-    @finaloverride
+    @override
     def create_encoder(
         self,
         *,
@@ -63,7 +56,7 @@ class SPMTokenizer(TextTokenizer):
         mode: Optional[str] = None,
         device: Optional[Device] = None,
         pin_memory: bool = False,
-    ) -> TextTokenEncoder:
+    ) -> SentencePieceEncoder:
         """Create a token encoder.
 
         :param task:
@@ -110,13 +103,3 @@ class SPMTokenizer(TextTokenizer):
             device=device,
             pin_memory=pin_memory,
         )
-
-    @finaloverride
-    def create_raw_encoder(
-        self, *, device: Optional[Device] = None, pin_memory: bool = False
-    ) -> TextTokenEncoder:
-        return SentencePieceEncoder(self.model, device=device, pin_memory=pin_memory)
-
-    @finaloverride
-    def create_decoder(self) -> TextTokenDecoder:
-        return SentencePieceDecoder(self.model)

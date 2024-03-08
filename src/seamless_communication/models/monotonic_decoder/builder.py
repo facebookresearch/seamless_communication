@@ -12,7 +12,7 @@ from fairseq2.models.transformer import (
     TransformerEmbeddingFrontend,
     TransformerFrontend,
 )
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import TiedProjection
@@ -77,9 +77,7 @@ class MonotonicDecoderConfig:
     in the PChooseLayer."""
 
 
-monotonic_decoder_archs = ArchitectureRegistry[MonotonicDecoderConfig](
-    "monotonic_decoder"
-)
+monotonic_decoder_archs = ModelArchitectureRegistry[MonotonicDecoderConfig]()
 
 monotonic_decoder_arch = monotonic_decoder_archs.decorator
 

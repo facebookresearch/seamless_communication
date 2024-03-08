@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union, final
+from typing import Final, Optional, Tuple, Union, final
 
 from fairseq2.data import VocabularyInfo
 from fairseq2.models.encoder_decoder import EncoderDecoderModel
@@ -22,6 +22,8 @@ from torch.nn import Module
 from seamless_communication.models.generator.ecapa_tdnn import ECAPA_TDNN
 from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
+
+UNITY_FAMILY: Final = "unity"
 
 
 @final
@@ -55,13 +57,14 @@ class UnitYModel(EncoderDecoderModel):
         text_decoder: Optional[TransformerDecoder],
         final_proj: Optional[Projection],
         t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None],
+        max_target_seq_len: int,
         target_vocab_info: VocabularyInfo,
         prosody_encoder_model: Optional[ECAPA_TDNN] = None,
         input_modality: str = "speech",
     ) -> None:
         model_dim = speech_encoder.model_dim
 
-        super().__init__(model_dim, target_vocab_info)
+        super().__init__(UNITY_FAMILY, model_dim, max_target_seq_len, target_vocab_info)
 
         self.input_modality = input_modality
 
@@ -190,7 +193,7 @@ class UnitYModel(EncoderDecoderModel):
 
         logits = self.final_proj(decoder_output)
 
-        return SequenceModelOutput(logits, self.target_vocab_info)
+        return SequenceModelOutput(logits, self.target_vocab_info.pad_idx)
 
 
 @final
@@ -209,11 +212,12 @@ class UnitYX2TModel(EncoderDecoderModel):
         decoder_frontend: TransformerFrontend,
         decoder: TransformerDecoder,
         final_proj: Projection,
+        max_target_seq_len: int,
         target_vocab_info: VocabularyInfo,
     ) -> None:
         model_dim = encoder.model_dim
 
-        super().__init__(model_dim, target_vocab_info)
+        super().__init__(UNITY_FAMILY, model_dim, max_target_seq_len, target_vocab_info)
 
         self.encoder_frontend = encoder_frontend
         self.encoder = encoder
@@ -257,7 +261,7 @@ class UnitYX2TModel(EncoderDecoderModel):
     ) -> SequenceModelOutput:
         logits = self.final_proj(decoder_output)
 
-        return SequenceModelOutput(logits, self.target_vocab_info)
+        return SequenceModelOutput(logits, self.target_vocab_info.pad_idx)
 
 
 @final
@@ -276,9 +280,10 @@ class UnitYT2UModel(EncoderDecoderModel):
         decoder_frontend: TransformerFrontend,
         decoder: TransformerDecoder,
         final_proj: Projection,
+        max_target_seq_len: int,
         target_vocab_info: VocabularyInfo,
     ) -> None:
-        super().__init__(decoder.model_dim, target_vocab_info)
+        super().__init__(UNITY_FAMILY, decoder.model_dim, max_target_seq_len, target_vocab_info)
 
         if encoder is not None:
             self.encoder = encoder
@@ -324,7 +329,7 @@ class UnitYT2UModel(EncoderDecoderModel):
     ) -> SequenceModelOutput:
         logits = self.final_proj(decoder_output)
 
-        return SequenceModelOutput(logits, self.target_vocab_info)
+        return SequenceModelOutput(logits, self.target_vocab_info.pad_idx)
 
 
 @final
@@ -438,7 +443,7 @@ class UnitYNART2UModel(Module):
     def project(self, decoder_output: Tensor) -> SequenceModelOutput:
         logits = self.final_proj(decoder_output)
 
-        return SequenceModelOutput(logits, self.target_vocab_info)
+        return SequenceModelOutput(logits, self.target_vocab_info.pad_idx)
 
 
 @dataclass

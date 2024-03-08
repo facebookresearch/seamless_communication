@@ -4,21 +4,22 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, Final, List, Union
 import torch
 from torch import Tensor
-from torch.nn import Module
+from fairseq2.models import Model
 
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
 
+VOCODER_CODE_HIFIGAN_FAMILY: Final = "vocoder_code_hifigan"
 
-class Vocoder(Module):
+class Vocoder(Model):
     def __init__(
         self,
         code_generator: CodeGenerator,
         lang_spkr_idx_map: Dict[str, Any],
     ):
-        super().__init__()
+        super().__init__(VOCODER_CODE_HIFIGAN_FAMILY)
         self.code_generator = code_generator
         self.lang_spkr_idx_map = lang_spkr_idx_map
 
@@ -29,7 +30,7 @@ class Vocoder(Module):
         spkr_list: Union[Optional[List[int]], int] = None,
         dur_prediction: bool = True,
     ) -> Tensor:
-        # TODO: Do we need this backward compatibility, or just update all calling sites? 
+        # TODO: Do we need this backward compatibility, or just update all calling sites?
         if len(units.shape) == 1:
             units = units.unsqueeze(0) # add batch dim
         if isinstance(lang_list, str):

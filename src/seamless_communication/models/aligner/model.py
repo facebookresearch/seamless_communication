@@ -4,25 +4,27 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, List, Tuple, Union
+from typing import Any, Final, List, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fairseq2.data import CString
+from fairseq2.models import Model
 from fairseq2.nn.embedding import StandardEmbedding
 from fairseq2.nn.padding import to_padding_mask
-from fairseq2.typing import DataType
+from fairseq2.typing import DataType, Device
 from torch import Tensor
 from torch.nn import Module
 
 from seamless_communication.models.unity.char_tokenizer import CharTokenizer
 from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 
+UNITY2_ALIGNER_FAMILY: Final = "unity2_aligner"
 
-class UnitY2AlignmentFrontend(Module):
+
+class UnitY2AlignmentFrontend(nn.Module):
     def __init__(
         self,
         embed_text: StandardEmbedding,
@@ -53,7 +55,7 @@ class UnitY2AlignmentFrontend(Module):
 
     def tokenize_text_to_tokens(
         self, text: str, add_trailing_silence: bool = False
-    ) -> List[Union[CString, str]]:
+    ) -> List[str]:
         tokenized = self.encode_text.encode_as_tokens(text)
         if add_trailing_silence:
             tokenized = tokenized + [tokenized[0]]
@@ -90,6 +92,7 @@ class UnitY2AlignmentEncoder(Module):
         dropout: float,
         temperature: float,
         reduction_factor: int,
+        device: Device,
         dtype: DataType,
     ):
         super().__init__()
@@ -101,7 +104,12 @@ class UnitY2AlignmentEncoder(Module):
             if i < text_layers - 1:
                 layers.append(
                     nn.Conv1d(
-                        embed_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype
+                        embed_dim,
+                        embed_dim,
+                        kernel_size=3,
+                        padding=1,
+                        device=device,
+                        dtype=dtype,
                     )
                 )
                 layers.append(nn.ReLU())
@@ -109,7 +117,12 @@ class UnitY2AlignmentEncoder(Module):
             else:
                 layers.append(
                     nn.Conv1d(
-                        embed_dim, embed_dim, kernel_size=1, padding=0, dtype=dtype
+                        embed_dim,
+                        embed_dim,
+                        kernel_size=1,
+                        padding=0,
+                        device=device,
+                        dtype=dtype,
                     )
                 )
                 layers.append(nn.Dropout(p=dropout))
@@ -122,7 +135,12 @@ class UnitY2AlignmentEncoder(Module):
             if i < feat_layers - 1:
                 layers.append(
                     nn.Conv1d(
-                        input_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype
+                        input_dim,
+                        embed_dim,
+                        kernel_size=3,
+                        padding=1,
+                        device=device,
+                        dtype=dtype,
                     )
                 )
                 layers.append(nn.ReLU())
@@ -135,6 +153,7 @@ class UnitY2AlignmentEncoder(Module):
                         kernel_size=1,
                         padding=0,
                         stride=reduction_factor,
+                        device=device,
                         dtype=dtype,
                     )
                 )
@@ -277,7 +296,7 @@ def viterbi_decode(
     return durations
 
 
-class UnitY2AlignmentModel(Module):
+class UnitY2AlignmentModel(Model):
     alignment_encoder: UnitY2AlignmentEncoder
     alignment_frontend: UnitY2AlignmentFrontend
 
@@ -286,7 +305,7 @@ class UnitY2AlignmentModel(Module):
         alignment_frontend: UnitY2AlignmentFrontend,
         alignment_encoder: UnitY2AlignmentEncoder,
     ):
-        super().__init__()
+        super().__init__(UNITY2_ALIGNER_FAMILY)
         self.alignment_frontend = alignment_frontend
         self.alignment_encoder = alignment_encoder
 

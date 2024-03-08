@@ -207,7 +207,7 @@ def build_data_pipeline(
 
     pipeline_builder = read_text(data_file, rtrim=True).skip(1).map(split_tsv)
 
-    map_file = FileMapper(root_dir=audio_root_dir, cached_fd_count=10)
+    map_file = FileMapper(root_dir=Path(audio_root_dir), cached_fd_count=10)
 
     pipeline_builder.map(
         map_file,

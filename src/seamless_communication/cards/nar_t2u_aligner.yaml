@@ -6,7 +6,7 @@
 
 name: nar_t2u_aligner
 char_tokenizer: "https://huggingface.co/facebook/seamless-streaming/resolve/main/spm_char_lang38_tc.model"
-model_type: unity2_aligner
+model_family: unity2_aligner
 model_arch: nar_t2u_aligner
 checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/unity2_aligner.pt"
 num_units: 10000

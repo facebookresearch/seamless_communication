@@ -7,9 +7,10 @@
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from fairseq2.data import VocabularyInfo
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.models.w2vbert import w2vbert_archs
 from fairseq2.models.wav2vec2 import Wav2Vec2EncoderBuilder, Wav2Vec2EncoderConfig
 from fairseq2.nn.projection import TiedProjection
@@ -36,7 +37,7 @@ from seamless_communication.models.unity.adaptor_block import (
     UnitYEncoderAdaptor,
     UnitYTransformerAdaptorLayer,
 )
-from seamless_communication.models.unity.model import UnitYModel
+from seamless_communication.models.unity.model import UNITY_FAMILY, UnitYModel
 from seamless_communication.models.unity.t2u_builder import (
     UnitYNART2UBuilder,
     UnitYT2UBuilder,
@@ -100,7 +101,7 @@ class UnitYConfig:
     """The dropout probability in Transformer layers of the adaptor block."""
 
 
-unity_archs = ArchitectureRegistry[UnitYConfig]("unity")
+unity_archs = ModelArchitectureRegistry[UnitYConfig]()
 
 unity_arch = unity_archs.decorator
 
@@ -111,7 +112,15 @@ def _base() -> UnitYConfig:
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
 
-    mt_model_config.vocab_info.size = 256102  # NLLB-100
+    vocab_info = mt_model_config.vocab_info
+
+    mt_model_config.vocab_info = VocabularyInfo(
+        size=256102,  # NLLB-100
+        unk_idx=vocab_info.unk_idx,
+        bos_idx=vocab_info.bos_idx,
+        eos_idx=vocab_info.eos_idx,
+        pad_idx=vocab_info.pad_idx,
+    )
 
     t2u_config = unity_t2u_archs.get_config("base")
 
@@ -139,7 +148,15 @@ def _medium() -> UnitYConfig:
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_600m")
 
-    mt_model_config.vocab_info.size = 256206  # NLLB-200
+    vocab_info = mt_model_config.vocab_info
+
+    mt_model_config.vocab_info = VocabularyInfo(
+        size=256206,  # NLLB-200
+        unk_idx=vocab_info.unk_idx,
+        bos_idx=vocab_info.bos_idx,
+        eos_idx=vocab_info.eos_idx,
+        pad_idx=vocab_info.pad_idx,
+    )
 
     t2u_config = unity_t2u_archs.get_config("medium")
 
@@ -163,11 +180,19 @@ def _medium() -> UnitYConfig:
 
 @unity_arch("base_v2")
 def _base_v2() -> UnitYConfig:
-    conformer_shaw_encoder_config = conformer_shaw_archs.get_config("600m")
+    conformer_shaw_config = conformer_shaw_archs.get_config("conformer_shaw_600m")
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
 
-    mt_model_config.vocab_info.size = 256102  # NLLB-100
+    vocab_info = mt_model_config.vocab_info
+
+    mt_model_config.vocab_info = VocabularyInfo(
+        size=256102,  # NLLB-100
+        unk_idx=vocab_info.unk_idx,
+        bos_idx=vocab_info.bos_idx,
+        eos_idx=vocab_info.eos_idx,
+        pad_idx=vocab_info.pad_idx,
+    )
 
     mt_model_config.max_seq_len = 4096
 
@@ -175,7 +200,7 @@ def _base_v2() -> UnitYConfig:
 
     return UnitYConfig(
         model_dim=1024,
-        w2v2_encoder_config=conformer_shaw_encoder_config,
+        w2v2_encoder_config=conformer_shaw_config.encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
         prosody_encoder_config=None,
@@ -193,11 +218,19 @@ def _base_v2() -> UnitYConfig:
 
 @unity_arch("expressivity_v2")
 def _expressivity_v2() -> UnitYConfig:
-    conformer_shaw_encoder_config = conformer_shaw_archs.get_config("600m")
+    conformer_shaw_config = conformer_shaw_archs.get_config("conformer_shaw_600m")
 
     mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
 
-    mt_model_config.vocab_info.size = 256102  # NLLB-100
+    vocab_info = mt_model_config.vocab_info
+
+    mt_model_config.vocab_info = VocabularyInfo(
+        size=256102,  # NLLB-100
+        unk_idx=vocab_info.unk_idx,
+        bos_idx=vocab_info.bos_idx,
+        eos_idx=vocab_info.eos_idx,
+        pad_idx=vocab_info.pad_idx,
+    )
 
     mt_model_config.max_seq_len = 10000
 
@@ -207,7 +240,7 @@ def _expressivity_v2() -> UnitYConfig:
 
     return UnitYConfig(
         model_dim=1024,
-        w2v2_encoder_config=conformer_shaw_encoder_config,
+        w2v2_encoder_config=conformer_shaw_config.encoder_config,
         mt_model_config=mt_model_config,
         t2u_config=t2u_config,
         prosody_encoder_config=prosody_encoder_config,
@@ -263,19 +296,19 @@ class UnitYBuilder:
         :param dtype:
             The data type of module parameters and buffers.
         """
-        if w2v2_encoder_builder.config.model_dim != config.model_dim:
+        if config.w2v2_encoder_config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `w2v2_encoder_builder.config` must be equal, but are {config.model_dim} and {w2v2_encoder_builder.config.model_dim} instead."
+                f"`config.model_dim` and `config.w2v2_encoder_config.model_dim` must be equal, but are {config.model_dim} and {config.w2v2_encoder_config.model_dim} instead."
             )
 
-        if mt_model_builder.config.model_dim != config.model_dim:
+        if config.mt_model_config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `mt_model_builder.config` must be equal, but are {config.model_dim} and {mt_model_builder.config.model_dim} instead."
+                f"`config.model_dim` and `config.mt_model_config.model_dim` must be equal, but are {config.model_dim} and {config.mt_model_config.model_dim} instead."
             )
 
-        if t2u_builder is not None and t2u_builder.config.model_dim != config.model_dim:
+        if config.t2u_config is not None and config.t2u_config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `t2u_builder.config` must be equal, but are {config.model_dim} and {t2u_builder.config.model_dim} instead."
+                f"`config.model_dim` and `config.t2u_config.model_dim` must be equal, but are {config.model_dim} and {config.t2u_config.model_dim} instead."
             )
 
         self.config = config
@@ -337,6 +370,7 @@ class UnitYBuilder:
             text_decoder,
             final_proj,
             t2u_model,
+            self.config.mt_model_config.max_seq_len or 0,
             self.config.mt_model_config.vocab_info,
             prosody_encoder_model,
         )
@@ -367,12 +401,12 @@ class UnitYBuilder:
     def build_adaptor_layer(self, idx: int) -> TransformerEncoderLayer:
         """Build a Transformer-based encoder adaptor layer."""
         self_attn = self.build_adaptor_attention(
-            self.w2v2_encoder_builder.config.num_encoder_attn_heads
+            self.config.w2v2_encoder_config.num_encoder_attn_heads
         )
 
         ffn = StandardFeedForwardNetwork(
             self.config.model_dim,
-            self.w2v2_encoder_builder.config.ffn_inner_dim,
+            self.config.w2v2_encoder_config.ffn_inner_dim,
             inner_activation=GELU() if self.config.use_gelu else ReLU(),
             bias=True,
             device=self.device,
@@ -396,12 +430,12 @@ class UnitYBuilder:
         # Empirically shown that, in adaptor layers, vanilla MHA performs better
         # than MHA with relative positional encoding.
         self_attn = self.build_adaptor_attention(
-            self.w2v2_encoder_builder.config.num_encoder_attn_heads
+            self.config.w2v2_encoder_config.num_encoder_attn_heads
         )
 
         conv = ConformerConvolution(
-            self.w2v2_encoder_builder.config.model_dim,
-            self.w2v2_encoder_builder.config.depthwise_conv_kernel_size,
+            self.config.w2v2_encoder_config.model_dim,
+            self.config.w2v2_encoder_config.depthwise_conv_kernel_size,
             device=self.device,
             dtype=self.dtype,
         )
@@ -446,13 +480,13 @@ class NllbWithGELUBuilder(NllbBuilder):
     @override
     def build_ffn(self) -> FeedForwardNetwork:
         return StandardFeedForwardNetwork(
-            self.config.model_dim,
-            self.config.ffn_inner_dim,
+            self._config.model_dim,
+            self._config.ffn_inner_dim,
             bias=True,
             inner_activation=GELU(),
             norm_order=TransformerNormOrder.PRE,
-            device=self.device,
-            dtype=self.dtype,
+            device=self._device,
+            dtype=self._dtype,
         )
 
 
@@ -497,11 +531,11 @@ def create_unity_model(
 
     if config.use_gelu:
         mt_model_builder: NllbBuilder = NllbWithGELUBuilder(
-            config.mt_model_config, device=device, dtype=dtype
+            UNITY_FAMILY, config.mt_model_config, device=device, dtype=dtype
         )
     else:
         mt_model_builder = NllbBuilder(
-            config.mt_model_config, device=device, dtype=dtype
+            UNITY_FAMILY, config.mt_model_config, device=device, dtype=dtype
         )
 
     unity_builder = UnitYBuilder(

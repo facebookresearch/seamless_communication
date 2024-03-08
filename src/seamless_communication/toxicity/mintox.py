@@ -18,7 +18,6 @@ from seamless_communication.toxicity.etox_bad_word_checker import (
 )
 from fairseq2.generation import BannedSequenceProcessor
 from fairseq2.data.text.text_tokenizer import TextTokenizer
-from fairseq2.data.typing import StringLike
 from fairseq2.typing import Device
 from fairseq2.data import SequenceData
 from fairseq2.nn.padding import get_seqs_and_padding_mask
@@ -32,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_bad_words_with_batch_indices(
-    source_texts: List[StringLike],
-    target_texts: List[StringLike],
+    source_texts: List[str],
+    target_texts: List[str],
     source_lang: str,
     target_lang: str,
     bad_word_checker: ETOXBadWordChecker,
@@ -54,9 +53,9 @@ def _extract_bad_words_with_batch_indices(
 
 
 def _replace_with_new_text_output_in_batch(
-    original_texts: List[StringLike],
+    original_texts: List[str],
     indices_with_toxicity: List[int],
-    new_texts: List[StringLike],
+    new_texts: List[str],
 ) -> None:
     new_idx = 0
     # indices_with_toxicity is a small list, using list should be fast enough.
@@ -100,8 +99,8 @@ def mintox_pipeline(
     model_input: SequenceData,
     input_modality: "Modality",
     output_modality: "Modality",
-    src_texts: List[StringLike],
-    original_texts: List[StringLike],
+    src_texts: List[str],
+    original_texts: List[str],
     original_units: Optional[Tensor] = None,
     unit_generation_ngram_filtering: bool = False,
     text_generation_opts: Optional[SequenceGeneratorOptions] = None,
@@ -109,7 +108,7 @@ def mintox_pipeline(
     bad_word_checker: ETOXBadWordChecker = None,
     duration_factor: float = 1.0,
     prosody_encoder_input: Optional[SequenceData] = None,
-) -> Tuple[List[StringLike], Optional[Tensor]]:
+) -> Tuple[List[str], Optional[Tensor]]:
     """MinTox: Mitigation at INference time of added TOXicity."""
     from seamless_communication.inference.translator import Modality, Translator
 

@@ -6,15 +6,14 @@
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
-from fairseq2.assets import asset_store, download_manager
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import VocabularyInfo
-from fairseq2.models.nllb.loader import NllbTokenizerLoader
+from fairseq2.models.nllb import load_nllb_tokenizer
 from fairseq2.models.transformer import (
     TransformerEmbeddingFrontend,
     TransformerFrontend,
 )
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import Linear, Projection, TiedProjection
@@ -131,8 +130,7 @@ class UnitYT2UConfig:
     """The dimensionality of prosody encoder (e.g. ECAPA_TDNN) output"""
 
 
-unity_t2u_archs = ArchitectureRegistry[UnitYT2UConfig]("unity_t2u")
-
+unity_t2u_archs = ModelArchitectureRegistry[UnitYT2UConfig]()
 
 unity_t2u_arch = unity_t2u_archs.decorator
 
@@ -329,6 +327,7 @@ class UnitYT2UBuilder:
             decoder_frontend,
             decoder,
             final_proj,
+            self.config.unit_max_seq_len,
             self.config.target_vocab_info,
         )
 
@@ -598,7 +597,7 @@ class UnitYNART2UBuilder:
             self.config.nar_decoder_frontend_config
         )
 
-        nllb_tokenizer = NllbTokenizerLoader(asset_store, download_manager)(
+        nllb_tokenizer = load_nllb_tokenizer(
             self.config.nar_decoder_config.model_name_or_card
         )
 

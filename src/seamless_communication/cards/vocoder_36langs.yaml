@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 name: vocoder_36langs
-model_type: vocoder_code_hifigan
+model_family: vocoder_code_hifigan
 model_arch: base
 checkpoint: "https://huggingface.co/facebook/seamless-m4t-vocoder/resolve/main/vocoder_36langs.pt"
 model_config: {

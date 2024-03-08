@@ -15,7 +15,7 @@ from fairseq2.nn.transformer import (
     MultiheadAttention,
     create_standard_layer_norm,
 )
-from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.typing import DataType, Device, override
 from torch import Tensor
 from torch.nn import Dropout, Module
 
@@ -104,7 +104,7 @@ class MonotonicTransformerDecoderLayer(Module):
         else:
             self.register_module("ffn_dropout", None)
 
-    @finaloverride
+    @override
     def forward(
         self,
         seqs: Tensor,

@@ -4,10 +4,11 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, Final, List, Literal, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
+from fairseq2.models import Model
 from fairseq2.nn.embedding import Embedding, StandardEmbedding
 from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.position_encoder import PositionEncoder
@@ -43,6 +44,9 @@ from .streamable import (
     StreamableLSTM,
     StreamableResnetBlock,
 )
+
+
+PRETSSEL_VOCODER_FAMILY: Final = "vocoder_pretssel"
 
 ELU_PARAMS: Dict[str, Any] = {"alpha": 1.0}
 
@@ -162,7 +166,7 @@ class PretsselDecoderFrontend(Module):
         return seqs, padding_mask
 
 
-class PretsselVocoder(Module):
+class PretsselVocoder(Model):
     """The expressivity-preserving vocoder"""
 
     encoder_frontend: PretsselEncoderFrontend
@@ -212,7 +216,7 @@ class PretsselVocoder(Module):
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ):
-        super().__init__()
+        super().__init__(PRETSSEL_VOCODER_FAMILY)
         self.encoder_frontend = encoder_frontend
         self.encoder = encoder
         self.decoder_frontend = decoder_frontend

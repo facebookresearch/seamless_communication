@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 name: vocoder_v2
-model_type: vocoder_code_hifigan
+model_family: vocoder_code_hifigan
 model_arch: base
 checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/vocoder_v2.pt"
 model_config: {

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import torch
-from fairseq2.data import SequenceData, StringLike
+from fairseq2.data import SequenceData
 from fairseq2.data.text import TextTokenizer
 from fairseq2.generation import (
     BeamSearchSeq2SeqGenerator,
@@ -137,6 +137,7 @@ class UnitYGenerator:
             decoder_frontend=model.text_decoder_frontend,
             decoder=model.text_decoder,
             final_proj=model.final_proj,
+            max_target_seq_len=model.max_target_seq_len,
             target_vocab_info=model.target_vocab_info,
         )
 
@@ -169,6 +170,7 @@ class UnitYGenerator:
                 decoder_frontend=model.text_decoder_frontend,
                 decoder=model.text_decoder,
                 final_proj=model.final_proj,
+                max_target_seq_len=model.max_target_seq_len,
                 target_vocab_info=model.target_vocab_info,
             )
             generator = BeamSearchSeq2SeqGenerator(
@@ -234,7 +236,7 @@ class UnitYGenerator:
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-    ) -> Tuple[List[StringLike], Optional[Tensor]]:
+    ) -> Tuple[List[str], Optional[Tensor]]:
         """
         :param source_seqs:
             The source sequences to use for generation. *Shape:* :math:`(N,S,*)`,
@@ -346,7 +348,7 @@ class UnitYGenerator:
             unit_seqs = t2u_model_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.
             unit_seqs = apply_padding_mask(
-                unit_seqs, decoder_padding_mask, t2u_model_output.vocab_info.pad_idx
+                unit_seqs, decoder_padding_mask, t2u_model_output.pad_idx
             )
 
         # Convert to speech units.

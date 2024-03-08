@@ -4,25 +4,25 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Dict
 
 import torch
 
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ModelLoader
+from fairseq2.models import setup_model_family
 from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
-from fairseq2.models.wav2vec2.builder import Wav2Vec2Config
-from fairseq2.models.wav2vec2.loader import load_wav2vec2_config
-from fairseq2.models.wav2vec2.model import Wav2Vec2Model
+from fairseq2.models.wav2vec2 import Wav2Vec2Model
 
 from seamless_communication.models.conformer_shaw.builder import (
+    CONFORMER_SHAW_FAMILY,
+    ConformerShawConfig,
+    conformer_shaw_archs,
     create_conformer_shaw_model,
 )
 
 
 def convert_conformer_shaw_checkpoint(
-    checkpoint: Mapping[str, Any], config: Wav2Vec2Config
-) -> Mapping[str, Any]:
+    checkpoint: Dict[str, Any], config: ConformerShawConfig
+) -> Dict[str, Any]:
     """Convert a fairseq conformer shaw checkpoint to fairseq2."""
     state_dict = checkpoint["model"]
 
@@ -73,10 +73,10 @@ def convert_conformer_shaw_checkpoint(
     return convert_fairseq_checkpoint(checkpoint, key_map)
 
 
-load_conformer_shaw_model = ModelLoader[Wav2Vec2Model, Wav2Vec2Config](
-    asset_store,
-    download_manager,
-    load_wav2vec2_config,
+load_conformer_shaw_model, load_conformer_shaw_config = setup_model_family(
+    CONFORMER_SHAW_FAMILY,
+    ConformerShawConfig,
     create_conformer_shaw_model,
+    conformer_shaw_archs,
     convert_conformer_shaw_checkpoint,
 )

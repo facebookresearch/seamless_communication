@@ -4,11 +4,10 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Dict
 
 import torch
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.models import setup_model_family
 from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
 
 from seamless_communication.models.monotonic_decoder.builder import (
@@ -16,12 +15,12 @@ from seamless_communication.models.monotonic_decoder.builder import (
     create_monotonic_decoder_model,
     monotonic_decoder_archs,
 )
-from seamless_communication.models.monotonic_decoder.model import MonotonicDecoderModel
+from seamless_communication.models.monotonic_decoder.model import MONOTONIC_DECODER_FAMILY
 
 
 def convert_monotonic_checkpoint(
-    checkpoint: Mapping[str, Any], config: MonotonicDecoderConfig
-) -> Mapping[str, Any]:
+    checkpoint: Dict[str, Any], config: MonotonicDecoderConfig
+) -> Dict[str, Any]:
     state_dict = checkpoint["model"]
 
     # Check if we have a fairseq2 checkpoint.
@@ -75,18 +74,11 @@ def convert_monotonic_checkpoint(
     return checkpoint
 
 
-load_monotonic_decoder_config = ConfigLoader[MonotonicDecoderConfig](
-    asset_store, monotonic_decoder_archs
-)
-
-
-load_monotonic_decoder_model = ModelLoader[
-    MonotonicDecoderModel, MonotonicDecoderConfig
-](
-    asset_store,
-    download_manager,
-    load_monotonic_decoder_config,
+load_monotonic_decoder_model, load_monotonic_decoder_config = setup_model_family(
+    MONOTONIC_DECODER_FAMILY,
+    MonotonicDecoderConfig,
     create_monotonic_decoder_model,
+    monotonic_decoder_archs,
     convert_monotonic_checkpoint,
     restrict_checkpoints=False,
 )

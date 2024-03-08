@@ -19,7 +19,6 @@ import torchaudio
 from fairseq2.data import Collater, DataPipeline, FileMapper
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.data.text import StrSplitter, TextTokenizer, read_text
-from fairseq2.data.typing import StringLike
 from fairseq2.typing import DataType, Device
 from torch import Tensor
 from tqdm import tqdm
@@ -181,10 +180,10 @@ def build_data_pipeline(
 
 def adjust_output_for_corrupted_inputs(
     valid_sequences: Tensor,
-    text_output: List[StringLike],
+    text_output: List[str],
     speech_output: Optional[BatchedSpeechOutput],
-) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
-    adjusted_text_output: List[StringLike] = []
+) -> Tuple[List[str], Optional[BatchedSpeechOutput]]:
+    adjusted_text_output: List[str] = []
     adjusted_speech_output: Optional[BatchedSpeechOutput] = None
 
     if speech_output is not None:

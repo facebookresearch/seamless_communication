@@ -16,7 +16,6 @@ from fairseq2.assets import (
     asset_store as base_asset_store,
     download_manager as base_download_manager,
 )
-from fairseq2.data import StringLike
 from fairseq2.data.text import SentencePieceEncoder, SentencePieceModel
 
 
@@ -116,7 +115,7 @@ class ETOXBadWordChecker:
 
     @staticmethod
     def _contains_tokens(
-        text_tokens: List[StringLike], word_tokens: List[StringLike]
+        text_tokens: List[str], word_tokens: List[str]
     ) -> bool:
         for i in range(len(text_tokens) - len(word_tokens) + 1):
             for j in range(len(word_tokens)):

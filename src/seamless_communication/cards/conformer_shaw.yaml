@@ -5,6 +5,6 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 name: conformer_shaw
-model_type: wav2vec2
+model_family: conformer_shaw
 model_arch: conformer_shaw_600m
 checkpoint: "https://huggingface.co/facebook/conformer-shaw/resolve/main/conformer_shaw.pt"

@@ -116,12 +116,12 @@ class UnitYFinetuneWrapper(nn.Module):
                 unit_encoder_out,
                 unit_encoder_padding_mask,
             ) = self.model.t2u_model.encode(
-                text_decoder_output=text_decoder_out,
-                text_decoder_padding_mask=text_decoder_padding_mask,
+                text_decoder_out,
+                text_decoder_padding_mask,
             )
             seqs = batch.text_to_units.prev_output_tokens.to(self.device)
             seq_lens = batch.text_to_units.target_lengths.to(self.device)
-            unit_decoder_out, _ = self.model.t2u_model.decode(
+            unit_decoder_out = self.model.t2u_model.decode(
                 seqs=seqs,
                 padding_mask=PaddingMask(seq_lens, seqs.size(1)),
                 encoder_output=unit_encoder_out,
@@ -156,7 +156,7 @@ class CalcLoss:
             text_logits.device
         )
         s2t_loss = SequenceModelOutput(
-            logits=text_logits, vocab_info=self.s2t_vocab_info
+            text_logits, self.s2t_vocab_info.pad_idx
         ).compute_loss(
             targets=batch.speech_to_text.target_tokens.to(text_logits.device),
             ignore_prefix_size=1,
@@ -167,7 +167,7 @@ class CalcLoss:
         assert batch.text_to_units.target_lengths is not None
         s2u_numel = torch.sum(batch.text_to_units.target_lengths).to(unit_logits.device)
         s2u_loss = SequenceModelOutput(
-            logits=unit_logits, vocab_info=self.t2u_vocab_info
+            logits=unit_logits, vocab_info=self.t2u_vocab_info.pad_idx
         ).compute_loss(
             targets=batch.text_to_units.target_tokens.to(unit_logits.device),
             ignore_prefix_size=1,
@@ -314,7 +314,7 @@ class UnitYFinetune:
         eval_loss = loss_hist.reduce()
         self._update_eval_stats(eval_loss)
 
-    def _train_step_log(self):
+    def _train_step_log(self) -> None:
         """Log train stats"""
         if (self.update_idx + 1) % self.params.log_steps == 0:
             avg_loss = self.train_loss_hist.reduce()
@@ -340,7 +340,7 @@ class UnitYFinetune:
         self.train_loss_hist.update(1, loss.item())
         self._train_step_log()
 
-    def _save_model(self):
+    def _save_model(self) -> None:
         logger.info("Saving model")
         if dist_utils.is_main_process():
             state_dict = {
@@ -351,7 +351,7 @@ class UnitYFinetune:
         if dist_utils.is_dist_initialized():
             dist.barrier()
 
-    def run(self):
+    def run(self) -> None:
         logger.info("Start finetuning")
         self._reset_stats()
         self._eval_model()

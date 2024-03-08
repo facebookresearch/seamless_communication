@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
+from pathlib import Path
 from typing import Optional, Union, final
 
 from fairseq2.assets import (
@@ -14,36 +15,24 @@ from fairseq2.assets import (
 )
 from fairseq2.assets.card import AssetCard
 from fairseq2.data.text import (
-    SentencePieceDecoder,
+    SentencePieceTokenizer,
     SentencePieceEncoder,
-    SentencePieceModel,
-    TextTokenDecoder,
-    TextTokenEncoder,
-    TextTokenizer,
-    vocab_info_from_sentencepiece,
 )
-from fairseq2.data.typing import PathLike
-from fairseq2.typing import Device, finaloverride
+from fairseq2.typing import Device, override
 
 
 @final
-class CharTokenizer(TextTokenizer):
+class CharTokenizer(SentencePieceTokenizer):
     """A character-level tokenizer used during non-autoregressive T2U decoding."""
 
-    model: SentencePieceModel
-
-    def __init__(self, pathname: PathLike) -> None:
+    def __init__(self, path: Path) -> None:
         """
         :param pathname:
             The pathname of the SentencePiece model file.
         """
-        self.model = SentencePieceModel(pathname)
+        super().__init__(path)
 
-        vocab_info = vocab_info_from_sentencepiece(self.model)
-
-        super().__init__(vocab_info)
-
-    @finaloverride
+    @override
     def create_encoder(
         self,
         task: Optional[str] = None,
@@ -51,23 +40,9 @@ class CharTokenizer(TextTokenizer):
         mode: Optional[str] = None,
         device: Optional[Device] = None,
         pin_memory: bool = False,
-    ) -> TextTokenEncoder:
+    ) -> SentencePieceEncoder:
         """Creates a character level encoder."""
-        return SentencePieceEncoder(
-            self.model,
-            device=device,
-            pin_memory=pin_memory,
-        )
-
-    @finaloverride
-    def create_raw_encoder(
-        self, *, device: Optional[Device] = None, pin_memory: bool = False
-    ) -> TextTokenEncoder:
         return SentencePieceEncoder(self.model, device=device, pin_memory=pin_memory)
-
-    @finaloverride
-    def create_decoder(self) -> TextTokenDecoder:
-        return SentencePieceDecoder(self.model)
 
 
 class UnitYCharTokenizerLoader:

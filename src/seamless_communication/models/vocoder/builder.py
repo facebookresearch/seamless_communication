@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.architecture_registry import ModelArchitectureRegistry
 from fairseq2.typing import DataType, Device
 
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
@@ -34,7 +34,7 @@ class VocoderConfig:
     lang_spkr_idx_map: Dict[str, Any]
 
 
-vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_code_hifigan")
+vocoder_archs = ModelArchitectureRegistry[VocoderConfig]()
 
 vocoder_arch = vocoder_archs.decorator
 

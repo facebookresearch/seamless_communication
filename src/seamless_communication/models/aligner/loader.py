@@ -4,24 +4,23 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, List, Mapping
+from typing import Any, List, Dict
 
 import torch
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.models import setup_model_family
 
 from seamless_communication.models.aligner.builder import (
     UnitY2AlignmentConfig,
     aligner_archs,
     create_unity2_alignment_model,
 )
-from seamless_communication.models.aligner.model import UnitY2AlignmentModel
+from seamless_communication.models.aligner.model import UNITY2_ALIGNER_FAMILY
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
 
 
 def convert_unity2_aligner_checkpoint(
-    checkpoint: Mapping[str, Any], config: UnitY2AlignmentConfig
-) -> Mapping[str, Any]:
+    checkpoint: Dict[str, Any], config: UnitY2AlignmentConfig
+) -> Dict[str, Any]:
     if (
         "model" in checkpoint
         and "alignment_encoder.t_conv.1.weight" in checkpoint["model"]
@@ -74,15 +73,11 @@ def _get_char_index_mapping(config: UnitY2AlignmentConfig) -> List[int]:
     return model_to_dict_mapping
 
 
-load_unity2_alignment_config = ConfigLoader[UnitY2AlignmentConfig](
-    asset_store, aligner_archs
-)
-
-load_unity2_alignment_model = ModelLoader[UnitY2AlignmentModel, UnitY2AlignmentConfig](
-    asset_store,
-    download_manager,
-    load_unity2_alignment_config,
+load_unity2_alignment_model, load_unity2_alignment_config = setup_model_family(
+    UNITY2_ALIGNER_FAMILY,
+    UnitY2AlignmentConfig,
     create_unity2_alignment_model,
+    aligner_archs,
     convert_unity2_aligner_checkpoint,
     restrict_checkpoints=False,
 )

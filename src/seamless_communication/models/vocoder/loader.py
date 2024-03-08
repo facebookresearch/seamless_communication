@@ -4,22 +4,21 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Dict
 
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.models import setup_model_family
 
 from seamless_communication.models.vocoder.builder import (
     VocoderConfig,
     create_vocoder_model,
     vocoder_archs,
 )
-from seamless_communication.models.vocoder.vocoder import Vocoder
+from seamless_communication.models.vocoder.vocoder import VOCODER_CODE_HIFIGAN_FAMILY
 
 
 def convert_vocoder_checkpoint(
-    checkpoint: Mapping[str, Any], config: VocoderConfig
-) -> Mapping[str, Any]:
+    checkpoint: Dict[str, Any], config: VocoderConfig
+) -> Dict[str, Any]:
     if (
         "model" in checkpoint
         and "code_generator.resblocks.0.convs1.0.weight_g" in checkpoint["model"]
@@ -36,13 +35,10 @@ def convert_vocoder_checkpoint(
     return checkpoint
 
 
-load_vocoder_config = ConfigLoader[VocoderConfig](asset_store, vocoder_archs)
-
-
-load_vocoder_model = ModelLoader[Vocoder, VocoderConfig](
-    asset_store,
-    download_manager,
-    load_vocoder_config,
+load_vocoder_model, load_vocoder_config = setup_model_family(
+    VOCODER_CODE_HIFIGAN_FAMILY,
+    VocoderConfig,
     create_vocoder_model,
+    vocoder_archs,
     convert_vocoder_checkpoint,
 )

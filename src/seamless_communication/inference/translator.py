@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 from fairseq2.assets import asset_store
 from fairseq2.assets.card import AssetCard
-from fairseq2.data import Collater, SequenceData, StringLike
+from fairseq2.data import Collater, SequenceData
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
 from fairseq2.data.text import TextTokenizer
 from fairseq2.memory import MemoryBlock
@@ -169,7 +169,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-    ) -> Tuple[List[StringLike], Optional[Tensor]]:
+    ) -> Tuple[List[str], Optional[Tensor]]:
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
             model.t2u_model, UnitYNART2UModel
@@ -226,8 +226,8 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-        src_text: Optional[StringLike] = None,
-    ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
+        src_text: Optional[str] = None,
+    ) -> Tuple[List[str], Optional[BatchedSpeechOutput]]:
         """
         The main method used to perform inference on all tasks.
 

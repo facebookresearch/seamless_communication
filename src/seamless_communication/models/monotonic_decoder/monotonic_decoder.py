@@ -16,7 +16,7 @@ from fairseq2.nn.transformer import (
     CausalAttentionMaskFactory,
     create_standard_layer_norm,
 )
-from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.typing import DataType, Device, override
 from torch import Tensor
 from torch.nn import Module
 
@@ -62,7 +62,7 @@ class MonotonicTransformerDecoder(Module):
             self.model_dim, device=device, dtype=dtype
         )
 
-    @finaloverride
+    @override
     def forward(
         self,
         seqs: Tensor,
