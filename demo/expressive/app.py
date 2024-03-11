@@ -25,7 +25,7 @@ from fairseq2.generation import NGramRepeatBlockProcessor
 from fairseq2.memory import MemoryBlock
 from huggingface_hub import snapshot_download
 from seamless_communication.inference import Translator, SequenceGeneratorOptions
-from seamless_communication.models.unity import (
+from seamless_communication.store import (
     load_gcmvn_stats,
     load_unity_unit_tokenizer,
 )

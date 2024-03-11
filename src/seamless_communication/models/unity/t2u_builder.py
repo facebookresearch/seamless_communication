@@ -49,6 +49,9 @@ from seamless_communication.models.unity.length_regulator import (
 )
 from seamless_communication.models.unity.model import UnitYNART2UModel, UnitYT2UModel
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
+from seamless_communication.models.aligner.model import UnitY2AlignmentEncoder
+from seamless_communication.models.aligner.builder import AlignmentEncoderConfig
+from seamless_communication.store import load_unity_unit_tokenizer
 
 
 @dataclass
@@ -66,6 +69,7 @@ class NARDecoderFrontendConfig:
     duration_predictor_config: VariancePredictorConfig
     pitch_predictor_config: Optional[VariancePredictorConfig]
     energy_predictor_config: Optional[VariancePredictorConfig]
+    alignment_encoder_config: Optional[AlignmentEncoderConfig] = None
 
 
 @dataclass
@@ -247,6 +251,67 @@ def _expressivity_nar() -> UnitYT2UConfig:
         duration_predictor_config=duration_predictor_config,
         pitch_predictor_config=None,
         energy_predictor_config=None,
+    )
+
+    nar_decoder_config = NARDecoderConfig(
+        model_name_or_card="seamless_expressivity",
+        char_vocabulary_size=10904,
+        char_max_seq_len=10000,
+        conv1d_kernel_size=7,
+        conv1d_inner_dim=1024,
+        conv1d_dropout_p=0.1,
+        use_film=True,
+        film_cond_dim=512,
+    )
+
+    return UnitYT2UConfig(
+        model_dim=1024,
+        unit_max_seq_len=10000,
+        target_vocab_info=VocabularyInfo(
+            size=10005, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+        ),
+        num_encoder_layers=4,
+        num_decoder_layers=4,
+        nar_decoder_frontend_config=nar_decoder_frontend_config,
+        nar_decoder_config=nar_decoder_config,
+        num_encoder_attn_heads=16,
+        num_decoder_attn_heads=16,
+        ffn_inner_dim=1024 * 8,
+        dropout_p=0.0,
+        use_gelu=True,
+        char_pad_idx=1,
+        use_prosody_proj=True,
+        prosody_encoder_dim=512,
+    )
+
+
+@unity_t2u_arch("expressivity_nar_trainable")
+def _expressivity_nar() -> UnitYT2UConfig:
+    duration_predictor_config = VariancePredictorConfig(
+        var_pred_hidden_dim=256,
+        var_pred_kernel_size=3,
+        var_pred_dropout=0.5,
+        use_film=True,
+        film_cond_dim=512,
+    )
+
+    alignment_encoder_config = AlignmentEncoderConfig(
+        model_dim=1024,
+        feat_dim=1024,
+        num_text_layers=2,
+        num_feat_layers=3,
+        dropout=0.0,
+        temperature=1.0,
+        reduction_factor=1,
+        prior_end_steps=8000,
+    )
+
+    nar_decoder_frontend_config = NARDecoderFrontendConfig(
+        subword_to_unit_upsampling_type="hard",
+        duration_predictor_config=duration_predictor_config,
+        pitch_predictor_config=None,
+        energy_predictor_config=None,
+        alignment_encoder_config=alignment_encoder_config,
     )
 
     nar_decoder_config = NARDecoderConfig(
@@ -602,6 +667,10 @@ class UnitYNART2UBuilder:
             self.config.nar_decoder_config.model_name_or_card
         )
 
+        unit_tokenizer = load_unity_unit_tokenizer(
+            self.config.nar_decoder_config.model_name_or_card
+        )
+
         # The legacy pad idx should be the same as that of the unit_pos_encoder,
         # since in fairseq1 the pos encoder is shared between both char, units.
         char_pos_encoder = SinusoidalPositionEncoder(
@@ -620,18 +689,42 @@ class UnitYNART2UBuilder:
             dtype=self.dtype,
         )
 
+        alignment_encoder = self.build_alignment_encoder()
+
         return NARDecoderFrontend(
             embed_unit,
             embed_char,
             nllb_tokenizer,
+            unit_tokenizer,
             char_tokenizer,
             unit_pos_encoder,
             char_pos_encoder,
             variance_adaptor,
+            alignment_encoder,
             dropout_p=self.config.dropout_p,
             device=self.device,
             dtype=self.dtype,
         )
+
+    def build_alignment_encoder(self) -> Optional[UnitY2AlignmentEncoder]:
+        cfg = self.config.nar_decoder_frontend_config.alignment_encoder_config
+        if cfg is None:
+            return None
+
+        alignment_encoder = UnitY2AlignmentEncoder(
+            embed_dim=cfg.model_dim,
+            feat_dim=cfg.feat_dim,
+            text_layers=cfg.num_text_layers,
+            feat_layers=cfg.num_feat_layers,
+            dropout=cfg.dropout,
+            temperature=cfg.temperature,
+            reduction_factor=cfg.reduction_factor,
+            dtype=self.dtype,
+            device=self.device,
+            prior_end_steps=cfg.prior_end_steps,
+        )
+        return alignment_encoder
+
 
     def build_decoder(self) -> FeedForwardTransformer:
         """Build a Transformer decoder."""

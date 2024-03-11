@@ -5,23 +5,216 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union, final
+from typing import Optional, Tuple, Union, final, List
 
+import numpy as np
+import torch
+from torch import Tensor
+from torch.nn import Module
+from torch.nn.functional import mse_loss, pad, log_softmax, ctc_loss
 from fairseq2.data import VocabularyInfo
 from fairseq2.models.encoder_decoder import EncoderDecoderModel
 from fairseq2.models.sequence import SequenceModelOutput
 from fairseq2.models.transformer.frontend import TransformerFrontend
 from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.padding import PaddingMask
+from fairseq2.nn.padding import PaddingMask, apply_padding_mask
 from fairseq2.nn.projection import Projection
 from fairseq2.nn.transformer import TransformerDecoder, TransformerEncoder
-from overrides import final as finaloverride
-from torch import Tensor
-from torch.nn import Module
+from fairseq2.models.seq2seq import Seq2SeqBatch
 
 from seamless_communication.models.generator.ecapa_tdnn import ECAPA_TDNN
 from seamless_communication.models.unity.fft_decoder import FeedForwardTransformer
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
+from seamless_communication.train.utils.multi_task_configs import AuxMTLModel
+
+
+@dataclass
+class UnitYBatch(Seq2SeqBatch):
+    """
+    Holds a typical UnitY batch, extending the Seq2SeqBatch,
+    the target_seqs/target_padding_mask refer to unit sequence.
+    """
+
+    prosody_input_seqs: Optional[Tensor] = None
+    """The prosody input sequences. *Shape:* :math:`(N,S_{src},*)`, where :math:`N` is
+    the batch size, :math:`S_{src}` is the sequence length, and :math:`*`
+    is any number of sequence-specific dimensions including none."""
+
+    prosody_input_padding_mask: Optional[PaddingMask] = None
+    """The padding mask of ``prosody_input_seqs``. *Shape:* :math:`(N,S_{src})`, where
+    :math:`N` is the batch size and :math:`S_{src}` is the sequence
+    length."""
+
+    target_text_seqs: Optional[Tensor] = None
+    """The target text sequences. *Shape:* :math:`(N,S_{tgt},*)`, where :math:`N` is
+    the batch size, :math:`S_{tgt}` is the target text length, and :math:`*`
+    is any number of sequence-specific dimensions including none."""
+
+    target_text_padding_mask: Optional[PaddingMask] = None
+    """The padding mask of ``target_text_seqs``. *Shape:* :math:`(N,S_{tgt})`, where
+    :math:`N` is the batch size and :math:`S_{tgt}` is the target text
+    length."""
+
+    duration_factor: Optional[float] = 1.0
+    """The duration factor for UnitYNART2UModel"""
+
+    def num_target_text_elements(self) -> int:
+        """Return the number of elements in the target text sequences."""
+        if self.target_text_padding_mask is None:
+            return self.target_text_seqs.numel()
+
+        return int(self.target_text_padding_mask.seq_lens.sum())
+
+    def as_input_and_target(self) -> Tuple[Seq2SeqBatch, Tensor, Tensor]:
+        """Use this batch for model training or validation.
+
+        :returns:
+          - A new batch with the target text/unit sequences trimmed one step
+            from the end to use as model input.
+          - The target text/unit sequences trimmed one step from the beginning
+            to use in loss computation.
+        """
+        if (seq_len := self.target_seqs.size(1)) < 2:
+            raise ValueError(
+                f"The sequence length of `target_seqs` must be at least 2 for training, but is {seq_len} instead."
+            )
+
+        target_text_seqs = self.target_text_seqs[:, :-1]
+
+        if self.target_text_padding_mask is None:
+            target_text_padding_mask = None
+        else:
+            target_text_padding_mask = self.target_text_padding_mask.trim(1)
+
+        batch = UnitYBatch(
+            source_seqs=self.source_seqs,
+            source_padding_mask=self.source_padding_mask,
+            target_seqs=self.target_seqs,
+            target_padding_mask=self.target_padding_mask,
+            prosody_input_seqs=self.prosody_input_seqs,
+            prosody_input_padding_mask=self.prosody_input_padding_mask,
+            target_text_seqs=target_text_seqs,
+            target_text_padding_mask=target_text_padding_mask,
+            duration_factor=self.duration_factor,
+        )
+
+        return batch, self.target_text_seqs[:, 1:], self.target_seqs
+
+
+@dataclass
+class UnitYModelOutput:
+    """Holds the output of the UnitY model."""
+
+    text_output: SequenceModelOutput
+    """Holds the text decoder output"""
+
+    unit_output: SequenceModelOutput
+    """Holds the unit decoder output"""
+
+    log_durations: Tensor
+    """Holds the duration predictor output (for duration loss)"""
+
+    aux_mtl_output: Tensor
+    """Holds the multi-task model output (for auxiliary loss)"""
+
+    char_seqs: Tensor
+    """Holds the character sequence (for auxiliary ctc loss)"""
+
+    char_padding_mask: PaddingMask
+    """Holds the padding mask for character sequence"""
+
+    attn_hard_dur: Tensor
+    """Holds the aligned hard duration b/t character and units"""
+
+    attn_lprob: Tensor
+    """Holds the aligned soft duration b/t character and units"""
+
+    def compute_loss(
+        self,
+        text_targets: Tensor,
+        unit_targets: Tensor,
+        *,
+        text_loss_weight: float = 1.0,
+        aux_loss_type: Optional[str] = None,
+        aux_loss_weight: float = 0.0,
+        duration_loss_weight: float = 1.0,
+        forward_sum_loss_weight: float = 1.0,
+        ignore_text_prefix_size: int = 0,
+        ignore_unit_prefix_size: int = 0,
+        label_smoothing: float = 0.0,
+    ) -> Tensor:
+        """
+        Compute the UnitY multi-task training loss
+        """
+        unit_lens = (unit_targets != self.unit_output.vocab_info.pad_idx).sum(-1)
+        char_lens = self.char_padding_mask.seq_lens
+
+        loss = self.unit_output.compute_loss(
+            unit_targets.long(),
+            ignore_prefix_size=ignore_unit_prefix_size,
+            label_smoothing=label_smoothing,
+        )
+
+        if text_loss_weight > 0.:
+            text_nll_loss = self.text_output.compute_loss(
+                text_targets,
+                ignore_prefix_size=ignore_text_prefix_size,
+                label_smoothing=label_smoothing,
+            )
+            loss += text_loss_weight * text_nll_loss
+
+        # calculate duration loss
+        if duration_loss_weight > 0.:
+            log_durations = apply_padding_mask(self.log_durations, self.char_padding_mask)
+            duration_target = torch.log(self.attn_hard_dur + 1)
+            duration_loss = mse_loss(log_durations, duration_target, reduction="sum")
+            loss += duration_loss_weight * duration_loss
+
+        # calculate forward sum loss
+        if forward_sum_loss_weight > 0.:
+            # a row must be added to the attention matrix to account for blank token of CTC loss
+            # (bsz, T_feat, T_text + 1)
+            log_p_attn_pd = pad(self.attn_lprob, (1, 0, 0, 0, 0, 0), value=np.log(np.e**-1))
+
+            forward_sum_loss = 0.
+            for i in range(self.attn_lprob.size(0)):
+                # every target is mapped to a unique position
+                target_seq = torch.arange(1, char_lens[i] + 1).unsqueeze(0)
+
+                # (T_feat, 1, T_text + 1)
+                cur_log_p_attn_pd = log_p_attn_pd[i, :unit_lens[i], :char_lens[i] + 1].unsqueeze(1)
+                cur_log_p_attn_pd = log_softmax(cur_log_p_attn_pd, dim=-1)
+
+                forward_sum_loss += ctc_loss(
+                    log_probs=cur_log_p_attn_pd.float(),  # for fp16
+                    targets=target_seq,
+                    input_lengths=unit_lens[i: i + 1],
+                    target_lengths=char_lens[i: i + 1],
+                    reduction="sum",
+                    zero_infinity=True,
+                )
+
+            loss += forward_sum_loss_weight * forward_sum_loss
+
+        # calculate auxiliary loss
+        if aux_loss_weight > 0.:
+            aux_lprobs = self.aux_mtl_output.log_softmax(dim=-1)
+            if aux_loss_type == "ctc":
+                with torch.backends.cudnn.flags(enabled=False):
+                    aux_loss = ctc_loss(
+                        aux_lprobs.transpose(0, 1),
+                        self.char_seqs,
+                        unit_lens,
+                        char_lens,
+                        reduction="sum",
+                        zero_infinity=True,
+                    )
+            else:
+                raise NotImplementedError
+
+            loss += aux_loss_weight * aux_loss
+
+        return loss
 
 
 @final
@@ -44,6 +237,7 @@ class UnitYModel(EncoderDecoderModel):
     final_proj: Optional[Projection]
     t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None]
     prosody_encoder_model: Optional[ECAPA_TDNN]
+    aux_mtl_model: Optional[AuxMTLModel]
 
     def __init__(
         self,
@@ -57,6 +251,7 @@ class UnitYModel(EncoderDecoderModel):
         t2u_model: Union["UnitYT2UModel", "UnitYNART2UModel", None],
         target_vocab_info: VocabularyInfo,
         prosody_encoder_model: Optional[ECAPA_TDNN] = None,
+        aux_mtl_model: Optional[AuxMTLModel] = None,
         input_modality: str = "speech",
     ) -> None:
         model_dim = speech_encoder.model_dim
@@ -115,7 +310,24 @@ class UnitYModel(EncoderDecoderModel):
         else:
             self.register_module("prosody_encoder_model", None)
 
-    @finaloverride
+        if aux_mtl_model is not None:
+            self.aux_mtl_model = aux_mtl_model
+        else:
+            self.register_module("aux_mtl_model", None)
+
+    @final
+    def inference_trim(self):
+        """Trim model parameters for inference-only"""
+        self.aux_mtl_model = None
+        if isinstance(self.t2u_model, UnitYNART2UModel):
+            self.t2u_model.decoder_frontend.alignment_encoder = None
+
+    def set_num_updates(self, num_updates: int):
+        """Set the number of parameters updates."""
+        if self.t2u_model.decoder_frontend.alignment_encoder is not None:
+            self.t2u_model.decoder_frontend.alignment_encoder.set_num_updates(num_updates)
+
+    @final
     def encode(
         self, seqs: Tensor, padding_mask: Optional[PaddingMask]
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
@@ -150,7 +362,7 @@ class UnitYModel(EncoderDecoderModel):
 
         return self.text_encoder(seqs, padding_mask)  # type: ignore[no-any-return]
 
-    @finaloverride
+    @final
     def decode(
         self,
         seqs: Tensor,
@@ -179,7 +391,7 @@ class UnitYModel(EncoderDecoderModel):
             state_bag=state_bag,
         )
 
-    @finaloverride
+    @final
     def project(
         self, decoder_output: Tensor, decoder_padding_mask: Optional[PaddingMask]
     ) -> SequenceModelOutput:
@@ -191,6 +403,63 @@ class UnitYModel(EncoderDecoderModel):
         logits = self.final_proj(decoder_output)
 
         return SequenceModelOutput(logits, self.target_vocab_info)
+
+    @final
+    def forward(self, batch: UnitYBatch) -> UnitYModelOutput:
+        """
+        Used only during training, inference forward is at UnitYGenerator
+        """
+        speech_enc_out, speech_enc_padding_mask = self.encode(
+            batch.source_seqs, batch.source_padding_mask
+        )
+
+        text_dec_out, text_dec_padding_mask = self.decode(
+            batch.target_text_seqs,
+            batch.target_text_padding_mask,
+            speech_enc_out,
+            speech_enc_padding_mask,
+        )
+
+        text_output = self.project(text_dec_out, text_dec_padding_mask)
+
+        # forward prosody_encoder_model
+        prosody_encoder_out = None
+        if self.prosody_encoder_model is not None:
+            prosody_input_seqs = batch.prosody_input_seqs
+            if prosody_input_seqs is None:
+                prosody_input_seqs = batch.source_seqs
+
+            prosody_encoder_out = self.prosody_encoder_model(
+                prosody_input_seqs,
+                batch.source_padding_mask,  # always the same
+            ).unsqueeze(1)
+
+        # forward t2u model
+        assert isinstance(self.t2u_model, UnitYNART2UModel), "only NAR T2U is supported in training"
+        unit_output, unit_dec_padding_mask, log_durations, inner_states, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur = self.t2u_model(
+            text_dec_out,
+            text_dec_padding_mask,
+            batch.target_text_seqs,
+            batch.target_seqs,
+            batch.duration_factor,
+            prosody_encoder_out,
+        )
+
+        if self.aux_mtl_model is None:
+            aux_mtl_output = None
+        else:
+            aux_mtl_output = self.aux_mtl_model(inner_states)
+
+        return UnitYModelOutput(
+            text_output=text_output,
+            unit_output=unit_output,
+            log_durations=log_durations,
+            aux_mtl_output=aux_mtl_output,
+            char_seqs=char_seqs,
+            char_padding_mask=char_padding_mask,
+            attn_lprob=attn_lprob,
+            attn_hard_dur=attn_hard_dur,
+        )
 
 
 @final
@@ -222,14 +491,14 @@ class UnitYX2TModel(EncoderDecoderModel):
         self.final_proj = final_proj
         self.target_vocab_info = target_vocab_info
 
-    @finaloverride
+    @final
     def encode(
         self, seqs: Tensor, padding_mask: Optional[PaddingMask]
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs, padding_mask = self.encoder_frontend(seqs, padding_mask)
         return self.encoder(seqs, padding_mask)  # type: ignore[no-any-return]
 
-    @finaloverride
+    @final
     def decode(
         self,
         seqs: Tensor,
@@ -251,7 +520,7 @@ class UnitYX2TModel(EncoderDecoderModel):
             state_bag=state_bag,
         )
 
-    @finaloverride
+    @final
     def project(
         self, decoder_output: Tensor, decoder_padding_mask: Optional[PaddingMask]
     ) -> SequenceModelOutput:
@@ -381,9 +650,10 @@ class UnitYNART2UModel(Module):
         text_decoder_output: Tensor,
         text_decoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        unit_seqs: Optional[Tensor] = None,
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[SequenceModelOutput, Optional[PaddingMask], Tensor]:
+    ) -> Tuple[SequenceModelOutput, Optional[PaddingMask], Tensor, List[Tensor], Tensor, PaddingMask, Tensor, Tensor]:
         encoder_output, encoder_padding_mask = self.encode(
             text_decoder_output, text_decoder_padding_mask
         )
@@ -391,15 +661,16 @@ class UnitYNART2UModel(Module):
         if self.prosody_proj is not None and film_cond_emb is not None:
             encoder_output = encoder_output + self.prosody_proj(film_cond_emb)
 
-        decoder_output, decoder_padding_mask, durations = self.decode(
+        decoder_output, decoder_padding_mask, log_durations, inner_states, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur = self.decode(
             encoder_output,
             encoder_padding_mask,
             text_seqs,
-            duration_factor,
-            film_cond_emb,
+            unit_seqs=unit_seqs,
+            duration_factor=duration_factor,
+            film_cond_emb=film_cond_emb,
         )
 
-        return self.project(decoder_output), decoder_padding_mask, durations
+        return self.project(decoder_output), decoder_padding_mask, log_durations, inner_states, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur
 
     def encode(
         self,
@@ -416,46 +687,28 @@ class UnitYNART2UModel(Module):
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Optional[Tensor],
+        unit_seqs: Optional[Tensor],
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
+    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor, List[Tensor], Tensor, PaddingMask, Tensor, Tensor]:
         # encoder_output: (N, S, M)
         # text_seqs: (N, S)
-        seqs, padding_mask, durations = self.decoder_frontend(
+        seqs, padding_mask, log_durations, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur = self.decoder_frontend(
             encoder_output,
             encoder_padding_mask,
             text_seqs,
+            unit_seqs,
             duration_factor,
             film_cond_emb,
         )
 
-        seqs, padding_mask = self.decoder(
+        seqs, padding_mask, inner_states = self.decoder(
             seqs, padding_mask, film_cond_emb=film_cond_emb
         )
 
-        return seqs, padding_mask, durations  # type: ignore[no-any-return]
+        return seqs, padding_mask, log_durations, inner_states, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur # type: ignore[no-any-return]
 
     def project(self, decoder_output: Tensor) -> SequenceModelOutput:
         logits = self.final_proj(decoder_output)
 
         return SequenceModelOutput(logits, self.target_vocab_info)
-
-
-@dataclass
-class UnitYOutput:
-    """Holds the output of a UnitY model."""
-
-    s2t_output: SequenceModelOutput
-    """The S2T output of the multitask model."""
-
-    mt_output: SequenceModelOutput
-    """The MT output of the multitask model."""
-
-    t2u_output: SequenceModelOutput
-    """The output of the T2U model."""
-
-    def compute_loss(
-        self, targets: Tensor, ignore_prefix_size: int = 0, label_smoothing: float = 0.0
-    ) -> None:
-        # TODO: Implement R-Drop based loss
-        pass

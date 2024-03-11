@@ -5,6 +5,8 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from typing import Any, List, Tuple, Union
+from functools import lru_cache
+from scipy.stats import betabinom
 
 import numpy as np
 import numpy.typing as npt
@@ -14,7 +16,7 @@ import torch.nn.functional as F
 from fairseq2.data import CString
 from fairseq2.nn.embedding import StandardEmbedding
 from fairseq2.nn.padding import to_padding_mask
-from fairseq2.typing import DataType
+from fairseq2.typing import DataType, Device
 from torch import Tensor
 from torch.nn import Module
 
@@ -91,17 +93,20 @@ class UnitY2AlignmentEncoder(Module):
         temperature: float,
         reduction_factor: int,
         dtype: DataType,
+        device: Device,
+        prior_end_steps: int = 1e10,
     ):
         super().__init__()
         self.temperature = temperature
         self.reduction_factor = reduction_factor  # for unit
+        self.prior_end_steps = prior_end_steps
 
         layers: List[Module] = [Permute12()]
         for i in range(text_layers):
             if i < text_layers - 1:
                 layers.append(
                     nn.Conv1d(
-                        embed_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype
+                        embed_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype, device=device
                     )
                 )
                 layers.append(nn.ReLU())
@@ -109,7 +114,7 @@ class UnitY2AlignmentEncoder(Module):
             else:
                 layers.append(
                     nn.Conv1d(
-                        embed_dim, embed_dim, kernel_size=1, padding=0, dtype=dtype
+                        embed_dim, embed_dim, kernel_size=1, padding=0, dtype=dtype, device=device
                     )
                 )
                 layers.append(nn.Dropout(p=dropout))
@@ -122,7 +127,7 @@ class UnitY2AlignmentEncoder(Module):
             if i < feat_layers - 1:
                 layers.append(
                     nn.Conv1d(
-                        input_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype
+                        input_dim, embed_dim, kernel_size=3, padding=1, dtype=dtype, device=device
                     )
                 )
                 layers.append(nn.ReLU())
@@ -136,12 +141,18 @@ class UnitY2AlignmentEncoder(Module):
                         padding=0,
                         stride=reduction_factor,
                         dtype=dtype,
+                        device=device,
                     )
                 )
                 layers.append(nn.Dropout(p=dropout))
                 layers.append(Permute12())
             input_dim = embed_dim
         self.f_conv = nn.Sequential(*layers)
+        self.set_num_updates(0)
+
+    def set_num_updates(self, num_updates: int):
+        """Set the number of parameters updates."""
+        self.num_updates = num_updates
 
     def forward(
         self,
@@ -180,6 +191,15 @@ class UnitY2AlignmentEncoder(Module):
 
         attn_lprob = F.log_softmax(score, dim=-1)
 
+        # add beta-binomial prior
+        if self.training and self.num_updates < self.prior_end_steps:
+            # when using curriculum learning, apply to training mode only for consistent evaluation
+            log_bb_prior = self.generate_alignment_prior(text_lengths, feat_lengths)
+            log_bb_prior = log_bb_prior.to(
+                dtype=attn_lprob.dtype, device=attn_lprob.device
+            )
+            attn_lprob = attn_lprob + log_bb_prior
+
         attn_hard_dur = viterbi_decode(attn_lprob, text_lengths, feat_lengths)
 
         if self.reduction_factor > 1:
@@ -188,6 +208,34 @@ class UnitY2AlignmentEncoder(Module):
             )
 
         return attn_lprob, attn_hard_dur
+
+    def generate_alignment_prior(
+        self,
+        text_lengths: Tensor,
+        feat_lengths: Tensor,
+    ) -> torch.Tensor:
+        """Generate alignment prior formulated as beta-binomial distribution
+
+        Args:
+            text_lengths (Tensor): Batch of the lengths of each input (B,).
+            feat_lengths (Tensor): Batch of the lengths of each target (B,).
+
+        Returns:
+            Tensor: Batched 2d static prior matrix (B, T_feat, T_text)
+        """
+        B = len(text_lengths)
+        T_text = text_lengths.max()
+        T_feat = feat_lengths.max()
+
+        log_bb_prior = torch.full((B, T_feat, T_text), fill_value=-np.inf)
+        for bidx in range(B):
+            N = text_lengths[bidx].item()
+            T = feat_lengths[bidx].item()
+
+            log_prob = beta_binomial_prior_distribution(N, T)
+            log_bb_prior[bidx, :T, :N] = log_prob
+
+        return log_bb_prior
 
     def postprocess_alignment(
         self, attn_hard_dur: Tensor, text_lengths: Tensor, feat_lengths: Tensor
@@ -207,6 +255,21 @@ class UnitY2AlignmentEncoder(Module):
                         attn_hard_dur[b, t + 1 :] = 0
                     break
         return attn_hard_dur
+
+
+@lru_cache(maxsize=4096)
+def beta_binomial_prior_distribution(N: int, T: int) -> Tensor:
+    """Generate alignment prior formulated as beta-binomial distribution
+    :param N: text length
+    :param T: feature length
+    """
+    alpha = np.arange(1, T + 1, dtype=float)  # (T,)
+    beta = np.array([T - t + 1 for t in alpha])
+    k = np.arange(N)
+    batched_k = k[..., None]  # (N, 1)
+    log_prob = betabinom.logpmf(batched_k, N, alpha, beta)  # (N, T)
+    log_prob = torch.from_numpy(log_prob).transpose(0, 1)  # -> (T, N)
+    return log_prob
 
 
 def _monotonic_alignment_search(

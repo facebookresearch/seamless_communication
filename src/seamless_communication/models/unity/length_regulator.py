@@ -283,14 +283,15 @@ class VarianceAdaptor(Module):
     ) -> Tuple[Tensor, PaddingMask, Tensor]:
         if self.duration_predictor is not None:
             log_durations = self.duration_predictor(seqs, padding_mask, film_cond_emb)
-            durations = torch.clamp(
-                torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
-                min=min_duration,
-            )
-            # We need to apply the padding_mask again since we clamp by min_duration.
-            durations = apply_padding_mask(durations, padding_mask, pad_value=0)
-
-        assert durations is not None
+            if durations is None:
+                durations = torch.clamp(
+                    torch.round((torch.exp(log_durations) - 1) * duration_factor).long(),
+                    min=min_duration,
+                )
+                # We need to apply the padding_mask again since we clamp by min_duration.
+                durations = apply_padding_mask(durations, padding_mask, pad_value=0)
+        else:
+            log_durations = None
 
         if self.pitch_predictor is not None:
             pitch_out = self.pitch_predictor(seqs, padding_mask, film_cond_emb)
@@ -318,4 +319,4 @@ class VarianceAdaptor(Module):
         else:
             seqs, seq_lens = self.length_regulator(seqs, durations)
 
-        return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1)), durations
+        return seqs, PaddingMask(seq_lens, batch_seq_len=seqs.size(1)), log_durations

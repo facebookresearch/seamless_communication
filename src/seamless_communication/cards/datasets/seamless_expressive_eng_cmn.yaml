@@ -1,0 +1,25 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+name: seamless_expressive_eng_cmn
+dataset_type: unity
+uri: "/fsx-ust/data/expressivity/training_20231017/xlsr_10k"
+audio_root_dir: "/fsx-ust/data/audio_zips"
+splits:
+    train:
+        train_ctts_emotion0.8_cmn_eng: 866399 
+        train_ctts_emotion0.8_eng_cmn: 866366
+        train_mexpresso_clean_src_cmn_eng: 10291
+        train_mexpresso_clean_src_eng_cmn: 10239
+        train_dubbed_clean_src_cmn_eng: 228872
+        train_dubbed_clean_src_eng_cmn: 228823
+        train_mined_clean_src_mg1_06_cmp3_2_cmn_eng: 57914
+        train_mined_clean_src_mg1_06_cmp3_2_eng_cmn: 57865
+        train_tmodule_clean_src_cos_0_75_cmp_3_2_cmn_eng: 52966
+        train_tmodule_clean_src_cos_0_75_cmp_3_2_eng_cmn: 52971
+    valid:
+        dev_mexpresso_dubbed_clean_src_cmn_eng: 3459
+        dev_mexpresso_dubbed_clean_src_eng_cmn: 3445

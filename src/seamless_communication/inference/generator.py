@@ -335,13 +335,14 @@ class UnitYGenerator:
                 unit_seq_list, self.model.t2u_model.target_vocab_info.pad_idx
             )
         else:
-            t2u_model_output, decoder_padding_mask, _ = self.model.t2u_model(
+            t2u_model_output, decoder_padding_mask = self.model.t2u_model(
                 text_decoder_output=decoder_output,
                 text_decoder_padding_mask=decoder_padding_mask,
                 text_seqs=text_seqs,
+                unit_seqs=None,  # inference time
                 duration_factor=duration_factor,
                 film_cond_emb=prosody_encoder_out,
-            )
+            )[:2]
             # (B, S_unit, V_unit)
             unit_seqs = t2u_model_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.

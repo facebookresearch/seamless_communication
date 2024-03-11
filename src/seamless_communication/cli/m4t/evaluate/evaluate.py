@@ -37,7 +37,7 @@ from seamless_communication.inference import (
     SequenceGeneratorOptions,
     Translator,
 )
-from seamless_communication.models.unity import load_unity_text_tokenizer
+from seamless_communication.store import load_unity_text_tokenizer
 
 logging.basicConfig(
     level=logging.INFO,

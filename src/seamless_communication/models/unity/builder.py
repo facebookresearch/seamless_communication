@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
@@ -47,6 +47,12 @@ from seamless_communication.models.conformer_shaw import (
     ConformerShawEncoderBuilder,
     ConformerShawEncoderConfig,
     conformer_shaw_archs,
+)
+from seamless_communication.train.utils.multi_task_configs import (
+    AuxMTLBuilder,
+    AuxMTLConfig,
+    AuxMTLModel,
+    load_aux_mtl_config,
 )
 
 
@@ -99,6 +105,8 @@ class UnitYConfig:
     adaptor_dropout_p: float
     """The dropout probability in Transformer layers of the adaptor block."""
 
+    aux_mtl_config: AuxMTLConfig = None
+    """The auxiliary multi-task learning config (only used in training)"""
 
 unity_archs = ArchitectureRegistry[UnitYConfig]("unity")
 
@@ -223,6 +231,41 @@ def _expressivity_v2() -> UnitYConfig:
     )
 
 
+@unity_arch("expressivity_v2_trainable")
+def _expressivity_v2() -> UnitYConfig:
+    conformer_shaw_encoder_config = conformer_shaw_archs.get_config("600m")
+
+    mt_model_config: NllbConfig = nllb_archs.get_config("dense_1b")
+
+    mt_model_config.vocab_info.size = 256102  # NLLB-100
+
+    mt_model_config.max_seq_len = 4096
+
+    t2u_config = unity_t2u_archs.get_config("expressivity_nar_trainable")
+
+    prosody_encoder_config = ecapa_tdnn_archs.get_config("base")
+
+    aux_mtl_config = load_aux_mtl_config("seamless_expressivity_trainable")
+
+    return UnitYConfig(
+        model_dim=1024,
+        w2v2_encoder_config=conformer_shaw_encoder_config,
+        mt_model_config=mt_model_config,
+        t2u_config=t2u_config,
+        prosody_encoder_config=prosody_encoder_config,
+        use_text_encoder=False,
+        use_text_decoder=True,
+        use_conformer_adaptor=False,
+        use_gelu=True,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+        aux_mtl_config=aux_mtl_config,
+    )
+
+
 class UnitYBuilder:
     """Builds modules of a UnitY model.
 
@@ -235,6 +278,7 @@ class UnitYBuilder:
     mt_model_builder: NllbBuilder
     t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None]
     prosody_encoder_builder: Optional[EcapaTDNNBuilder]
+    aux_mtl_model_builder: Optional[AuxMTLBuilder]
     device: Optional[Device]
     dtype: Optional[DataType]
 
@@ -245,6 +289,7 @@ class UnitYBuilder:
         mt_model_builder: NllbBuilder,
         t2u_builder: Union[UnitYT2UBuilder, UnitYNART2UBuilder, None],
         prosody_encoder_builder: Optional[EcapaTDNNBuilder],
+        aux_mtl_model_builder: Optional[AuxMTLBuilder],
         *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -284,6 +329,7 @@ class UnitYBuilder:
         self.mt_model_builder = mt_model_builder
         self.t2u_builder = t2u_builder
         self.prosody_encoder_builder = prosody_encoder_builder
+        self.aux_mtl_model_builder = aux_mtl_model_builder
 
         self.device, self.dtype = device, dtype
 
@@ -328,6 +374,11 @@ class UnitYBuilder:
         else:
             prosody_encoder_model = self.prosody_encoder_builder.build_model()
 
+        if self.aux_mtl_model_builder is None:
+            aux_mtl_model = None
+        else:
+            aux_mtl_model = self.aux_mtl_model_builder.build_model()
+
         return UnitYModel(
             speech_encoder_frontend,
             speech_encoder,
@@ -339,6 +390,7 @@ class UnitYBuilder:
             t2u_model,
             self.config.mt_model_config.vocab_info,
             prosody_encoder_model,
+            aux_mtl_model,
         )
 
     def build_speech_encoder(self) -> TransformerEncoder:
@@ -504,12 +556,20 @@ def create_unity_model(
             config.mt_model_config, device=device, dtype=dtype
         )
 
+    if config.aux_mtl_config is None:
+        aux_mtl_model_builder = None
+    else:
+        aux_mtl_model_builder = AuxMTLBuilder(
+            config.aux_mtl_config, device=device, dtype=dtype
+        )
+
     unity_builder = UnitYBuilder(
         config,
         w2v2_encoder_builder,
         mt_model_builder,
         t2u_builder,
         prosody_encoder_builder,
+        aux_mtl_model_builder,
         device=device,
         dtype=dtype,
     )

@@ -4,13 +4,11 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Mapping, Tuple, Union
+from typing import Any, Dict, List, Mapping
 
 import torch
-from fairseq2.assets import AssetStore, asset_store, download_manager
-from fairseq2.assets.card import AssetCard, AssetCardFieldNotFoundError
+from fairseq2.assets import asset_store, download_manager
 from fairseq2.models.nllb import NllbConfig
-from fairseq2.models.nllb.loader import NllbTokenizerLoader
 from fairseq2.models.utils import ConfigLoader, ModelLoader
 from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
 
@@ -21,7 +19,6 @@ from seamless_communication.models.unity.builder import (
 )
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
 from seamless_communication.models.unity.model import UnitYModel
-from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 
 
 def convert_unity_checkpoint(
@@ -400,72 +397,3 @@ load_unity_model = ModelLoader[UnitYModel, UnitYConfig](
     convert_unity_checkpoint,
     restrict_checkpoints=False,
 )
-
-
-load_unity_text_tokenizer = NllbTokenizerLoader(asset_store, download_manager)
-
-
-class UnitYUnitTokenizerLoader:
-    """Loads speech unit tokenizers of UnitY models."""
-
-    def __init__(self, asset_store: AssetStore) -> None:
-        """
-        :param asset_store:
-            The asset store to retrieve the model information.
-        """
-        self.asset_store = asset_store
-
-    def __call__(self, model_name_or_card: Union[str, AssetCard]) -> UnitTokenizer:
-        """
-        :param model_name_or_card:
-            The name of the model or an already loaded AssetCard
-        """
-
-        if isinstance(model_name_or_card, AssetCard):
-            card = model_name_or_card
-        else:
-            card = self.asset_store.retrieve_card(model_name_or_card)
-
-        return UnitTokenizer(
-            card.field("num_units").as_(int),
-            card.field("unit_langs").as_list(str),
-            card.field("model_arch").as_(str),
-        )
-
-
-load_unity_unit_tokenizer = UnitYUnitTokenizerLoader(asset_store)
-
-
-class GcmvnStatsLoader:
-    """Loads GCMVN stats (mean & std) for ProsodyUnitY."""
-
-    def __init__(self, asset_store: AssetStore) -> None:
-        """
-        :param asset_store:
-            The asset store to retrieve the model information.
-        """
-        self.asset_store = asset_store
-
-    def __call__(
-        self, model_name_or_card: Union[str, AssetCard]
-    ) -> Tuple[List[float], List[float]]:
-        """
-        :param model_name_or_card:
-            The name of the model or an already loaded AssetCard
-        """
-
-        if isinstance(model_name_or_card, AssetCard):
-            card = model_name_or_card
-        else:
-            card = self.asset_store.retrieve_card(model_name_or_card)
-
-        try:
-            gcmvn_stats: Dict[str, List[float]] = card.field("gcmvn_stats").as_(dict)
-        except AssetCardFieldNotFoundError:
-            model_override = card.field("model_config").as_(dict)
-            gcmvn_stats = model_override["gcmvn_stats"]
-
-        return gcmvn_stats["mean"], gcmvn_stats["std"]
-
-
-load_gcmvn_stats = GcmvnStatsLoader(asset_store)

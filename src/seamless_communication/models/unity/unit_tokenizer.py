@@ -182,7 +182,7 @@ class UnitTokenEncoder:
 
         seqs[seqs >= self.tokenizer.num_units + 4] = self.unk_idx
 
-        return token_indices
+        return seqs
 
 
 class UnitTokenDecoder:

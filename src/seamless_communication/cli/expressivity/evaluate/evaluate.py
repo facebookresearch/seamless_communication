@@ -37,7 +37,7 @@ from seamless_communication.cli.m4t.predict import (
     set_generation_opts,
 )
 from seamless_communication.inference import BatchedSpeechOutput, Translator
-from seamless_communication.models.unity import (
+from seamless_communication.store import (
     load_gcmvn_stats,
     load_unity_unit_tokenizer,
 )

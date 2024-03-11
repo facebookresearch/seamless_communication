@@ -21,7 +21,7 @@ from seamless_communication.cli.m4t.predict import (
     set_generation_opts,
 )
 from seamless_communication.inference import Translator
-from seamless_communication.models.unity import (
+from seamless_communication.store import (
     load_gcmvn_stats,
     load_unity_unit_tokenizer,
 )
@@ -69,10 +69,10 @@ def main() -> None:
         raise Exception(
             "--tgt_lang, --output_path must be provided for SeamlessExpressive inference."
         )
-        
+
     if args.gated_model_dir:
         add_gated_assets(args.gated_model_dir)
-    
+
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
         dtype = torch.float16
@@ -83,7 +83,7 @@ def main() -> None:
     logger.info(f"Running inference on {device=} with {dtype=}.")
 
     unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
-    
+
     translator = Translator(
         args.model_name,
         vocoder_name_or_card=None,

@@ -14,8 +14,7 @@ import torch
 from fairseq2.assets import asset_store
 from fairseq2.data.audio import WaveformToFbankConverter, WaveformToFbankInput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
-from seamless_communication.models.unity import load_gcmvn_stats
-from seamless_communication.store import add_gated_assets
+from seamless_communication.store import add_gated_assets, load_gcmvn_stats
 from seamless_communication.streaming.agents.common import (
     AgentStates,
     NoUpdateTargetMixin,
@@ -116,7 +115,7 @@ class PretsselVocoderAgent(NoUpdateTargetMixin, TextToSpeechAgent):  # type: ign
 
         tgt_lang = states.tgt_lang if states.tgt_lang else self.tgt_lang
 
-        
+
         if tgt_lang not in self.vocoder_langs:
             logger.warning(f"{tgt_lang} not supported!")
             content = []

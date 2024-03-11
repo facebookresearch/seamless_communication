@@ -24,6 +24,8 @@ from seamless_communication.models.unity.length_regulator import (
     HardUpsampling,
     VarianceAdaptor,
 )
+from seamless_communication.models.aligner.model import UnitY2AlignmentEncoder
+from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 
 SPACE = "▁"
 
@@ -60,6 +62,7 @@ class NARDecoderFrontend(Module):
     scale: float
     char_length_regulator: HardUpsampling
     variance_adaptor: VarianceAdaptor
+    alignment_encoder: UnitY2AlignmentEncoder
     layer_norm: Optional[LayerNorm]
     dropout: Optional[Dropout]
 
@@ -68,10 +71,12 @@ class NARDecoderFrontend(Module):
         embed: Embedding,
         embed_char: Embedding,
         text_tokenizer: NllbTokenizer,
+        unit_tokenizer: UnitTokenizer,
         char_tokenizer: CharTokenizer,
         unit_pos_encoder: PositionEncoder,
         char_pos_encoder: PositionEncoder,
         variance_adaptor: VarianceAdaptor,
+        alignment_encoder: Optional[UnitY2AlignmentEncoder] = None,
         no_scale: bool = False,
         layer_norm: bool = False,
         dropout_p: float = 0.1,
@@ -85,13 +90,13 @@ class NARDecoderFrontend(Module):
         self.embed = embed
         self.embed_char = embed_char
         self.text_tokenizer = text_tokenizer
+        self.unit_tokenizer = unit_tokenizer
         self.char_tokenizer = char_tokenizer
         self.tag_manager = TagManager(text_tokenizer.vocab_info)
 
         self.unk_idx = self.text_tokenizer.vocab_info.unk_idx
-        self.pad_idx = self.text_tokenizer.vocab_info.pad_idx
-
-        # TODO: Implement AlignmentEncoder for training.
+        self.text_pad_idx = self.text_tokenizer.vocab_info.pad_idx
+        self.unit_pad_idx = self.unit_tokenizer.vocab_info.pad_idx
 
         if unit_pos_encoder.encoding_dim != self.model_dim:
             raise ValueError(
@@ -126,6 +131,11 @@ class NARDecoderFrontend(Module):
             self.dropout = Dropout(dropout_p)
         else:
             self.register_module("dropout", None)
+
+        if alignment_encoder is not None:
+            self.alignment_encoder = alignment_encoder
+        else:
+            self.register_module("alignment_encoder", None)
 
     def indices_to_subwords(self, text_seqs: Tensor) -> List[List[str]]:
         # TODO: To be replaced with fairseq2's indices_to_tokens SPM model method
@@ -165,8 +175,8 @@ class NARDecoderFrontend(Module):
 
         char_lens = text_seqs.new_zeros(text_seqs.size())
 
-        assert self.pad_idx is not None
-        subword_lens = text_seqs.ne(self.pad_idx).sum(1)
+        assert self.text_pad_idx is not None
+        subword_lens = text_seqs.ne(self.text_pad_idx).sum(1)
 
         for b in range(N):
             # We slice out the tensor till the padding index.
@@ -189,7 +199,7 @@ class NARDecoderFrontend(Module):
                 for i in range(len(subwords))
             ]
             for i, (subword_idx, subword) in enumerate(zip(subword_indices, subwords)):
-                if subword_idx == self.pad_idx:
+                if subword_idx == self.text_pad_idx:
                     break
 
                 if subword_idx == self.unk_idx:
@@ -230,12 +240,12 @@ class NARDecoderFrontend(Module):
         N = text_seqs.shape[0]
         max_len = int(char_lens.sum(1).max().item())
 
-        assert self.pad_idx is not None
-        char_seqs = text_seqs.new_zeros((N, max_len)).fill_(self.pad_idx)
+        assert self.text_pad_idx is not None
+        char_seqs = text_seqs.new_zeros((N, max_len)).fill_(self.text_pad_idx)
         char_seq_lens = char_seqs.new_zeros(N)
 
-        assert self.pad_idx is not None
-        subword_lens = text_seqs.ne(self.pad_idx).sum(1)
+        assert self.text_pad_idx is not None
+        subword_lens = text_seqs.ne(self.text_pad_idx).sum(1)
 
         for b in range(N):
             total = 0
@@ -297,16 +307,27 @@ class NARDecoderFrontend(Module):
         return seqs
 
     @finaloverride
+    def forward_alignment(
+        self,
+        unit_seqs: Tensor,
+        char_seqs: Tensor,
+    ) -> Tuple[Tensor, Tensor]:
+        text_embedding = self.embed_char(char_seqs)
+        unit_embedding = self.embed(unit_seqs)
+        text_lengths = char_seqs.ne(self.text_pad_idx).long().sum(-1)
+        unit_lengths = unit_seqs.ne(self.unit_pad_idx).long().sum(-1)
+        return self.alignment_encoder(text_embedding, unit_embedding, text_lengths, unit_lengths)
+
+    @finaloverride
     def forward(
         self,
         encoder_output: Tensor,
         encoder_padding_mask: Optional[PaddingMask],
-        text_seqs: Optional[Tensor],
+        text_seqs: Tensor,
+        unit_seqs: Optional[Tensor] = None,
         duration_factor: float = 1.0,
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
-        assert text_seqs is not None
-
+    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor, Tensor, PaddingMask, Tensor, Tensor]:
         # text_seqs: (N, S_text)
         char_seqs, char_seq_lens, char_lens = self.text_to_char_seqs(text_seqs)
 
@@ -315,15 +336,20 @@ class NARDecoderFrontend(Module):
             char_seq_lens, batch_seq_len=char_seqs.size(1)
         )
 
+        if self.training:
+            assert unit_seqs is not None, "Golden unit sequence is required for training"
+            attn_lprob, attn_hard_dur = self.forward_alignment(unit_seqs, char_seqs)
+
         # (N, S_text, M) -> (N, S_char, M)
         seqs = self.character_level_upsampling(
             encoder_output, encoder_padding_mask, char_seqs, char_lens
         )
 
         # (N, S_char, M) -> (N, S_unit, M)
-        seqs, padding_mask, durations = self.variance_adaptor(
+        seqs, padding_mask, log_durations = self.variance_adaptor(
             seqs,
             encoder_padding_mask,
+            durations=attn_hard_dur,
             duration_factor=duration_factor,
             min_duration=1,
             film_cond_emb=film_cond_emb,
@@ -331,4 +357,4 @@ class NARDecoderFrontend(Module):
 
         seqs = self.forward_unit_pos_embedding(seqs, padding_mask)
 
-        return seqs, padding_mask, durations
+        return seqs, padding_mask, log_durations, char_seqs, encoder_padding_mask, attn_lprob, attn_hard_dur

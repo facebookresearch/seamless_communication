@@ -20,7 +20,7 @@ from seamless_communication.models.aligner.model import (
     UnitY2AlignmentModel,
 )
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
-from seamless_communication.models.unity.loader import load_unity_unit_tokenizer
+from seamless_communication.store import load_unity_unit_tokenizer
 
 
 @dataclass
@@ -38,6 +38,8 @@ class AlignmentEncoderConfig:
     temperature: float
 
     reduction_factor: int
+
+    prior_end_steps: int = 1e10
 
 
 @dataclass
@@ -156,6 +158,7 @@ class UnitY2AlignmentBuilder:
             temperature=cfg.temperature,
             reduction_factor=cfg.reduction_factor,
             dtype=self.dtype,
+            device=self.device,
         )
         alignment_encoder.training = training
 

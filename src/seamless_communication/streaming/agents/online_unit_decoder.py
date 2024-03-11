@@ -102,12 +102,17 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
             else:
                 return WriteAction("", finished=True)
 
-        model_output, _, durations = self.model(
+        model_output, _, log_durations = self.model(
             text_decoder_output=states.source,
             text_decoder_padding_mask=None,
             text_seqs=states.source_indices,
             duration_factor=self.d_factor,
         )
+        durations = torch.clamp(
+            torch.round((torch.exp(log_durations) - 1) * self.d_factor).long(),
+            min=0,
+        )
+
         durations = durations[0]
 
         if states.source_finished and states.duration_start_index > 0:

@@ -172,7 +172,7 @@ def convert_state_dict(
 
     if key_map is None:
         return state_dict
-    
+
     state_dict = convert_model_state_dict(state_dict, key_map=key_map)
 
     # We use the built-in version attribute of `torch.nn.Module`.
@@ -204,6 +204,7 @@ def convert_unity_model(
     from seamless_communication.models import unity
     from seamless_communication.models.unity.builder import UnitYConfig, create_unity_model
     from seamless_communication.models.unity.model import UnitYModel
+    from seamless_communication.store import load_unity_text_tokenizer
 
     load_unity_model_without_conversion = ModelLoader[UnitYModel, UnitYConfig](
         asset_store,
@@ -226,7 +227,7 @@ def convert_unity_model(
         tokenizer = NllbLikeTokenizerLoader(asset_store, download_manager)(model_name)
     else:
         model = unity.load_unity_model(model_name)
-        tokenizer = unity.load_unity_text_tokenizer(model_name)
+        tokenizer = load_unity_text_tokenizer(model_name)
 
     vocab = read_vocab(tokenizer)
 
@@ -323,7 +324,7 @@ def convert_model(
             elif model_type == ModelType.MTS:
                 # TODO: implement the EdgeML model conversion here
                 raise NotImplementedError("Scripted model conversion not implemented yet")
-            
+
             # Bilingual non-scripted model
             else:
                 model, hparams, vocab, tgt_vocab = convert_bitext_model(model_name, hparams=hparams)

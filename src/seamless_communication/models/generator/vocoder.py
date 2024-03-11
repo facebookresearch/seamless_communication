@@ -497,11 +497,11 @@ class PretsselVocoder(Module):
             prosody_padding_mask,
             tgt_lang,
         )
-        seqs, padding_mask = self.encoder(seqs, padding_mask, cond_embs)
+        seqs, padding_mask, _ = self.encoder(seqs, padding_mask, cond_embs)
         seqs, padding_mask = self.decoder_frontend(
             seqs, padding_mask, durations, duration_factor, min_duration, cond_embs
         )
-        seqs, padding_mask = self.decoder(seqs, padding_mask, cond_embs)
+        seqs, padding_mask, _ = self.decoder(seqs, padding_mask, cond_embs)
         seqs = self.final_proj(seqs)
 
         pn = seqs.transpose(1, 2)  # B x T x C -> B x C x T

@@ -31,9 +31,11 @@ from seamless_communication.models.unity import (
     UnitYNART2UModel,
     UnitYT2UModel,
     load_unity_model,
+    unity_archs,
+)
+from seamless_communication.store import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
-    unity_archs,
 )
 from seamless_communication.models.vocoder import load_vocoder_model
 from seamless_communication.toxicity import (
@@ -111,6 +113,7 @@ class Translator(nn.Module):
             dtype = torch.float32
 
         self.model = load_unity_model(model_name_or_card, device=device, dtype=dtype)
+        self.model.inference_trim()
         self.model.eval()
         assert isinstance(self.model, UnitYModel)
 

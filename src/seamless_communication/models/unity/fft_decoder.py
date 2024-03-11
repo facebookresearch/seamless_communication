@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Iterable, Optional, Tuple, final
+from typing import Iterable, Optional, Tuple, final, List
 
 from fairseq2.nn.module_list import ModuleList
 from fairseq2.nn.normalization import LayerNorm
@@ -67,14 +67,16 @@ class FeedForwardTransformer(Module):
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
         film_cond_emb: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask], List[Tensor]]:
+        inner_states = [seqs]
         for layer in self.layers.drop_iter():
             seqs, padding_mask = layer(seqs, padding_mask, film_cond_emb=film_cond_emb)
+            inner_states.append(seqs)
 
         if self.layer_norm is not None:
             seqs = self.layer_norm(seqs)
 
-        return seqs, padding_mask
+        return seqs, padding_mask, inner_states
 
     def extra_repr(self) -> str:
         """:meta private:"""
