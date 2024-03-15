@@ -31,7 +31,11 @@ from fairseq2.data.text import (
     TextTokenizer,
     read_text,
 )
-from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter, WaveformToFbankOutput
+from fairseq2.data.audio import (
+    AudioDecoder,
+    WaveformToFbankConverter,
+    WaveformToFbankOutput,
+)
 from fairseq2.datasets.error import DatasetError
 from fairseq2.datasets.loader import StandardDatasetLoader
 from fairseq2.datasets.utils import all_eod
@@ -80,6 +84,7 @@ class UnitYDataset:
         text_tokenizer: TextTokenizer,
         unit_tokenizer: UnitTokenizer,
         gang: Gang,
+        dtype: DataType,
         max_seq_len: int,
         max_num_tokens: int,
         *,
@@ -108,45 +113,80 @@ class UnitYDataset:
             gcmvn_std=gcmvn_std,
         )
 
-        while True:
-            eod = False
+        eod = False
 
-            pipeline_iter = iter(pipeline)
+        pipeline_iter = iter(pipeline)
 
-            while not eod:
-                batches = []
+        stored_batches = []
 
-                for _ in range(num_accumulate):
-                    try:
-                        example = next(pipeline_iter)
-                    except StopIteration:
-                        break
+        while not eod:
+            batches = []
 
-                    batch = self._example_to_batch(example, gang.device)
+            for _ in range(num_accumulate):
+                try:
+                    example = next(pipeline_iter)
+                except StopIteration:
+                    break
 
-                    batches.append(batch)
+                batch = self._example_to_batch(example, gang.device, dtype)
 
-                eod = len(batches) != num_accumulate
+                batches.append(batch)
 
-                # When the pipeline is sharded, sampling and bucketing by length
-                # can lead to unpredictability in the number of examples read in
-                # each process. So, it is important to ensure that all processes
-                # are in sync about the end of the data. If this is not the case,
-                # a training loop may become stuck.
-                if bucket_by_length:
-                    eod = all_eod(eod, gang, logger)
+            eod = len(batches) != num_accumulate
 
-                if not eod:
-                    yield batches
+            # When the pipeline is sharded, sampling and bucketing by length
+            # can lead to unpredictability in the number of examples read in
+            # each process. So, it is important to ensure that all processes
+            # are in sync about the end of the data. If this is not the case,
+            # a training loop may become stuck.
+            if bucket_by_length:
+                eod = all_eod(eod, gang, logger)
+
+            if not eod:
+                yield batches
+                stored_batches.append(self.move_batch(batches, torch.device("cpu")))
+
+        else:
+            num_epoch = 1
+            while True:
+                num_epoch += 1
+                logger.info(f"Starting on the {num_epoch}th epoch")
+                for batches in stored_batches:
+                    yield self.move_batch(batches, gang.device)
 
     @staticmethod
-    def _example_to_batch(example: Dict[str, Any], device: Device) -> UnitYBatch:
+    def move_batch(batches: List[UnitYBatch], device: Device) -> List[UnitYBatch]:
+        for batch in batches:
+            batch.source_seqs = batch.source_seqs.to(device)
+            if batch.source_padding_mask is not None:
+                batch.source_padding_mask = batch.source_padding_mask.to(device)
+
+            batch.target_seqs = batch.target_seqs.to(device)
+            if batch.target_padding_mask is not None:
+                batch.target_padding_mask = batch.target_padding_mask.to(device)
+
+            batch.prosody_input_seqs = batch.prosody_input_seqs.to(device)
+            if batch.prosody_input_padding_mask is not None:
+                batch.prosody_input_padding_mask = batch.prosody_input_padding_mask.to(device)
+
+            batch.target_text_seqs = batch.target_text_seqs.to(device)
+            if batch.target_text_padding_mask is not None:
+                batch.target_text_padding_mask = batch.target_text_padding_mask.to(device)
+
+        return batches
+
+    @staticmethod
+    def _example_to_batch(
+        example: Dict[str, Any], device: Device, dtype: DataType
+    ) -> UnitYBatch:
         sample = example["sample"]
         source_data = cast(SequenceData, sample["audio"]["data"]["fbank"])
         target_text_data = cast(SequenceData, sample["raw_tgt_text"])
         target_data = cast(SequenceData, sample["tgt_text"])
         prosody_input_seqs = None
-        if (gcmvn_fbank := sample["audio"]["data"].get("gcmvn_fbank", None)) is not None:
+        if (
+            gcmvn_fbank := sample["audio"]["data"].get("gcmvn_fbank", None)
+        ) is not None:
             prosody_input_data = cast(SequenceData, gcmvn_fbank)
             prosody_input_seqs, prosody_input_padding_mask = get_seqs_and_padding_mask(
                 prosody_input_data, device
@@ -163,11 +203,11 @@ class UnitYDataset:
         )
 
         return UnitYBatch(
-            source_seqs=source_seqs,
+            source_seqs=source_seqs.to(dtype),
             source_padding_mask=source_padding_mask,
             target_seqs=target_seqs,
             target_padding_mask=target_padding_mask,
-            prosody_input_seqs=prosody_input_seqs,
+            prosody_input_seqs=prosody_input_seqs.to(dtype),
             prosody_input_padding_mask=prosody_input_padding_mask,
             target_text_seqs=target_text_seqs,
             target_text_padding_mask=target_text_padding_mask,
@@ -181,7 +221,7 @@ class UnitYDataset:
 
     @staticmethod
     def squeeze_Tensor(tensor: Tensor) -> Tensor:
-        #TODO: loose unit_tokenizer input requirement to support 1D
+        # TODO: unit_tokenizer to support 1D tensor input
         return tensor[0]
 
     @staticmethod
@@ -287,8 +327,8 @@ class UnitYDataset:
                         self.normalize_fbank,
                         gcmvn_prosody_input=gcmvn_prosody_input,
                         gcmvn_mean=gcmvn_mean,
-                        gcmvn_std=gcmvn_std
-                    )
+                        gcmvn_std=gcmvn_std,
+                    ),
                 ],
                 selector="audio.data",
                 num_parallel_calls=num_prefetch,
@@ -302,7 +342,10 @@ class UnitYDataset:
             pipeline_builder.map(
                 [
                     text_token_encoder,
-                    partial(self.prepend_eos_symbol, eos_idx=text_tokenizer.vocab_info.eos_idx)
+                    partial(
+                        self.prepend_eos_symbol,
+                        eos_idx=text_tokenizer.vocab_info.eos_idx,
+                    ),
                 ],
                 selector="raw_tgt_text",
                 num_parallel_calls=num_prefetch,
@@ -316,7 +359,11 @@ class UnitYDataset:
                 unit_token_encoder.is_nar_decoder = False
 
             pipeline_builder.map(
-                [self.preprocess_unit_to_Tensor, unit_token_encoder, self.squeeze_Tensor],
+                [
+                    self.preprocess_unit_to_Tensor,
+                    unit_token_encoder,
+                    self.squeeze_Tensor,
+                ],
                 selector="tgt_text",
                 num_parallel_calls=num_prefetch,
             )
@@ -327,9 +374,7 @@ class UnitYDataset:
             # for troubleshooting.
             split_ = DataPipeline.constant(dataset_name).and_return()
 
-            line_nr = DataPipeline.count(
-                start=gang.rank, step=gang.size
-            ).and_return()
+            line_nr = DataPipeline.count(start=gang.rank, step=gang.size).and_return()
 
             # Zip the pipelines along with the pseudo pipelines into one
             pipeline_bld = DataPipeline.zip(
@@ -339,7 +384,7 @@ class UnitYDataset:
 
             pipeline_blds.append(pipeline_bld.and_return())
 
-        concat_pipeline_blds = DataPipeline.concat(pipeline_blds)
+        concat_pipeline_blds = DataPipeline.round_robin(pipeline_blds)
 
         # Shuffle examples.
         if shuffle_window_size > 0:
@@ -354,7 +399,7 @@ class UnitYDataset:
 
             concat_pipeline_blds.bucket_by_length(
                 bucket_sizes,
-                selector="sample.audio.data.fbank",
+                selector="sample.audio.data.fbank,sample.tgt_text,sample.raw_tgt_text",
                 skip_long_examples=True,
             )
         else:

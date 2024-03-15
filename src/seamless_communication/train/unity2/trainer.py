@@ -16,6 +16,7 @@ from typing import Any, Iterator, Literal, List, Optional, Union, final, Tuple, 
 import submitit
 import torch
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from torch.nn.parallel import DistributedDataParallel
 from fairseq2 import setup_extensions
 from fairseq2.checkpoint import FileCheckpointManager
 from fairseq2.gang import Gang, ProcessGroupGang, FakeGang
@@ -59,7 +60,6 @@ from seamless_communication.store import (
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.train.utils.distributed import init_process_group
 from seamless_communication.train.unity2.dataset import (
     UnitYDataset,
     load_unity_dataset,
@@ -94,11 +94,12 @@ class UnitYTrainConfig:
     parallelism: Literal["none", "fsdp", "ddp"] = "fsdp"
     """The type of parallelism to use."""
 
-    max_seq_len: int = 4095
+    max_seq_len: int = 4000
     """The maximum source and target sequence lengths."""
 
-    max_num_tokens: int = 4096
-    """The maximum number of tokens per batch."""
+    max_num_tokens: int = 8000
+    """The maximum number of tokens per batch. This is effectively 4k as in fairseq1's batch_size
+    as fairseq1 uses n_frames, here it uses fbank.shape"""
 
     shuffle_window_size: int = 100_000
     """The size of the sliding data shuffle window."""
@@ -157,9 +158,6 @@ class UnitYTrainConfig:
 
     profile: bool = False
     """If ``True``, runs the PyTorch profiler at the beginning of the training."""
-
-    use_submitit: bool = True
-    """If ``True``, Setup the environment ti use Submitit."""
 
     aux_loss_type: Optional[str] = None
     """the auxiliary loss type"""
@@ -238,10 +236,10 @@ class UnitYTrainer(StatefulObjectBag):
             text_tokenizer,
             unit_tokenizer,
             gang,
+            self.dtype,
             config.max_seq_len,
             config.max_num_tokens,
-            # bucket_by_length=True,
-            bucket_by_length=False,
+            bucket_by_length=True,
             shuffle_window_size=config.shuffle_window_size,
             num_prefetch=config.num_prefetch,
             num_accumulate=config.gradient_accumulation,
@@ -277,8 +275,8 @@ class UnitYTrainer(StatefulObjectBag):
             optimizer,
             gang=gang,
             init_scale=128,
-            scale_window=int(2**14 / gang.size / config.gradient_accumulation),
             min_scale=0.00001,
+            gradient_accumulation=config.gradient_accumulation,
             enabled=self.dtype == torch.float16,
         )
 
@@ -376,16 +374,20 @@ class UnitYTrainer(StatefulObjectBag):
 
             losses = []
 
-            with torch.autocast(device_type="cuda", dtype=self.dtype):
-                # Accumulate gradients.
-                for batch_nr, batch in enumerate(batches):
-                    with record_function(f"step_{step_nr}_{batch_nr}_forward"):
-                        loss = self._compute_loss(batch)
+            # Accumulate gradients.
+            for batch_nr, batch in enumerate(batches):
+                with record_function(f"step_{step_nr}_{batch_nr}_forward"):
+                    loss, extras = self._compute_loss(batch)
 
-                    with record_function(f"step_{step_nr}_{batch_nr}_backward"):
-                        self.loss_scaler.backward(loss)
+                if loss.isnan():
+                    logger.error("Detected nan")
+                    logger.info(batch.source_seqs.shape, batch.target_seqs, batch.target_text_seqs, batch.example["split"], batch.example["line_nr"])
+                    continue
 
-                    losses.append(loss.detach())
+                with record_function(f"step_{step_nr}_{batch_nr}_backward"):
+                    self.loss_scaler.backward(loss)
+
+                losses.append(extras)
 
             # Update parameters.
             with record_function(f"step_{step_nr}_optimizer"):
@@ -445,6 +447,7 @@ class UnitYTrainer(StatefulObjectBag):
             self.text_tokenizer,
             self.unit_tokenizer,
             self.gang,
+            self.dtype,
             self.config.max_seq_len,
             self.config.max_num_tokens,
             num_prefetch=self.config.num_prefetch,
@@ -464,7 +467,7 @@ class UnitYTrainer(StatefulObjectBag):
 
             logger.debug("Running validation step %d.", step_nr)
 
-            losses = [self._compute_loss(batch) for batch in batches]
+            losses = [self._compute_loss(batch)[1] for batch in batches]
 
             elapsed_time = step_stopwatch.get_elapsed_time()
 
@@ -549,7 +552,7 @@ def load_unity_trainer(config: UnitYTrainConfig) -> UnitYTrainer:
     stopwatch = Stopwatch(start=True)
 
     setup_logging(
-        log_file=config.output_dir.joinpath("logs/train_{rank}.log"), debug=True
+        log_file=config.output_dir.joinpath("logs/train_{rank}.log"), debug=False
     )
 
     setup_extensions()
@@ -562,7 +565,7 @@ def load_unity_trainer(config: UnitYTrainConfig) -> UnitYTrainer:
     if config.parallelism == "none":
         gang = FakeGang()
     else:
-        gang = init_process_group(config, logger)
+        gang = ProcessGroupGang.init_default_process_group(ok_initialized=True)
 
     checkpoint_manager = FileCheckpointManager(
         config.output_dir.joinpath("checkpoints"),
@@ -628,8 +631,8 @@ def load_unity_trainer(config: UnitYTrainConfig) -> UnitYTrainer:
         to_device(raw_model, gang.device)
 
         model = raw_model
-    elif self.config.parallelism == "fsdp":
-        wrap_policy, ignored_param_names = unity_wrap_policy(model_config, gang)
+    elif config.parallelism == "fsdp":
+        wrap_policy, ignored_param_names = unity_wrap_policy()
 
         model = to_fsdp(
             raw_model,
@@ -643,7 +646,12 @@ def load_unity_trainer(config: UnitYTrainConfig) -> UnitYTrainer:
             log_module(model, logger)
 
     elif config.parallelism == "ddp":
-        model = raw_model  # TODO: to_ddp()
+        model = DistributedDataParallel(
+            raw_model,
+            device_ids=[gang.device],
+        )
+        if gang.rank == 0:
+            log_module(model, logger)
 
     trainer = UnitYTrainer(
         config,

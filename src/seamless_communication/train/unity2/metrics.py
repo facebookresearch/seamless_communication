@@ -20,8 +20,11 @@ from seamless_communication.models.unity.model import UnitYBatch
 class UnitYMetricBag(MetricBag):
     """Holds the common metrics of a UnitY model."""
 
-    loss: Mean
-    entropy_loss: Mean
+    unit_nll_loss: Mean
+    text_nll_loss: Mean
+    duration_loss: Mean
+    forward_sum_loss: Mean
+    aux_loss: Mean
     batch_size: Mean
     elements_per_batch: Mean
     elements_per_second: Throughput
@@ -38,9 +41,11 @@ class UnitYMetricBag(MetricBag):
 
         d = gang.device
 
-        self.register_metric("loss", Mean(device=d), persistent=False)
-
-        self.register_metric("entropy_loss", Mean(device=d), persistent=False)
+        self.register_metric("unit_nll_loss", Mean(device=d), persistent=False)
+        self.register_metric("text_nll_loss", Mean(device=d), persistent=False)
+        self.register_metric("duration_loss", Mean(device=d), persistent=False)
+        self.register_metric("forward_sum_loss", Mean(device=d), persistent=False)
+        self.register_metric("aux_loss", Mean(device=d), persistent=False)
 
         self.register_metric("batch_size", Mean(device=d), persistent=False)
 
@@ -68,27 +73,42 @@ class UnitYMetricBag(MetricBag):
         :param elapsed_time:
             The total elapsed time to read and process ``batches``.
         """
-        loss = torch.zeros((), dtype=torch.float64)
+        unit_nll_loss = torch.zeros((), dtype=torch.float64)
+        text_nll_loss = torch.zeros((), dtype=torch.float64)
+        duration_loss = torch.zeros((), dtype=torch.float64)
+        forward_sum_loss = torch.zeros((), dtype=torch.float64)
+        aux_loss = torch.zeros((), dtype=torch.float64)
 
         batch_size = torch.zeros((), dtype=torch.float64)
 
         num_source_elements = torch.zeros((), dtype=torch.float64)
         num_target_elements = torch.zeros((), dtype=torch.float64)
+        num_target_text_elements = torch.zeros((), dtype=torch.float64)
 
         for batch, batch_loss in zip(batches, losses):
-            loss += float(batch_loss)
+            unit_nll_loss += float(batch_loss["unit_nll_loss"])
+            text_nll_loss += float(batch_loss["text_nll_loss"])
+            duration_loss += float(batch_loss["duration_loss"])
+            forward_sum_loss += float(batch_loss["forward_sum_loss"])
+            aux_loss += float(batch_loss["aux_loss"])
 
             batch_size += batch.batch_size
 
             num_source_elements += batch.num_source_elements()
             num_target_elements += batch.num_target_elements() - batch.batch_size
+            num_target_text_elements += batch.num_target_text_elements() - batch.batch_size
 
-        loss /= num_target_elements
+        unit_nll_loss /= num_target_elements * math.log(2)
+        text_nll_loss /= num_target_text_elements * math.log(2)
+        duration_loss /= num_target_elements
+        forward_sum_loss /= num_target_elements * math.log(2)
+        aux_loss /= num_target_elements * math.log(2)
 
-        self.loss.update(loss, weight=num_target_elements)
-
-        # Mainly exists for compatibility with fairseq's `nll_loss`.
-        self.entropy_loss.update(loss / math.log(2), weight=num_target_elements)
+        self.unit_nll_loss.update(unit_nll_loss, weight=num_target_elements)
+        self.text_nll_loss.update(text_nll_loss, weight=num_target_text_elements)
+        self.duration_loss.update(duration_loss, weight=num_target_elements)
+        self.forward_sum_loss.update(forward_sum_loss, weight=num_target_elements)
+        self.aux_loss.update(aux_loss, weight=num_target_elements)
 
         self.batch_size.update(batch_size * self.gang.size)
 
@@ -103,8 +123,11 @@ class UnitYMetricBag(MetricBag):
 
     def reset_batch_metrics(self) -> None:
         """Reset the batch metrics to their initial state."""
-        self.loss.reset()
-        self.entropy_loss.reset()
+        self.unit_nll_loss.reset()
+        self.text_nll_loss.reset()
+        self.duration_loss.reset()
+        self.forward_sum_loss.reset()
+        self.aux_loss.reset()
         self.batch_size.reset()
         self.elements_per_batch.reset()
         self.elements_per_second.reset()

@@ -154,6 +154,7 @@ class UnitYModelOutput:
             ignore_prefix_size=ignore_unit_prefix_size,
             label_smoothing=label_smoothing,
         )
+        unit_loss = loss.detach().data
 
         if text_loss_weight > 0.:
             text_nll_loss = self.text_output.compute_loss(
@@ -166,7 +167,7 @@ class UnitYModelOutput:
         # calculate duration loss
         if duration_loss_weight > 0.:
             log_durations = apply_padding_mask(self.log_durations, self.char_padding_mask)
-            duration_target = torch.log(self.attn_hard_dur + 1)
+            duration_target = torch.log(self.attn_hard_dur + 1).to(log_durations)
             duration_loss = mse_loss(log_durations, duration_target, reduction="sum")
             loss += duration_loss_weight * duration_loss
 
@@ -202,7 +203,7 @@ class UnitYModelOutput:
             if aux_loss_type == "ctc":
                 with torch.backends.cudnn.flags(enabled=False):
                     aux_loss = ctc_loss(
-                        aux_lprobs.transpose(0, 1),
+                        aux_lprobs.transpose(0, 1).float(),
                         self.char_seqs,
                         unit_lens,
                         char_lens,
@@ -214,7 +215,13 @@ class UnitYModelOutput:
 
             loss += aux_loss_weight * aux_loss
 
-        return loss
+        return loss, {
+            "unit_nll_loss": unit_loss,
+            "text_nll_loss": text_nll_loss.detach().data,
+            "duration_loss": duration_loss.detach().data,
+            "forward_sum_loss": forward_sum_loss.detach().data,
+            "aux_loss": aux_loss.detach().data,
+        }
 
 
 @final
@@ -695,7 +702,6 @@ class UnitYNART2UModel(Module):
         # text_seqs: (N, S)
         seqs, padding_mask, log_durations, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur = self.decoder_frontend(
             encoder_output,
-            encoder_padding_mask,
             text_seqs,
             unit_seqs,
             duration_factor,

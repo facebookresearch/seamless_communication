@@ -134,12 +134,12 @@ class ECAPA_TDNN(Module):
 
         # Attentive Statistical Pooling
         x = self.asp(x, padding_mask=padding_mask)
-        x = self.asp_norm(x.transpose(1, 2)).transpose(1, 2)
+        x = self.asp_norm(x.squeeze(-1)).unsqueeze(-1)
 
         # Final linear transformation
         x = self.fc(x)
 
-        x = x.transpose(1, 2).squeeze(1)  # B x C
+        x = x.squeeze(-1)  # B x C
         return F.normalize(x, dim=-1)
 
 

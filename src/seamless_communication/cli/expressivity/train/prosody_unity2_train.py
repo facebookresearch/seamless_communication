@@ -7,51 +7,18 @@
 import os
 from datetime import timedelta
 from pathlib import Path
-
 import torch
+
+from fairseq2 import setup_extensions
 from seamless_communication.train.unity2.trainer import UnitYTrainConfig, load_unity_trainer
 from seamless_communication.models.unity import unity_archs
-# from seamless_next.cluster import Cluster, ClusterConfig
+from seamless_next.cluster import Cluster, ClusterConfig
 
 
-# def main() -> None:
-
-#     user = os.getenv("USER")
-
-#     output_dir = Path(f"/checkpoint/{user}/nllb100-example")
-
-#     cluster_config = ClusterConfig(
-#         cluster="local",
-#         parallelism=1,
-#         partition="",
-#         num_nodes=1,
-#         num_gpus_per_node=1,
-#         cpus_per_task=1,
-#         log_dir=output_dir.joinpath("submitit"),
-#         timeout=timedelta(minutes=1000),
-#     )
-
-#     cluster = Cluster(cluster_config)
-
-#     # Load Jean's new 128k NLLB tokenizer.
-#     tokenizer = load_nllb_tokenizer("nllb-100-128k")
-
-#     model_config = nllb_archs.get_config("dense_1b")
-
-#     # We adapt the existing NLLB-200 dense 1B to 100 languages.
-#     model_config.vocab_info = tokenizer.vocab_info
-
-#     train_config = NllbTrainConfig(
-#         model_config_or_name=model_config,
-#         tokenizer_name="nllb-100-128k",
-#         dataset_name="nllb-100-dataset",
-#         output_dir=output_dir,
-#         parallelism="fsdp",
-#         dtype=torch.float16,
-#         debug=True,
-#     )
-
-#     cluster.run_job(train_nllb, train_config)
+def train_unity(config: UnitYTrainConfig) -> None:
+    setup_extensions()
+    trainer = load_unity_trainer(config)
+    trainer.run()
 
 
 if __name__ == "__main__":
@@ -63,13 +30,13 @@ if __name__ == "__main__":
         dataset_name="seamless_expressive_eng_cmn",
         gcmvn_prosody_input=True,
         gcmvn_stats_name="vocoder_pretssel",
-        output_dir=Path("~/tmp/test"),
-        dtype="torch.float16",
-        parallelism="none",
-        num_prefetch=3,
+        output_dir=Path("training_logs/"),
+        dtype="torch.bfloat16",
+        parallelism="fsdp",
+        num_prefetch=4,
         shuffle_window_size=0,
-        use_submitit=False,
-        gradient_accumulation=1,
+        publish_metrics_every_n_steps=1,
+        gradient_accumulation=4,
         ignore_text_prefix_size=1,
         aux_loss_type="ctc",
         aux_loss_weight=1.6,
@@ -78,6 +45,18 @@ if __name__ == "__main__":
         load_prosody_encoder_weight="/fsx-ust/shared/seamless23_oss/prosody_encoder_pretssel_pretrained.pt",
     )
 
-    trainer = load_unity_trainer(train_config)
+    cluster_config = ClusterConfig(
+        cluster="local",
+        parallelism=1,
+        partition="",
+        num_nodes=1,
+        num_gpus_per_node=8,
+        cpus_per_task=10,
+        log_dir=train_config.output_dir.joinpath("submitit"),
+        timeout=timedelta(minutes=1000),
+    )
 
-    trainer.run()
+    cluster = Cluster(cluster_config)
+
+    cluster.run_job(train_unity, train_config)
+    # train_unity(train_config)

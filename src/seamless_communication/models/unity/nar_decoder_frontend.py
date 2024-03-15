@@ -36,7 +36,7 @@ class TagManager:
 
     def preprocess_text_seqs(self, text_seqs: Tensor) -> Tensor:
         # Remove EOS, lang tokens as per NLLB "target" tokenizer mode.
-        text_seqs = text_seqs[:, 2:]
+        text_seqs = text_seqs.clone()[:, 2:]
         assert self.vocab_info.pad_idx is not None
         text_seqs.masked_fill_(
             text_seqs == self.vocab_info.eos_idx, self.vocab_info.pad_idx
@@ -151,16 +151,16 @@ class NARDecoderFrontend(Module):
         return subwords_batch
 
     def text_to_char_seqs(self, text_seqs: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        text_seqs = self.tag_manager.preprocess_text_seqs(text_seqs)
+        text_wo_tag = self.tag_manager.preprocess_text_seqs(text_seqs)
 
-        subwords_batch = self.indices_to_subwords(text_seqs)
+        subwords_batch = self.indices_to_subwords(text_wo_tag)
 
-        char_lens = self.count_character_length_in_subword(text_seqs, subwords_batch)
+        char_lens = self.count_character_length_in_subword(text_wo_tag, subwords_batch)
 
         char_lens = self.tag_manager.postprocess_dur_or_len(char_lens)
 
         char_seqs, char_seq_lens = self.get_char_seqs(
-            text_seqs, subwords_batch, char_lens
+            text_wo_tag, subwords_batch, char_lens
         )
 
         return char_seqs, char_seq_lens, char_lens
@@ -284,11 +284,11 @@ class NARDecoderFrontend(Module):
         char_embeds = self.embed_char(char_seqs)
 
         if self.scale != 1.0:
-            char_embeds *= self.scale
+            char_embeds = self.scale * char_embeds
 
-        pos_embeds += char_embeds
+        pos_embeds = pos_embeds + char_embeds
 
-        seqs += pos_embeds
+        seqs = seqs + pos_embeds
 
         return seqs
 
@@ -299,7 +299,7 @@ class NARDecoderFrontend(Module):
             self.unit_pos_encoder(seqs, padding_mask) - seqs
         )
 
-        seqs += pos_embeds
+        seqs = seqs + pos_embeds
 
         if self.dropout is not None:
             seqs = self.dropout(seqs)
@@ -322,7 +322,6 @@ class NARDecoderFrontend(Module):
     def forward(
         self,
         encoder_output: Tensor,
-        encoder_padding_mask: Optional[PaddingMask],
         text_seqs: Tensor,
         unit_seqs: Optional[Tensor] = None,
         duration_factor: float = 1.0,
@@ -332,7 +331,7 @@ class NARDecoderFrontend(Module):
         char_seqs, char_seq_lens, char_lens = self.text_to_char_seqs(text_seqs)
 
         # char_seqs: (N, S_char)
-        encoder_padding_mask = PaddingMask(
+        char_padding_mask = PaddingMask(
             char_seq_lens, batch_seq_len=char_seqs.size(1)
         )
 
@@ -342,13 +341,13 @@ class NARDecoderFrontend(Module):
 
         # (N, S_text, M) -> (N, S_char, M)
         seqs = self.character_level_upsampling(
-            encoder_output, encoder_padding_mask, char_seqs, char_lens
+            encoder_output, char_padding_mask, char_seqs, char_lens
         )
 
         # (N, S_char, M) -> (N, S_unit, M)
         seqs, padding_mask, log_durations = self.variance_adaptor(
             seqs,
-            encoder_padding_mask,
+            char_padding_mask,
             durations=attn_hard_dur,
             duration_factor=duration_factor,
             min_duration=1,
@@ -357,4 +356,4 @@ class NARDecoderFrontend(Module):
 
         seqs = self.forward_unit_pos_embedding(seqs, padding_mask)
 
-        return seqs, padding_mask, log_durations, char_seqs, encoder_padding_mask, attn_lprob, attn_hard_dur
+        return seqs, padding_mask, log_durations, char_seqs, char_padding_mask, attn_lprob, attn_hard_dur
