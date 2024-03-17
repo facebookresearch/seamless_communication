@@ -203,11 +203,11 @@ class UnitYDataset:
         )
 
         return UnitYBatch(
-            source_seqs=source_seqs.to(dtype),
+            source_seqs=source_seqs,
             source_padding_mask=source_padding_mask,
             target_seqs=target_seqs,
             target_padding_mask=target_padding_mask,
-            prosody_input_seqs=prosody_input_seqs.to(dtype),
+            prosody_input_seqs=prosody_input_seqs,
             prosody_input_padding_mask=prosody_input_padding_mask,
             target_text_seqs=target_text_seqs,
             target_text_padding_mask=target_text_padding_mask,
@@ -237,10 +237,11 @@ class UnitYDataset:
         gcmvn_std: Tensor,
     ) -> WaveformToFbankOutput:
         fbank = data["fbank"]
-        std, mean = torch.std_mean(fbank, dim=0)
-        data["fbank"] = fbank.subtract(mean).divide(std)
+        std, mean = torch.std_mean(fbank, dim=0, keepdim=True)
+        # safe divide
+        data["fbank"] = torch.where(std == 0, torch.zeros_like(fbank), fbank.sub(mean).div(std))
         if gcmvn_prosody_input:
-            data["gcmvn_fbank"] = fbank.subtract(gcmvn_mean).divide(gcmvn_std)
+            data["gcmvn_fbank"] = fbank.sub(gcmvn_mean).div(gcmvn_std)
 
         return data
 

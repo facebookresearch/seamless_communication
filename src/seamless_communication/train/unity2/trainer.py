@@ -377,12 +377,8 @@ class UnitYTrainer(StatefulObjectBag):
             # Accumulate gradients.
             for batch_nr, batch in enumerate(batches):
                 with record_function(f"step_{step_nr}_{batch_nr}_forward"):
-                    loss, extras = self._compute_loss(batch)
-
-                if loss.isnan():
-                    logger.error("Detected nan")
-                    logger.info(batch.source_seqs.shape, batch.target_seqs, batch.target_text_seqs, batch.example["split"], batch.example["line_nr"])
-                    continue
+                    with torch.autocast(device_type="cuda", dtype=self.dtype):
+                        loss, extras = self._compute_loss(batch)
 
                 with record_function(f"step_{step_nr}_{batch_nr}_backward"):
                     self.loss_scaler.backward(loss)
@@ -489,9 +485,6 @@ class UnitYTrainer(StatefulObjectBag):
         values = self.train_metric_bag.sync_and_compute_metrics()
 
         self.train_metric_bag.reset_batch_metrics()
-
-        if self.gang.rank != 0:
-            return
 
         assert values is not None
 
