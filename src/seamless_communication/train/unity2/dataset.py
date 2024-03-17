@@ -203,11 +203,11 @@ class UnitYDataset:
         )
 
         return UnitYBatch(
-            source_seqs=source_seqs,
+            source_seqs=source_seqs.to(dtype),
             source_padding_mask=source_padding_mask,
             target_seqs=target_seqs,
             target_padding_mask=target_padding_mask,
-            prosody_input_seqs=prosody_input_seqs,
+            prosody_input_seqs=prosody_input_seqs.to(dtype),
             prosody_input_padding_mask=prosody_input_padding_mask,
             target_text_seqs=target_text_seqs,
             target_text_padding_mask=target_text_padding_mask,

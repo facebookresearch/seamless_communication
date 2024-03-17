@@ -377,8 +377,7 @@ class UnitYTrainer(StatefulObjectBag):
             # Accumulate gradients.
             for batch_nr, batch in enumerate(batches):
                 with record_function(f"step_{step_nr}_{batch_nr}_forward"):
-                    with torch.autocast(device_type="cuda", dtype=self.dtype):
-                        loss, extras = self._compute_loss(batch)
+                    loss, extras = self._compute_loss(batch)
 
                 with record_function(f"step_{step_nr}_{batch_nr}_backward"):
                     self.loss_scaler.backward(loss)
