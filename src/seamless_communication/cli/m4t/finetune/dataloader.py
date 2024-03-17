@@ -39,11 +39,56 @@ class SeqsBatch:
     prev_output_tokens: Optional[Tensor]
     target_lengths: Optional[Tensor]
 
+    def __del__(self) -> None:
+        """Explicitly delete tensors
+        to force GPU memory cleanup"""
+        for tensor in [
+            self.src_tokens,
+            self.src_lengths,
+            self.target_tokens,
+            self.prev_output_tokens,
+            self.target_lengths,
+        ]:
+            if tensor is not None:
+                del tensor
+
 
 @dataclass
 class MultimodalSeqsBatch:
     speech_to_text: SeqsBatch
     text_to_units: SeqsBatch
+
+    def __del__(self) -> None:
+        del self.speech_to_text
+        del self.text_to_units
+
+
+@dataclass
+class BatchingConfig:
+    fbank_feats_pad_idx: int = 0
+    """The pad index to use in fbanks batching."""
+
+    batch_size: int = 5
+    """Fixed batch size to use"""
+
+    max_audio_length_sec: float = 15.0
+    """ Drop samples with source audio sample length above the threshold."""
+
+    rank: int = 0
+    """The rank of this worker in the process group."""
+
+    world_size: int = 1
+    """The world size of the process group."""
+
+    num_workers: int = 2
+    """Parallelism in dataset preparation."""
+
+    float_dtype: torch.dtype = torch.float16
+    """Select between fp16/fp32 for float tensors """
+
+
+def worker_init_fn(worker_id: int) -> None:
+    np.random.seed(np.random.get_state()[1][0] + worker_id)  # type: ignore
 
 
 class UnitYDataLoader:
