@@ -128,12 +128,12 @@ def build_data_pipeline(
         
     elif ctx.data_file_type == "JSON":
         def format_json(line: str):
-            example = json.loads(line)
+            example = json.loads(str(line))
             return {
                 "src_text": example["source"]["text"],
                 "src_lang": example["source"]["lang"],
                 "audio": example["source"]["audio_local_path"],
-                "ref_tgt_text": example["target"]["text"],
+                "tgt_text": example["target"]["text"],
             }
         
         with open(ctx.data_file, "r") as f:
