@@ -396,8 +396,8 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     assert args.data_file and args.task and args.tgt_lang, \
         "Please provide required arguments for evaluation - data_file, task, tgt_lang"
         
-    # assert Path(args.data_file).exists(), \
-    #     f"Invalid `data_file`: {args.data_file} does not exist"
+    assert Path(args.data_file).exists(), \
+        f"Invalid `data_file`: {args.data_file} does not exist"
         
     if Path(args.data_file).suffix == ".tsv":
         data_type = "TSV"
