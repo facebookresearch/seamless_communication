@@ -393,7 +393,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     default_args.update(optional_args) if optional_args else default_args
     args = Namespace(**default_args)
 
-    assert args.data_file and args.task and args.tgt_lang, \
+    assert args.data_file and args.task and args.tgt_lang and args.output_path, \
         "Please provide required arguments for evaluation - data_file, task, tgt_lang"
         
     assert Path(args.data_file).exists(), \
