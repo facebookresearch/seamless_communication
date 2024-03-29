@@ -326,7 +326,8 @@ class UnitYFinetune:
         with torch.no_grad():
             for batch in self.eval_data_loader.get_dataloader():
                 assert batch.speech_to_text.src_tokens is not None
-                loss = self.calc_loss(batch, *self.model(batch))
+                with torch.autocast(device_type=self.params.device, dtype=self.params.float_dtype):
+                    loss = self.calc_loss(batch, *self.model(batch))
                 if loss.isnan():
                     logger.warning("Eval loss value is NaN, setting to inf")
                     loss_val = float("Inf")
