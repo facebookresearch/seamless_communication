@@ -72,6 +72,7 @@ UNITY_TO_FLEURS_LANG_MAPPING = {
     "rus": "ru_ru",
     "snd": "sd_in",
     "slk": "sk_sk",
+    "spa": "es_419",
     "srp": "sr_rs",
     "swh": "sw_ke",
     "tam": "ta_in",
