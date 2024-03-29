@@ -122,7 +122,7 @@ def init_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
+        default="cuda",
         help=("Device to fine-tune on. See `torch.device`."),
     )
     return parser
