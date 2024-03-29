@@ -126,7 +126,7 @@ def main() -> None:
     args = init_parser().parse_args()
     dist_utils.init_distributed([logger, trainer.logger])
     device = torch.device("cuda")
-    float_dtype = torch.float32
+    float_dtype = torch.float16
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
     finetune_params = trainer.FinetuneParams(
@@ -144,7 +144,7 @@ def main() -> None:
     )
     logger.info(f"Finetune params: {finetune_params}")
     model: UnitYModel = load_unity_model(
-        args.model_name, device=torch.device("cpu"), dtype=float_dtype
+        args.model_name, device=torch.device("cpu"), dtype=torch.float32
     )
     assert model.target_vocab_info == text_tokenizer.vocab_info
     # (optional) delete unused params to reduce GPU memory consumption
