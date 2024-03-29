@@ -119,20 +119,25 @@ def init_parser() -> argparse.ArgumentParser:
             "* `SPEECH_TO_TEXT` -- finetune only S2T"
         ),
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help=("Device to fine-tune on. See `torch.device`."),
+    )
     return parser
 
 
 def main() -> None:
     args = init_parser().parse_args()
     dist_utils.init_distributed([logger, trainer.logger])
-    device = torch.device("cuda")
-    float_dtype = torch.float16
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
     finetune_params = trainer.FinetuneParams(
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
-        device=device,
+        float_dtype=torch.float16,
+        device=torch.device(args.device),
         train_batch_size=args.batch_size,
         eval_batch_size=args.batch_size,
         patience=args.patience,
@@ -166,7 +171,7 @@ def main() -> None:
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
             max_audio_length_sec=15.0,
-            float_dtype=float_dtype,
+            float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.train_dataset,
     )
@@ -178,7 +183,7 @@ def main() -> None:
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
             max_audio_length_sec=100.0,
-            float_dtype=float_dtype,
+            float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.eval_dataset,
     )

@@ -44,6 +44,9 @@ class FinetuneParams:
 
     finetune_mode: FinetuneMode = FinetuneMode.TEXT_TO_SPEECH
     """Allows to freeze S2T or T2U part of the model"""
+    
+    float_dtype: torch.dtype = torch.float16
+    """Float Dtype"""
 
     max_epochs: int = 10
     """ Maximum number of trainign epochs"""
@@ -350,7 +353,7 @@ class UnitYFinetune:
         """Run one train step"""
         self.model.train()
         self.optimizer.zero_grad()
-        with torch.autocast(device_type=self.params.device):
+        with torch.autocast(device_type=self.params.device, dtype=self.params.float_dtype):
             tokens, units = self.model(batch)
         loss = self.calc_loss(batch, tokens, units)
         if loss.isnan().any().item():
