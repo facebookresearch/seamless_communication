@@ -350,9 +350,9 @@ class UnitYFinetune:
         """Run one train step"""
         self.model.train()
         self.optimizer.zero_grad()
-        tokens, units = self.model(batch)
         with torch.autocast(device_type=self.params.device):
-            loss = self.calc_loss(batch, tokens, units)
+            tokens, units = self.model(batch)
+        loss = self.calc_loss(batch, tokens, units)
         if loss.isnan().any().item():
             logger.error(batch.speech_to_text)
             raise RuntimeError("Loss is Nan. Terminating.")
