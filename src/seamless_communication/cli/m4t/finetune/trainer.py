@@ -348,20 +348,21 @@ class UnitYFinetune:
 
     def _train_step(self, batch: dataloader.MultimodalSeqsBatch) -> None:
         """Run one train step"""
-        self.model.train()
-        self.optimizer.zero_grad()
-        tokens, units = self.model(batch)
-        loss = self.calc_loss(batch, tokens, units)
-        if loss.isnan().any().item():
-            logger.error(batch.speech_to_text)
-            raise RuntimeError("Loss is Nan. Terminating.")
-        self.grad_scaler.scale(loss).backward()
-        self.grad_scaler.step(self.optimizer)
-        self.grad_scaler.update()
-        self.lr_scheduler.step()
-        assert batch.speech_to_text.src_tokens is not None
-        self.train_loss_hist.update(1, loss.item())
-        self._train_step_log()
+        with torch.autocast(device_type=self.params.device):
+            self.model.train()
+            self.optimizer.zero_grad()
+            tokens, units = self.model(batch)
+            loss = self.calc_loss(batch, tokens, units)
+            if loss.isnan().any().item():
+                logger.error(batch.speech_to_text)
+                raise RuntimeError("Loss is Nan. Terminating.")
+            self.grad_scaler.scale(loss).backward()
+            self.grad_scaler.step(self.optimizer)
+            self.grad_scaler.update()
+            self.lr_scheduler.step()
+            assert batch.speech_to_text.src_tokens is not None
+            self.train_loss_hist.update(1, loss.item())
+            self._train_step_log()
 
     def _save_model(self) -> None:
         logger.info("Saving model")
