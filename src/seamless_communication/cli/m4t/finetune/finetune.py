@@ -161,7 +161,7 @@ def main() -> None:
     if model.text_encoder is not None:
         model.text_encoder = None
     model = model.to(finetune_params.device)
-    logger.info(f"Model {model}")
+    logger.info(f"<{args.model_name}> {model}")
 
     train_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
