@@ -144,7 +144,7 @@ def main() -> None:
     )
     logger.info(f"Finetune params: {finetune_params}")
     model: UnitYModel = load_unity_model(
-        args.model_name, device=torch.device("cpu"), dtype=float_dtype
+        args.model_name, device=torch.device("cpu"), dtype=torch.float32
     )
     assert model.target_vocab_info == text_tokenizer.vocab_info
     # (optional) delete unused params to reduce GPU memory consumption
