@@ -9,6 +9,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
+from tqdm import tqdm
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -324,7 +325,7 @@ class UnitYFinetune:
         loss_hist = LossCollector(device=self.params.device)
         self.model.eval()
         with torch.no_grad():
-            for batch in self.eval_data_loader.get_dataloader():
+            for batch in tqdm(self.eval_data_loader.get_dataloader()):
                 assert batch.speech_to_text.src_tokens is not None
                 with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
                     loss = self.calc_loss(batch, *self.model(batch))
