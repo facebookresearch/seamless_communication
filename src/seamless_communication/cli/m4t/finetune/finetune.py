@@ -136,8 +136,8 @@ def main() -> None:
     finetune_params = trainer.FinetuneParams(
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
-        float_dtype=torch.float16,
         device=torch.device(args.device),
+        float_dtype=torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16,
         train_batch_size=args.batch_size,
         eval_batch_size=args.batch_size,
         patience=args.patience,
