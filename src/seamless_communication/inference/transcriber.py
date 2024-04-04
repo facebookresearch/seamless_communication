@@ -284,7 +284,7 @@ class Transcriber(nn.Module):
         filter_width: int = 3,
         sample_rate: int = 16000,
         chunk_size_sec: int = 10,
-        pause_length: float = 0.5,
+        pause_length_sec: float = 0.5,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -322,17 +322,24 @@ class Transcriber(nn.Module):
         )
 
         if length_seconds > 10:
-            args = Namespace(sample_rate=sample_rate, chunk_size_sec=chunk_size_sec, pause_length=pause_length)
+          
+            waveform_2d = decoded_audio.get('waveform')
+            waveform_1d = decoded_audio.get('waveform').view(-1)
+
+            args = Namespace(sample_rate=sample_rate, chunk_size_sec=chunk_size_sec, pause_length=pause_length_sec)
             segmenter = SileroVADSegmenter(args)
-            segmented_audios = segmenter.segment_long_input(decoded_audio["waveform"])
+            segmented_audios = segmenter.segment_long_input(waveform_1d)
             transcriptions = []
-            for segmented_audio in segmented_audios:
-                src_segment = self.convert_to_fbank({"waveform": segmented_audio, "sample_rate": sample_rate, "format": -1})["fbank"]
+            for start, end in segmented_audios:
+                segment = waveform_1d[start:end]
+                
+                #src_segment = self.convert_to_fbank({"waveform": segment, "sample_rate": sample_rate, "format": -1})["fbank"]
                 length_seconds_segment = (
-                    segmented_audio.size(0) / sample_rate
+                    segment.size(0) / sample_rate
                 )
+                
                 transcription_segment = self.run_inference(
-                    src_segment,
+                    segment,
                     src_lang,
                     length_seconds_segment,
                     filter_width,
@@ -342,6 +349,7 @@ class Transcriber(nn.Module):
 
             return " ".join(transcriptions)
         else:
+
             return self.run_inference(
                 src,
                 src_lang,
