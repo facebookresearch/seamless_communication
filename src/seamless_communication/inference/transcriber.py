@@ -19,6 +19,7 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
+from argparse import Namespace
 
 import torch
 import torch.nn as nn
@@ -29,6 +30,8 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
+from seamless_communication.segment.silero_vad import SileroVADSegmenter
+import wave
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
@@ -280,6 +283,8 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
+        chunk_size_sec: int = 10,
+        pause_length: float = 0.5,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -316,10 +321,33 @@ class Transcriber(nn.Module):
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
         )
 
-        return self.run_inference(
-            src,
-            src_lang,
-            length_seconds,
-            filter_width,
-            sequence_generator_options,
-        )
+        if length_seconds > 10:
+            args = Namespace(sample_rate=sample_rate, chunk_size_sec=chunk_size_sec, pause_length=pause_length)
+            segmenter = SileroVADSegmenter(args)
+            segmented_audios = segmenter.segment_long_input(decoded_audio["waveform"])
+            transcriptions = []
+            for segmented_audio in segmented_audios:
+                src_segment = self.convert_to_fbank({"waveform": segmented_audio, "sample_rate": sample_rate, "format": -1})["fbank"]
+                length_seconds_segment = (
+                    segmented_audio.size(0) / sample_rate
+                )
+                transcription_segment = self.run_inference(
+                    src_segment,
+                    src_lang,
+                    length_seconds_segment,
+                    filter_width,
+                    sequence_generator_options,
+                )
+                transcriptions.append(transcription_segment)
+
+            return " ".join(transcriptions)
+        else:
+            return self.run_inference(
+                src,
+                src_lang,
+                length_seconds,
+                filter_width,
+                sequence_generator_options,
+            )
+
+   
