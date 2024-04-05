@@ -283,7 +283,7 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
-        chunk_size_sec: int = 10,
+        chunk_size_sec: int = 20,
         pause_length_sec: float = 0.5,
         **sequence_generator_options: Dict,
     ) -> Transcription:
@@ -298,6 +298,12 @@ class Transcriber(nn.Module):
             Sample rate of the audio Tensor.
         :param filter_width:
             Window size to pad weights tensor.
+        :param chunk_size_sec:
+            Length of audio chunks in seconds.
+            For segmenting audio.
+        :param pause_length_sec:
+            Length of pause between audio chunks in seconds.
+            For segmenting audio.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
 
@@ -316,30 +322,29 @@ class Transcriber(nn.Module):
             }
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
-        format = decoded_audio.get("format")
-        sample_rate = decoded_audio.get('sample_rate')
 
         length_seconds = (
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
-        ) 
+        )
 
-        if length_seconds > 10:
-          
-            waveform_2d = decoded_audio.get('waveform')
-            waveform_1d = decoded_audio.get('waveform').view(-1)
-            args = Namespace(sample_rate=int(sample_rate), chunk_size_sec=chunk_size_sec, pause_length=pause_length_sec)
+        if length_seconds > chunk_size_sec:
+
+            waveform_2d = decoded_audio.get("waveform")
+            waveform_1d = decoded_audio.get("waveform").view(-1)
+            args = Namespace(
+                sample_rate=int(sample_rate),
+                chunk_size_sec=chunk_size_sec,
+                pause_length=pause_length_sec,
+            )
             segmenter = SileroVADSegmenter(args)
             segmented_audios = segmenter.segment_long_input(waveform_1d)
             transcriptions = []
             for start, end in segmented_audios:
                 segment = waveform_2d[start:end, :]
-
-                src_segment = self.convert_to_fbank({"waveform": segment, "sample_rate": sample_rate, "format": format})["fbank"]
-                
-                length_seconds_segment = (
-                    segment.size(0) / sample_rate
-                )
-                
+                src_segment = self.convert_to_fbank(
+                    {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
+                     "format": decoded_audio.get("format")})["fbank"]
+                length_seconds_segment = segment.size(0) / sample_rate
                 transcription_segment = self.run_inference(
                     src_segment,
                     src_lang,
@@ -347,11 +352,11 @@ class Transcriber(nn.Module):
                     filter_width,
                     sequence_generator_options,
                 )
-                transcriptions.append(transcription_segment)
-                
-            return " ".join(transcriptions) #fix this
+                transcriptions.append(str(transcription_segment))
+
+            return " ".join(transcriptions)
         else:
-            
+
             return self.run_inference(
                 src,
                 src_lang,
@@ -359,5 +364,3 @@ class Transcriber(nn.Module):
                 filter_width,
                 sequence_generator_options,
             )
-
-   
