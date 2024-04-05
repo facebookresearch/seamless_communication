@@ -38,8 +38,6 @@ class SileroVADSegmenter:  # type: ignore
         self.sample_rate = getattr(args, 'sample_rate', 16000)
         self.chunk_size_sec = getattr(args, 'chunk_size_sec', 10)
         self.pause_length = getattr(args, 'pause_length', 0.5)
-        #self.model.to("cuda")
-
 
     def segment_long_input(self, audio) -> None:
         """
