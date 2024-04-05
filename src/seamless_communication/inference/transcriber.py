@@ -316,40 +316,42 @@ class Transcriber(nn.Module):
             }
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
+        format = decoded_audio.get("format")
+        sample_rate = decoded_audio.get('sample_rate')
 
         length_seconds = (
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
-        )
+        ) 
 
         if length_seconds > 10:
           
             waveform_2d = decoded_audio.get('waveform')
             waveform_1d = decoded_audio.get('waveform').view(-1)
-
-            args = Namespace(sample_rate=sample_rate, chunk_size_sec=chunk_size_sec, pause_length=pause_length_sec)
+            args = Namespace(sample_rate=int(sample_rate), chunk_size_sec=chunk_size_sec, pause_length=pause_length_sec)
             segmenter = SileroVADSegmenter(args)
             segmented_audios = segmenter.segment_long_input(waveform_1d)
             transcriptions = []
             for start, end in segmented_audios:
-                segment = waveform_1d[start:end]
+                segment = waveform_2d[start:end, :]
+
+                src_segment = self.convert_to_fbank({"waveform": segment, "sample_rate": sample_rate, "format": format})["fbank"]
                 
-                #src_segment = self.convert_to_fbank({"waveform": segment, "sample_rate": sample_rate, "format": -1})["fbank"]
                 length_seconds_segment = (
                     segment.size(0) / sample_rate
                 )
                 
                 transcription_segment = self.run_inference(
-                    segment,
+                    src_segment,
                     src_lang,
                     length_seconds_segment,
                     filter_width,
                     sequence_generator_options,
                 )
                 transcriptions.append(transcription_segment)
-
-            return " ".join(transcriptions)
+                
+            return " ".join(transcriptions) #fix this
         else:
-
+            
             return self.run_inference(
                 src,
                 src_lang,
