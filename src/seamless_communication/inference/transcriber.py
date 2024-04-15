@@ -331,12 +331,11 @@ class Transcriber(nn.Module):
 
             waveform_2d = decoded_audio.get("waveform")
             waveform_1d = decoded_audio.get("waveform").view(-1)
-            args = Namespace(
-                sample_rate=int(sample_rate),
-                chunk_size_sec=chunk_size_sec,
-                pause_length=pause_length_sec,
-            )
-            segmenter = SileroVADSegmenter(args)
+            segmenter = SileroVADSegmenter(
+              sample_rate=sample_rate,
+              chunk_size_sec=chunk_size_sec,
+              pause_length=pause_length_sec,
+              )
             segmented_audios = segmenter.segment_long_input(waveform_1d)
             transcriptions = []
             for start, end in segmented_audios:
