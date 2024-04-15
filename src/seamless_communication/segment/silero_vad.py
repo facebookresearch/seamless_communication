@@ -15,27 +15,20 @@ import warnings
 SAMPLING_RATE = 16000
 
 class SileroVADSegmenter:  # type: ignore
-    def __init__(self, args: Namespace) -> None:
-        self.model, utils = torch.hub.load(
+    def __init__(self, sample_rate = SAMPLING_RATE, chunk_size_sec = 10, pause_length = .5) -> None:
+        self.model, _ = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
             model="silero_vad",
             force_reload=False,
             onnx=False,
         )
-
-        (self.get_speech_timestamps,
-        self.save_audio,
-        self.read_audio,
-        self.VADIterator,
-        self.collect_chunks) = utils
-
-        self.sample_rate = getattr(args, "sample_rate", SAMPLING_RATE)
-        self.chunk_size_sec = getattr(args, "chunk_size_sec", 10)
-        self.pause_length = getattr(args, "pause_length", 0.5)
+        self.sample_rate = sample_rate
+        self.chunk_size_sec = chunk_size_sec
+        self.pause_length = pause_length
 
     def segment_long_input(self, audio: torch.Tensor) -> None:
         """
-        Split long input into chunks
+        Split long input into chunks using speech timestamps.
         """
         max_segment_length_samples = self.chunk_size_sec * self.sample_rate
         pause_length_samples = self.pause_length * self.sample_rate
@@ -76,6 +69,9 @@ class SileroVADSegmenter:  # type: ignore
         min_speech_duration_ms: int = 250,
         window_size_samples: int = 1536,
     ) -> tp.List[tp.Tuple[int, int]]:
+        """
+        Get speech timestamps based on the speech probabilities.
+        """
         probs, _ = self.get_speech_probs(
             audio=audio,
             model=model,
@@ -98,23 +94,19 @@ class SileroVADSegmenter:  # type: ignore
 
         return speech_timestamps
 
-    
     def pdac(
             self,
             probs: np.array, 
             max_segment_length: float, 
             min_segment_length: float, 
             threshold: float,
-            window_size_samples: float
+            window_size_samples: float,
         ) -> tp.List[Segment]:
         """
-        len(probs) may not work for sgm duration because it is for each window, not sample
-        
+        Recursively splits segments based on speech threshold and duration. 
         """
- 
         segments = []
         sgm = Segment(0, len(probs)*window_size_samples, probs)
-        sgm = self.trim(sgm, threshold)
 
         def recursive_split(sgm):
             if sgm.duration < max_segment_length:
@@ -124,7 +116,7 @@ class SileroVADSegmenter:  # type: ignore
                 sorted_indices = np.argsort(sgm.probs)
                 while j < len(sorted_indices):
                     split_idx = sorted_indices[j]
-                    sgm_a, sgm_b = self.split_and_trim(sgm, split_idx, threshold)
+                    sgm_a, sgm_b = self.split(sgm, split_idx, window_size_samples)
                     if (
                         sgm_a.duration > min_segment_length
                         and sgm_b.duration > min_segment_length
@@ -138,41 +130,24 @@ class SileroVADSegmenter:  # type: ignore
                         recursive_split(sgm_a)
                     if sgm_b.duration > min_segment_length:
                         recursive_split(sgm_b)
-
         recursive_split(sgm)
+        
         return segments
-    
-    def trim(
-            self,
-            sgm: Segment, 
-            threshold: float
-        ) -> Segment:
-        included_indices = np.where(sgm.probs >= threshold)[0]
 
-        if not len(included_indices):
-            return Segment(sgm.start, sgm.start, np.empty([0]))
-
-        i = included_indices[0]
-        j = included_indices[-1] + 1
-
-        sgm = Segment(sgm.start + i, sgm.start + j, sgm.probs[i:j])
-
-        return sgm
-
-    def split_and_trim(
+    def split(
             self,
             sgm: Segment, 
             split_idx: int, 
-            threshold: float
+            window_size_samples: float
         ) -> tp.Tuple[Segment, Segment]:
+        """
+        Splits segment into two segments based on the split index.
+        """
         probs_a = sgm.probs[:split_idx]
-        sgm_a = Segment(sgm.start, sgm.start + len(probs_a), probs_a)
+        sgm_a = Segment(sgm.start, sgm.start + (len(probs_a)*window_size_samples), probs_a)
 
         probs_b = sgm.probs[split_idx + 1 :]
         sgm_b = Segment(sgm_a.end + 1, sgm.end, probs_b)
-
-        sgm_a = self.trim(sgm_a, threshold)
-        sgm_b = self.trim(sgm_b, threshold)
 
         return sgm_a, sgm_b
     
@@ -183,7 +158,9 @@ class SileroVADSegmenter:  # type: ignore
         sampling_rate: int = SAMPLING_RATE,
         window_size_samples: int = 1536,
     ) -> tp.Tuple[np.ndarray, int]:
-        """Get a list of speech probabilities computed with sliding window over the audio using the model."""
+        """
+        Get a list of speech probabilities computed with sliding window over the audio using the model.
+        """
         if not torch.is_tensor(audio):
             try:
                 audio = torch.Tensor(audio)
@@ -209,11 +186,13 @@ class SileroVADSegmenter:  # type: ignore
 
         if sampling_rate == 8000 and window_size_samples > 768:
             warnings.warn(
-                "window_size_samples is too big for 8000 sampling_rate! Better set window_size_samples to 256, 512 or 768 for 8000 sample rate!"
+                """window_size_samples is too big for 8000 sampling_rate! Better set window_size_samples to 
+                256, 512 or 768 for 8000 sample rate!"""
             )
         if window_size_samples not in [256, 512, 768, 1024, 1536]:
             warnings.warn(
-                "Unusual window_size_samples! Supported window_size_samples:\n - [512, 1024, 1536] for 16000 sampling_rate\n - [256, 512, 768] for 8000 sampling_rate"
+                """Unusual window_size_samples! Supported window_size_samples:\n - [512, 1024, 1536] for 
+                16000 sampling_rate\n - [256, 512, 768] for 8000 sampling_rate"""
             )
 
         model.reset_states()
@@ -241,5 +220,5 @@ class Segment:
         self.start = start
         self.end = end
         self.probs = probs
-        self.duration = end - start
+        self.duration = float(end - start)
     
