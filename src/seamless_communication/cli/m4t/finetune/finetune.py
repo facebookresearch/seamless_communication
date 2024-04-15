@@ -130,10 +130,16 @@ def init_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = init_parser().parse_args()
+    
     dist_utils.init_distributed([logger, trainer.logger])
+    device = torch.device("cuda")
+    float_dtype = torch.float16
+    
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
+    
     finetune_params = trainer.FinetuneParams(
+        model_name=args.model_name,
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
         device=torch.device(args.device),
@@ -151,15 +157,19 @@ def main() -> None:
     model: UnitYModel = load_unity_model(
         args.model_name, device=torch.device("cpu"), dtype=torch.float32
     )
+    
     assert model.target_vocab_info == text_tokenizer.vocab_info
     # (optional) delete unused params to reduce GPU memory consumption
+    
     if (
         finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT
         and model.t2u_model is not None
     ):
         model.t2u_model = None
+    
     if model.text_encoder is not None:
         model.text_encoder = None
+    
     model = model.to(finetune_params.device)
     logger.info(f"<{args.model_name}> {model}")
 

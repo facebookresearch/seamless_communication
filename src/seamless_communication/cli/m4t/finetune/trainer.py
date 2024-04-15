@@ -40,6 +40,9 @@ class FinetuneMode(Enum):
 
 @dataclass
 class FinetuneParams:
+    model_name: str
+    """Model name of model being finetuned."""
+    
     save_model_path: Path
     """Path were to save finetuned model."""
 
@@ -372,11 +375,13 @@ class UnitYFinetune:
     def _save_model(self) -> None:
         logger.info("Saving model")
         if dist_utils.is_main_process():
-            state_dict = {
-                key.replace("module.model.", ""): value
-                for key, value in self.model.state_dict().items()
-            }
-            torch.save(state_dict, self.params.save_model_path)
+            torch.save({
+                "model_name": self.params.model_name,
+                "model": {
+                    key.replace("module.model.", ""): value
+                    for key, value in self.model.state_dict().items()
+                }
+            }, self.params.save_model_path)
         if dist_utils.is_dist_initialized():
             dist.barrier()
 

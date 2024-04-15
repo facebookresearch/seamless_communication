@@ -38,7 +38,6 @@ from seamless_communication.inference import (
     SequenceGeneratorOptions,
     Translator,
 )
-from seamless_communication.models.unity import load_unity_text_tokenizer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -247,11 +246,10 @@ def adjust_output_for_corrupted_inputs(
 
 def run_eval(
     translator: Translator,
-    text_tokenizer: TextTokenizer,
     ctx: EvalContext,
     whisper_model_name: str,
 ) -> None:
-    pipeline = build_data_pipeline(ctx, text_tokenizer)
+    pipeline = build_data_pipeline(ctx, translator.text_tokenizer)
 
     total_steps = count_lines(ctx.data_file) - 1
     progress_bar = tqdm(total=total_steps)
@@ -388,7 +386,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         help="Whisper model to be used for ASR-BLEU scoring",
         default="large",
     )
-    args, unknown = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     default_args = vars(args)
     default_args.update(optional_args) if optional_args else default_args
     args = Namespace(**default_args)
@@ -420,15 +418,12 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         device = torch.device("cpu")
         dtype = torch.float32
 
-    text_tokenizer = load_unity_text_tokenizer(args.model_name)
-
     # TODO: Avoid loading the T2U model, vocoder when the output
     # modality is text.
     translator = Translator(
         args.model_name,
         args.vocoder_name,
         device,
-        text_tokenizer=text_tokenizer,
         dtype=dtype,
         input_modality=input_modality,
         output_modality=output_modality,
@@ -465,7 +460,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     # fmt: on
     logger.info(f"Running inference on {device=} with {dtype=}, {ctx.batch_size=}.")
 
-    run_eval(translator, text_tokenizer, ctx, args.whisper_model_name)
+    run_eval(translator, ctx, args.whisper_model_name)
 
 
 if __name__ == "__main__":
