@@ -9,6 +9,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
+from tqdm import tqdm
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -44,6 +45,9 @@ class FinetuneParams:
 
     finetune_mode: FinetuneMode = FinetuneMode.TEXT_TO_SPEECH
     """Allows to freeze S2T or T2U part of the model"""
+    
+    float_dtype: torch.dtype = torch.float16
+    """Float Dtype"""
 
     max_epochs: int = 10
     """ Maximum number of trainign epochs"""
@@ -260,7 +264,7 @@ class UnitYFinetune:
             eps=1e-08,
             maximize=False,
             weight_decay=0.0,
-            fused=True,
+            fused=(self.params.device.type == "cuda"),
         )
         self.grad_scaler = torch.cuda.amp.GradScaler()  # type: ignore
         self.lr_scheduler = MyleLR(
@@ -321,9 +325,10 @@ class UnitYFinetune:
         loss_hist = LossCollector(device=self.params.device)
         self.model.eval()
         with torch.no_grad():
-            for batch in self.eval_data_loader.get_dataloader():
+            for batch in tqdm(self.eval_data_loader.get_dataloader()):
                 assert batch.speech_to_text.src_tokens is not None
-                loss = self.calc_loss(batch, *self.model(batch))
+                with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
+                    loss = self.calc_loss(batch, *self.model(batch))
                 if loss.isnan():
                     logger.warning("Eval loss value is NaN, setting to inf")
                     loss_val = float("Inf")
@@ -350,7 +355,7 @@ class UnitYFinetune:
         """Run one train step"""
         self.model.train()
         self.optimizer.zero_grad()
-        with torch.autocast(device_type=self.params.device):
+        with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
             tokens, units = self.model(batch)
         loss = self.calc_loss(batch, tokens, units)
         if loss.isnan().any().item():
