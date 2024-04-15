@@ -64,7 +64,6 @@ class SileroVADSegmenter:  # type: ignore
         self,
         audio: torch.Tensor,
         model,
-        threshold: float = 0.5,
         sampling_rate: int = SAMPLING_RATE,
         min_speech_duration_ms: int = 250,
         window_size_samples: int = 1536,
@@ -86,7 +85,6 @@ class SileroVADSegmenter:  # type: ignore
             probs=probs,
             max_segment_length=max_segment_length_samples,
             min_segment_length=min_segment_length_samples,
-            threshold=threshold,
             window_size_samples=window_size_samples,
         )
 
@@ -99,7 +97,6 @@ class SileroVADSegmenter:  # type: ignore
             probs: np.array, 
             max_segment_length: float, 
             min_segment_length: float, 
-            threshold: float,
             window_size_samples: float,
         ) -> tp.List[Segment]:
         """
