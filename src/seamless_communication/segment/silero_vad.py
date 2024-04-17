@@ -65,7 +65,7 @@ class SileroVADSegmenter:  # type: ignore
         audio: torch.Tensor,
         model,
         sampling_rate: int = SAMPLING_RATE,
-        min_speech_duration_ms: int = 250,
+        min_speech_duration_ms: int = 500,
         window_size_samples: int = 1536,
     ) -> tp.List[tp.Tuple[int, int]]:
         """
