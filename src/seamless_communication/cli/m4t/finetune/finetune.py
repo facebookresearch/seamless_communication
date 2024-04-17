@@ -132,8 +132,7 @@ def main() -> None:
     args = init_parser().parse_args()
     
     dist_utils.init_distributed([logger, trainer.logger])
-    device = torch.device("cuda")
-    float_dtype = torch.float16
+    float_dtype = torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16
     
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
@@ -143,7 +142,7 @@ def main() -> None:
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
         device=torch.device(args.device),
-        float_dtype=torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16,
+        float_dtype=float_dtype,
         train_batch_size=args.batch_size,
         eval_batch_size=args.batch_size,
         patience=args.patience,
@@ -159,7 +158,7 @@ def main() -> None:
     )
     
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    # (optional) delete unused params to reduce GPU memory consumption
+    # TODO: delete unused params to reduce GPU memory consumption
     
     if (
         finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT

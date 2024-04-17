@@ -304,6 +304,10 @@ class UnitYFinetune:
             device_ids=[dist_utils.get_local_rank()],
             find_unused_parameters=find_unused,
         )
+        
+    def _freeze_module(self, module: torch.nn.Module) -> None:
+        for param in module.parameters():
+            param.requires_grad = False
 
     def _update_eval_stats(self, eval_loss: float) -> None:
         self.is_best_state = (
@@ -333,12 +337,10 @@ class UnitYFinetune:
                 with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
                     loss = self.calc_loss(batch, *self.model(batch))
                 if loss.isnan():
-                    logger.warning("Eval loss value is NaN, setting to inf")
-                    loss_val = float("Inf")
-                else:
-                    loss_val = loss.item()
+                    logger.warning(".. batch loss value is NaN, skipping")
+                    continue
                 del batch  # force memory release
-                loss_hist.update(1, loss_val)
+                loss_hist.update(1, loss.item())
         eval_loss = loss_hist.reduce()
         self._update_eval_stats(eval_loss)
 
@@ -378,7 +380,7 @@ class UnitYFinetune:
             torch.save({
                 "model_name": self.params.model_name,
                 "model": {
-                    key.replace("module.model.", ""): value
+                    key.replace("module.model.model.", ""): value
                     for key, value in self.model.state_dict().items()
                 }
             }, self.params.save_model_path)

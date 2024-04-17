@@ -292,15 +292,20 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                (text_output, speech_output,) = translator.predict(
-                    src,
-                    ctx.task,
-                    ctx.target_lang,
-                    src_lang=ctx.source_lang,
-                    text_generation_opts=ctx.text_generation_opts,
-                    unit_generation_opts=ctx.unit_generation_opts,
-                    unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-                )
+                # HACK:: Fix this bad handling
+                # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
+                try:
+                    (text_output, speech_output,) = translator.predict(
+                        src,
+                        ctx.task,
+                        ctx.target_lang,
+                        src_lang=ctx.source_lang,
+                        text_generation_opts=ctx.text_generation_opts,
+                        unit_generation_opts=ctx.unit_generation_opts,
+                        unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+                    )
+                except RuntimeError:
+                    continue
             else:
                 text_output = []
                 if ctx.output_modality == Modality.SPEECH:
@@ -360,8 +365,20 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         help="Data file to be evaluated, either TSV file or manifest JSON file."
         "Format of the manifest JSON file should be that as produced by `m4t_prepare_dataset`"
     )
+    parser.add_argument(
+        "--load_checkpoint", 
+        type=str,
+        help="Load a local Checkpoint",
+        default=None
+    )
 
     parser = add_inference_arguments(parser)
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Device",
+        default="cuda" if torch.cuda.is_available() else "cpu",
+    )
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -410,13 +427,9 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         raise ValueError(
             f"Invalid audio_root_dir: {args.audio_root_dir} for speech input."
         )
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        dtype = torch.float16
-    else:
-        device = torch.device("cpu")
-        dtype = torch.float32
+    
+    device = torch.device(args.device)
+    dtype = torch.float16 if device.type == "cuda" else torch.float32
 
     # TODO: Avoid loading the T2U model, vocoder when the output
     # modality is text.
@@ -428,6 +441,21 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         input_modality=input_modality,
         output_modality=output_modality,
     )
+    
+    # HACK: Get a quick model load
+    if args.load_checkpoint:
+        saved_model = torch.load(args.load_checkpoint, map_location=device)
+        edit_saved_model = dict()
+        for k, v in saved_model.items():
+            edit_saved_model[k.replace("model.", "")] = v
+        translator.model.load_state_dict(edit_saved_model)
+        
+        # if "model" not in saved_model:
+        #     saved_model
+        # assert "model" in saved_model, "Incompatible File"
+        # assert "model_type" in saved_model, "Incompatible File"
+        # assert saved_model["model_type"] == args.model_name, "Incompatible File"
+        # translator.model.load_state_dict(saved_model["model"])
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
 
