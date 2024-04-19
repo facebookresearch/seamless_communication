@@ -133,11 +133,13 @@ def main() -> None:
     dist_utils.init_distributed([logger, trainer.logger])
     text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
+    float_dtype = torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16
+    logger.info(f"Training precision: {float_dtype}")
     finetune_params = trainer.FinetuneParams(
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
         device=torch.device(args.device),
-        float_dtype=torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16,
+        float_dtype=float_dtype,
         train_batch_size=args.batch_size,
         eval_batch_size=args.batch_size,
         patience=args.patience,
