@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 from tqdm import tqdm
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import torch
 import torch.distributed as dist
@@ -328,11 +328,11 @@ class UnitYFinetune:
         """Calc avg loss on eval dataset and update evaluation stats"""
         if self.eval_data_loader is None:
             return
-        logger.info("Run evaluation")
+        logger.info(f"Evaluation Step {self.update_idx}")
         loss_hist = LossCollector(device=self.params.device)
         self.model.eval()
         with torch.no_grad():
-            for batch in tqdm(self.eval_data_loader.get_dataloader()):
+            for batch in tqdm(self.eval_data_loader.get_dataloader(), desc="Evaluation Step"):
                 assert batch.speech_to_text.src_tokens is not None
                 with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
                     loss = self.calc_loss(batch, *self.model(batch))
@@ -356,23 +356,27 @@ class UnitYFinetune:
                 f"last lr={self.lr_scheduler.get_last_lr()[0]:.2E}"
             )
 
-    def _train_step(self, batch: dataloader.MultimodalSeqsBatch) -> None:
+    def _train_forward(self, batch: List[dataloader.MultimodalSeqsBatch]) -> None:
         """Run one train step"""
         self.model.train()
         self.optimizer.zero_grad()
         with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
             tokens, units = self.model(batch)
+        
         loss = self.calc_loss(batch, tokens, units)
         if loss.isnan().any().item():
             logger.error(batch.speech_to_text)
-            raise RuntimeError("Loss is Nan. Terminating.")
+            raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
+        
         self.grad_scaler.scale(loss).backward()
         self.grad_scaler.step(self.optimizer)
         self.grad_scaler.update()
         self.lr_scheduler.step()
+        
         assert batch.speech_to_text.src_tokens is not None
         self.train_loss_hist.update(1, loss.item())
         self._train_step_log()
+        self.update_idx += 1
 
     def _save_model(self) -> None:
         logger.info("Saving model")
@@ -388,23 +392,33 @@ class UnitYFinetune:
             dist.barrier()
 
     def run(self) -> None:
-        logger.info("Start finetuning")
+        logger.info("Start Finetuning")
         self._reset_stats()
         self._eval_model()
-        batch_itr = self.train_data_loader.get_dataloader()
+        
+        train_dataloader = self.train_data_loader.get_dataloader()
+        
         while self.epoch_idx < self.params.max_epochs and self.patience_left:
-            for train_batch in batch_itr:
-                self._train_step(batch=train_batch)
-                if self.update_idx and self.update_idx % self.params.eval_steps == 0:
-                    self._eval_model()
-                    if self.is_best_state:
-                        self._save_model()
-                    elif not self.patience_left:
-                        no_improve_steps = self.params.eval_steps * self.params.patience
-                        logger.info(
-                            "Early termination, as eval loss did not improve "
-                            f"over last {no_improve_steps} updates"
-                        )
-                        break
-                self.update_idx += 1
+            for train_batch in tqdm(train_dataloader, desc="Training Steps"):
+                # Run batch through train step
+                self._train_forward(train_batch)
+                
+                # Perform eval if its time to eval
+                if not self.update_idx or self.update_idx % self.params.eval_steps != 0:
+                    continue
+                
+                torch.cuda.empty_cache()
+                self._eval_model()
+                
+                # Save the current model if its the best we've ever had
+                if self.is_best_state:
+                    self._save_model()
+                elif not self.patience_left:
+                    no_improve_steps = self.params.eval_steps * self.params.patience
+                    logger.info(
+                        "Early termination, as eval loss did not improve "
+                        f"over last {no_improve_steps} updates"
+                    )
+                    break
+                
             self.epoch_idx += 1

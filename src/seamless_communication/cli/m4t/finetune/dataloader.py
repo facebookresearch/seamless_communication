@@ -191,18 +191,23 @@ class UnitYDataLoader:
         return torch.stack([tensor for tensor in padded_tensors], dim=0)
 
     def _is_long_src_audio(self, sample: LangPairSample) -> bool:
-        wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
-        length_s: float = max(wav.shape) / sample_rate
-        return length_s > self.batching_config.max_audio_length_sec
+        try:
+            wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
+            length_s: float = max(wav.shape) / sample_rate
+            return length_s > self.batching_config.max_audio_length_sec
+        except:
+            return True
 
     def _prepare_batch(self, raw_samples: List[Dict[str, Any]]) -> MultimodalSeqsBatch:
         samples = [LangPairSample.from_json(sample) for sample in raw_samples]
         # input speech
+        
         #  - filter long audio samples
         filtered_samples = [sample for sample in samples if not self._is_long_src_audio(sample)]
         samples = filtered_samples if filtered_samples else [samples[0]]  # keep at least one sample
         src_tokens_list = [self._get_source_fbank(sample) for sample in samples]
-        #  - filter NaNs in fbanks
+        
+        #  - filter NaNs in fbanks´´
         with_nans = [fbank.isnan().any().item() for fbank in src_tokens_list]
         samples = [sample for sample, skip in zip(samples, with_nans) if not skip]
         assert len(samples) > 0
@@ -215,6 +220,7 @@ class UnitYDataLoader:
         src_lengths = torch.LongTensor(
             [src_tokens.shape[0] for src_tokens in src_tokens_list]
         )
+        
         # output text
         text_tokens_list = [
             self._get_tokenized_target_text(sample) for sample in samples
