@@ -190,6 +190,12 @@ def init_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument(
+        "--name",
+        type=str,
+        required=True,
+        help="HuggingFace name of the dataset to prepare.",
+    )
+    parser.add_argument(
         "--source_lang",
         type=str,
         required=True,
