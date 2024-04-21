@@ -6,6 +6,7 @@
 
 
 import logging
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -324,23 +325,26 @@ class UnitYFinetune:
             f"patience_steps_left={self.patience_left}"
         )
 
-    def _eval_model(self) -> None:
+    @torch.no_grad()
+    def _eval_model(self, n_batches: int = 250) -> None:
         """Calc avg loss on eval dataset and update evaluation stats"""
         if self.eval_data_loader is None:
             return
-        logger.info(f"Evaluation Step {self.update_idx}")
+        logger.info(f"Evaluation Step {self.update_idx // self.params.eval_steps}...")
         loss_hist = LossCollector(device=self.params.device)
         self.model.eval()
-        with torch.no_grad():
-            for batch in tqdm(self.eval_data_loader.get_dataloader(), desc="Evaluation Step"):
-                assert batch.speech_to_text.src_tokens is not None
-                with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
-                    loss = self.calc_loss(batch, *self.model(batch))
-                if loss.isnan():
-                    logger.warning(".. batch loss value is NaN, skipping")
-                    continue
-                del batch  # force memory release
-                loss_hist.update(1, loss.item())
+        for batch in self.eval_data_loader.get_dataloader():
+            if n_batches == 0:
+                break
+            assert batch.speech_to_text.src_tokens is not None
+            with torch.autocast(device_type=self.params.device.type, dtype=self.params.float_dtype):
+                loss = self.calc_loss(batch, *self.model(batch))
+            if loss.isnan():
+                logger.warning("Eval batch loss value is NaN, skipping")
+                continue
+            del batch  # force memory release
+            loss_hist.update(1, loss.item())
+            n_batches -= 1
         eval_loss = loss_hist.reduce()
         self._update_eval_stats(eval_loss)
 
@@ -407,8 +411,23 @@ class UnitYFinetune:
                 if not self.update_idx or self.update_idx % self.params.eval_steps != 0:
                     continue
                 
+                # Clear GPU memory for eval and re-init
+                del train_batch
+                del train_dataloader
                 torch.cuda.empty_cache()
-                self._eval_model()
+                
+                try:
+                    self._eval_model(n_batches=100)
+                    train_dataloader = self.train_data_loader.get_dataloader()
+                except torch.cuda.OutOfMemoryError:
+                    logger.info("[OOM] CUDA out of memory. Waiting 10 seconds...")
+                    time.sleep(10)    
+                    try:
+                        self._eval_model(n_batches=100)
+                        train_dataloader = self.train_data_loader.get_dataloader()
+                    except torch.cuda.OutOfMemoryError:
+                        continue
+                    
                 
                 # Save the current model if its the best we've ever had
                 if self.is_best_state:
