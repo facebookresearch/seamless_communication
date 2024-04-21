@@ -395,7 +395,7 @@ class UnitYFinetune:
         if dist_utils.is_dist_initialized():
             dist.barrier()
 
-    def run(self) -> None:
+    def run(self, stop_at: Optional[int] = None) -> None:
         logger.info("Start Finetuning")
         self._reset_stats()
         self._eval_model()
@@ -407,28 +407,26 @@ class UnitYFinetune:
                 # Run batch through train step
                 self._train_forward(train_batch)
                 
+                # Stop at some batch index if told to do so
+                if stop_at and stop_at == self.update_idx:
+                    return
+                
                 # Perform eval if its time to eval
                 if not self.update_idx or self.update_idx % self.params.eval_steps != 0:
                     continue
                 
                 # Clear GPU memory for eval and re-init
-                del train_batch
-                del train_dataloader
                 torch.cuda.empty_cache()
-                
                 try:
                     self._eval_model(n_batches=100)
-                    train_dataloader = self.train_data_loader.get_dataloader()
                 except torch.cuda.OutOfMemoryError:
-                    logger.info("[OOM] CUDA out of memory. Waiting 10 seconds...")
+                    logger.info("[OOM] CUDA out of memory. Waiting 10 seconds and trying again...")
                     time.sleep(10)    
                     try:
                         self._eval_model(n_batches=100)
-                        train_dataloader = self.train_data_loader.get_dataloader()
                     except torch.cuda.OutOfMemoryError:
                         continue
                     
-                
                 # Save the current model if its the best we've ever had
                 if self.is_best_state:
                     self._save_model()

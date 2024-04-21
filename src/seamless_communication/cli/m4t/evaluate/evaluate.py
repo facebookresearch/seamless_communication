@@ -248,11 +248,12 @@ def run_eval(
     translator: Translator,
     ctx: EvalContext,
     whisper_model_name: str,
+    n_samples = None
 ) -> None:
     pipeline = build_data_pipeline(ctx, translator.text_tokenizer)
 
     total_steps = count_lines(ctx.data_file) - 1
-    progress_bar = tqdm(total=total_steps)
+    progress_bar = tqdm(total=n_samples or total_steps)
 
     output_path = ctx.output_path / ctx.data_file.stem
     output_path.mkdir(parents=True, exist_ok=True)
@@ -341,6 +342,10 @@ def run_eval(
 
                 sample_id += 1
                 progress_bar.update(1)
+                if n_samples and progress_bar.n == n_samples:
+                    break
+            if n_samples and progress_bar.n == n_samples:
+                break
 
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")
@@ -403,6 +408,12 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         help="Whisper model to be used for ASR-BLEU scoring",
         default="large",
     )
+    parser.add_argument(
+        "--n_samples",
+        type=int,
+        help="Number of Samples to run eval on. All if None.",
+        default=None,
+    )
     args, _ = parser.parse_known_args()
     default_args = vars(args)
     default_args.update(optional_args) if optional_args else default_args
@@ -444,18 +455,9 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     
     # HACK: Get a quick model load
     if args.load_checkpoint:
-        saved_model = torch.load(args.load_checkpoint, map_location=device)
-        edit_saved_model = dict()
-        for k, v in saved_model.items():
-            edit_saved_model[k.replace("model.", "")] = v
-        translator.model.load_state_dict(edit_saved_model)
-        
-        # if "model" not in saved_model:
-        #     saved_model
-        # assert "model" in saved_model, "Incompatible File"
-        # assert "model_type" in saved_model, "Incompatible File"
-        # assert saved_model["model_type"] == args.model_name, "Incompatible File"
-        # translator.model.load_state_dict(saved_model["model"])
+        saved_model = torch.load(args.load_checkpoint, map_location=device)["model"]
+        saved_model = { k.replace("model.", ""): v for k, v in saved_model.items() }
+        translator.model.load_state_dict(saved_model)
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
 
@@ -488,7 +490,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     # fmt: on
     logger.info(f"Running inference on {device=} with {dtype=}, {ctx.batch_size=}.")
 
-    run_eval(translator, ctx, args.whisper_model_name)
+    run_eval(translator, ctx, args.whisper_model_name, n_samples=args.n_samples)
 
 
 if __name__ == "__main__":

@@ -85,6 +85,12 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Max number of training epochs"),
     )
     parser.add_argument(
+        "--max_batches",
+        type=int,
+        default=None,
+        help=("Max number of training batches"),
+    )
+    parser.add_argument(
         "--learning_rate",
         type=float,
         default=1e-7,
@@ -191,7 +197,7 @@ def main() -> None:
             batch_size=finetune_params.eval_batch_size,
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
-            max_audio_length_sec=100.0,
+            max_audio_length_sec=75.0,
             float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.eval_dataset,
@@ -200,9 +206,10 @@ def main() -> None:
         model=model,
         params=finetune_params,
         train_data_loader=train_dataloader,
-        eval_data_loader=eval_dataloader,
+        eval_data_loader=eval_dataloader
     )
-    finetune.run()
+    
+    finetune.run(stop_at=args.max_batches)
 
 
 if __name__ == "__main__":

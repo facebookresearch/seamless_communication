@@ -191,6 +191,7 @@ class UnitYDataLoader:
         return torch.stack([tensor for tensor in padded_tensors], dim=0)
 
     def _is_long_src_audio(self, sample: LangPairSample) -> bool:
+        # HACK:: causes errored audios to be excluded but this is difficult to follow
         try:
             wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
             length_s: float = max(wav.shape) / sample_rate
