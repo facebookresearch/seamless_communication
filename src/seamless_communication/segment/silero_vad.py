@@ -113,7 +113,11 @@ class SileroVADSegmenter:  # type: ignore
                 sorted_indices = np.argsort(sgm.probs)
                 while j < len(sorted_indices):
                     split_idx = sorted_indices[j]
-                    sgm_a, sgm_b = self.split(sgm, split_idx, window_size_samples)
+                    sgm_a, sgm_b = self.split(
+                      sgm, 
+                      split_idx, 
+                      window_size_samples, 
+                      threshold=.5)
                     if (
                         sgm_a.duration > min_segment_length
                         and sgm_b.duration > min_segment_length
@@ -131,11 +135,32 @@ class SileroVADSegmenter:  # type: ignore
         
         return segments
 
+    def trim(
+            self,
+            sgm: Segment, 
+            threshold: float,
+            window_size_samples: float
+        ) -> Segment:
+        included_indices = np.where(sgm.probs >= threshold)[0]
+        
+        if not len(included_indices):
+            return Segment(sgm.start, sgm.start, np.empty([0]))
+        
+        i = included_indices[0] * window_size_samples
+        j = (included_indices[-1] + 1) * window_size_samples
+
+        sgm = Segment(sgm.start + i, 
+        sgm.start + j, 
+        sgm.probs[included_indices[0]:included_indices[-1]+1])
+
+        return sgm
+
     def split(
             self,
             sgm: Segment, 
             split_idx: int, 
-            window_size_samples: float
+            window_size_samples: float,
+            threshold: float
         ) -> tp.Tuple[Segment, Segment]:
         """
         Splits segment into two segments based on the split index.
@@ -145,6 +170,9 @@ class SileroVADSegmenter:  # type: ignore
 
         probs_b = sgm.probs[split_idx + 1 :]
         sgm_b = Segment(sgm_a.end + 1, sgm.end, probs_b)
+
+        sgm_a = self.trim(sgm_a, threshold, window_size_samples)
+        sgm_b = self.trim(sgm_b, threshold, window_size_samples)
 
         return sgm_a, sgm_b
     
