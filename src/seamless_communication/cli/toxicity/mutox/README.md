@@ -49,6 +49,9 @@ We use multi-modal and multilingual
 al., 2023). For the classifier, we use variable input sizes for the 3
 feedforward layers (1024, 512, and 128).
 
+The predictions of the classifier can be interpreted as logits (i.e. after feeding them to a sigmoid transform they become probabilities). 
+The 0 value can be used as a threshold, as it corresponds to the 50% predicted toxicity probability.
+
 ## Classifier Quick Start
 
 This introduces the MuTox speech toxicity model, this relies on computing the
@@ -72,6 +75,18 @@ You can also check the mutox example notebook in this directory.
 
 The dataset is available in this [tsv file](https://dl.fbaipublicfiles.com/seamless/datasets/mutox.tsv). The dataset is licensed under the MIT license (see MIT_LICENSE
 file at the root of seamless_communication).
+
+The columns of the dataset are:
+- `id`: a string id of the segment;
+- `lang`: 3-letter language code;
+- `partition`: one of `train`, `dev`, or `devtest`;
+- `public_url_segment`: a string formatted as `url:start:end`, where start and end are indicated in milliseconds;
+- `audio_file_transcript`: text transctiption of the segment;
+- `contains_toxicity`,	`toxicity_types`,	`perlocutionary_effects`: annotation results as strings (see the paper for their explanation);
+- `label`: 	an integer label, equal to 1 if `contains_toxicity` equals `Yes` and 0 otherwise;
+- `etox_result`: toxic word (or multiple words, separated by `|`) detected by the Etox matcher;
+- `detoxify_score`: toxicity probabilities predicted by the Detoxify system (float numbers between 0 and 1);
+- `mutox_speech_score`,	`mutox_text_score`, `mutox_zero_shot_speech_score`, `mutox_zero_shot_text_score`: MuTox predictions as float numbers with any value (they can be interpreted as logits, i.e. probabilities before a sigmoid transformation).
 
 ## Citation
 
