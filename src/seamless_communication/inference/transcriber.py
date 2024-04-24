@@ -284,7 +284,7 @@ class Transcriber(nn.Module):
         filter_width: int = 3,
         sample_rate: int = 16000,
         chunk_size_sec: int = 20,
-        pause_length_sec: float = 0.5,
+        pause_length_sec: float = 1,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -310,6 +310,7 @@ class Transcriber(nn.Module):
         :returns:
             - List of Tokens with timestamps.
         """
+        
         if isinstance(audio, str):
             with Path(audio).open("rb") as fb:
                 block = MemoryBlock(fb.read())
@@ -343,6 +344,7 @@ class Transcriber(nn.Module):
                 src_segment = self.convert_to_fbank(
                     {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
                      "format": decoded_audio.get("format")})["fbank"]
+                print(src_segment.device)
                 length_seconds_segment = segment.size(0) / sample_rate
                 transcription_segment = self.run_inference(
                     src_segment,
