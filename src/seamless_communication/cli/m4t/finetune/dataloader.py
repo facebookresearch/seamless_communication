@@ -197,6 +197,7 @@ class UnitYDataLoader:
             length_s: float = max(wav.shape) / sample_rate
             return length_s > self.batching_config.max_audio_length_sec
         except:
+            logger.exception(f"Failed to load sample path: {sample.source.audio_local_path}")
             return True
 
     def _prepare_batch(self, raw_samples: List[Dict[str, Any]]) -> MultimodalSeqsBatch:
