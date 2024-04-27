@@ -30,7 +30,7 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
-from seamless_communication.segment.silero_vad import SileroVADSegmenter
+
 import wave
 
 
@@ -283,8 +283,6 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
-        chunk_size_sec: int = 20,
-        pause_length_sec: float = 1,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -298,19 +296,12 @@ class Transcriber(nn.Module):
             Sample rate of the audio Tensor.
         :param filter_width:
             Window size to pad weights tensor.
-        :param chunk_size_sec:
-            Length of audio chunks in seconds.
-            For segmenting audio.
-        :param pause_length_sec:
-            Length of pause between audio chunks in seconds.
-            For segmenting audio.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
 
         :returns:
             - List of Tokens with timestamps.
         """
-        
         if isinstance(audio, str):
             with Path(audio).open("rb") as fb:
                 block = MemoryBlock(fb.read())
@@ -328,40 +319,10 @@ class Transcriber(nn.Module):
             decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
         )
 
-        if length_seconds > chunk_size_sec:
-
-            waveform_2d = decoded_audio.get("waveform")
-            waveform_1d = decoded_audio.get("waveform").view(-1)
-            segmenter = SileroVADSegmenter(
-              sample_rate=sample_rate,
-              chunk_size_sec=chunk_size_sec,
-              pause_length=pause_length_sec,
-              )
-            segmented_audios = segmenter.segment_long_input(waveform_1d)
-            transcriptions = []
-            for start, end in segmented_audios:
-                segment = waveform_2d[start:end, :]
-                src_segment = self.convert_to_fbank(
-                    {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
-                     "format": decoded_audio.get("format")})["fbank"]
-                print(src_segment.device)
-                length_seconds_segment = segment.size(0) / sample_rate
-                transcription_segment = self.run_inference(
-                    src_segment,
-                    src_lang,
-                    length_seconds_segment,
-                    filter_width,
-                    sequence_generator_options,
-                )
-                transcriptions.append(str(transcription_segment))
-
-            return " ".join(transcriptions)
-        else:
-
-            return self.run_inference(
-                src,
-                src_lang,
-                length_seconds,
-                filter_width,
-                sequence_generator_options,
-            )
+        return self.run_inference(
+            src,
+            src_lang,
+            length_seconds,
+            filter_width,
+            sequence_generator_options,
+        )
