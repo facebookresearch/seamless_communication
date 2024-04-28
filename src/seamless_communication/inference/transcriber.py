@@ -30,6 +30,7 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
+from seamless_communication.denoise.demucs import Demucs
 
 import wave
 
@@ -283,6 +284,11 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
+        denoise: bool = False,
+        denoise_model: str = "htdemucs",
+        denoise_two_tems: bool = False,
+        denoise_float32: bool = False,
+        denoise_int24: bool = False,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -298,20 +304,41 @@ class Transcriber(nn.Module):
             Window size to pad weights tensor.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
+        :params denoise:
+            Whether to denoise the audio.
+        :params denoise_model:
+            Denoising model to use.
+        :params denoise_two_stems:
+            Whether to use two stems for denoising.
+        :params denoise_float32:
+            Whether to use float32 for denoising.
+        :params denoise_int24:
+            Whether to use int24 for denoising.
 
         :returns:
             - List of Tokens with timestamps.
         """
-        if isinstance(audio, str):
-            with Path(audio).open("rb") as fb:
-                block = MemoryBlock(fb.read())
-            decoded_audio = self.decode_audio(block)
-        else:
-            decoded_audio = {
-                "waveform": audio,
-                "sample_rate": sample_rate,
-                "format": -1,
-            }
+
+        if denoise:
+            demucs = Demucs(
+                sample_rate=sample_rate,
+                model=denoise_model,
+                two_stems=denoise_two_tems,
+                float32=denoise_float32,
+                int24=denoise_int24,
+                )
+            decoded_audio = demucs.denoise(decoded_audio)
+        else:    
+            if isinstance(audio, str):
+                with Path(audio).open("rb") as fb:
+                    block = MemoryBlock(fb.read())
+                decoded_audio = self.decode_audio(block)
+            else:
+                decoded_audio = {
+                    "waveform": audio,
+                    "sample_rate": sample_rate,
+                    "format": -1,
+                }
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
 

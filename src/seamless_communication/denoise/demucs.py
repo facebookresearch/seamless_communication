@@ -4,19 +4,18 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-import io
 from pathlib import Path
-import select
 from shutil import rmtree
 import subprocess as sp
-import sys
-from typing import Dict, Tuple, Optional, IO
 import tempfile
+from typing import Union
+from torch import Tensor
+import torchaudio
 
 SAMPLING_RATE = 16000
 
 class Demucs():
-    def __int__(
+    def __init__(
             self, 
             model="htdemucs", 
             two_stems=None, 
@@ -28,9 +27,14 @@ class Demucs():
         self.float32 = float32
         self.int24 = int24
 
-    def denoise(self, input_file):
+    def denoise(self, audio: Union[str, Tensor]):
 
-        if not Path(input_file).exists():
+        if isinstance(audio, Tensor):
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                torchaudio.save(temp_wav.name, audio, sample_rate=self.sample_rate)
+                audio = temp_wav.name
+
+        if not Path(audio).exists():
             print("Input file does not exist.")
             return None
 
@@ -43,7 +47,7 @@ class Demucs():
             if self.two_stems is not None:
                 cmd += [f"--two-stems={self.two_stems}"]
 
-            cmd.append(input_file)
+            cmd.append(audio)
 
             print("Executing command:", " ".join(cmd))
             p = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
