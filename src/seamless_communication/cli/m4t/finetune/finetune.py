@@ -176,6 +176,7 @@ def main() -> None:
             float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.train_dataset,
+        max_src_tokens_per_batch=7000,
     )
     eval_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
