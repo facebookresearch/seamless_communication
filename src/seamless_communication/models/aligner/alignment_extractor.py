@@ -91,7 +91,7 @@ class AlignmentExtractor(nn.Module):
         assert isinstance(
             self.unit_extractor, UnitExtractor
         ), "Unit extractor is required to get units from audio tensor"
-        units = self.unit_extractor.predict(audio, self.unit_extractor_output_layer)
+        units = self.unit_extractor.predict(audio, self.unit_extractor_output_layer - 1)
         return units
 
     @torch.inference_mode()
