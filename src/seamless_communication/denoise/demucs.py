@@ -8,17 +8,23 @@ from pathlib import Path
 from shutil import rmtree
 import subprocess as sp
 import tempfile
-from typing import Union
+import select
+from typing import Union, Dict, Optional, Tuple, IO
 from torch import Tensor
 import torchaudio
+import io
+import sys
+from fairseq2.memory import MemoryBlock
+
 
 SAMPLING_RATE = 16000
 
 class Demucs():
     def __init__(
             self, 
+            sample_rate=SAMPLING_RATE,
             model="htdemucs", 
-            two_stems=None, 
+            two_stems=None,
             float32=False,
             int24=False):
         self.sample_rate = SAMPLING_RATE
@@ -26,6 +32,33 @@ class Demucs():
         self.two_stems = two_stems
         self.float32 = float32
         self.int24 = int24
+
+    def copy_process_streams(self, process: sp.Popen):
+        def raw(stream: Optional[IO[bytes]]) -> IO[bytes]:
+            assert stream is not None
+            if isinstance(stream, io.BufferedIOBase):
+                stream = stream.raw
+            return stream
+
+        p_stdout, p_stderr = raw(process.stdout), raw(process.stderr)
+        stream_by_fd: Dict[int, Tuple[IO[bytes], io.StringIO, IO[str]]] = {
+            p_stdout.fileno(): (p_stdout, sys.stdout),
+            p_stderr.fileno(): (p_stderr, sys.stderr),
+        }
+        fds = list(stream_by_fd.keys())
+
+        while fds:
+            # `select` syscall will wait until one of the file descriptors has content.
+            ready, _, _ = select.select(fds, [], [])
+            for fd in ready:
+                p_stream, std = stream_by_fd[fd]
+                raw_buf = p_stream.read(2 ** 16)
+                if not raw_buf:
+                    fds.remove(fd)
+                    continue
+                buf = raw_buf.decode()
+                std.write(buf)
+                std.flush()
 
     def denoise(self, audio: Union[str, Tensor]):
 
@@ -47,38 +80,36 @@ class Demucs():
             if self.two_stems is not None:
                 cmd += [f"--two-stems={self.two_stems}"]
 
-            cmd.append(audio)
+            audio = [str(audio)]
 
             print("Executing command:", " ".join(cmd))
-            p = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-            stdout, stderr = p.communicate()
+            p = sp.Popen(cmd + audio, stdout=sp.PIPE, stderr=sp.PIPE)
+            self.copy_process_streams(p)
+            p.wait()
 
             if p.returncode != 0:
                 print("Command failed, something went wrong.")
-                print("Error message:", stderr.decode())
                 return None
-
-            separated_files = list(Path(temp_dir).glob("*vocals*"))
+            
+            separated_files = list(Path(temp_dir + "/htdemucs/noisy").glob("*vocals.wav*"))
             if not separated_files:
                 print("Separated vocals file not found.")
                 return None
 
-            output_file = separated_files[0].with_suffix(".wav")
-            cmd_convert = ["ffmpeg", "-i", 
-                           str(separated_files[0]), "-ar", 
-                           str(self.sample_rate), "-ac", "1", 
-                           str(output_file)]
-            print("Executing command:", " ".join(cmd_convert))
-            p_convert = sp.Popen(cmd_convert, stdout=sp.PIPE, stderr=sp.PIPE)
-            stdout_convert, stderr_convert = p_convert.communicate()
+            waveform, sample_rate = torchaudio.load(separated_files[0])
 
-            if p_convert.returncode != 0:
-                print("Conversion to WAV failed.")
-                print("Error message:", stderr_convert.decode())
-                return None
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            if sample_rate != 16000:
+                resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+                waveform = resampler(waveform)
+                sample_rate = 16000
 
-            return str(output_file)
-    
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                torchaudio.save(temp_wav.name, waveform, sample_rate=sample_rate)
+                audio = temp_wav.name
 
+            with Path(audio).open("rb") as fb:
+                block = MemoryBlock(fb.read()) 
 
-
+            return block

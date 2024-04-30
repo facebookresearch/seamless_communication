@@ -286,7 +286,7 @@ class Transcriber(nn.Module):
         sample_rate: int = 16000,
         denoise: bool = False,
         denoise_model: str = "htdemucs",
-        denoise_two_tems: bool = False,
+        denoise_two_tems: bool = None,
         denoise_float32: bool = False,
         denoise_int24: bool = False,
         **sequence_generator_options: Dict,
@@ -327,8 +327,9 @@ class Transcriber(nn.Module):
                 float32=denoise_float32,
                 int24=denoise_int24,
                 )
-            decoded_audio = demucs.denoise(decoded_audio)
-        else:    
+            audio = demucs.denoise(audio)
+            decoded_audio = self.decode_audio(audio)
+        else:            
             if isinstance(audio, str):
                 with Path(audio).open("rb") as fb:
                     block = MemoryBlock(fb.read())
