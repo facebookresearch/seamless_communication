@@ -16,6 +16,7 @@ import torch
 
 from seamless_communication.datasets.huggingface import (
     Speech2SpeechFleursDatasetBuilder,
+    Speech2SpeechGigaSpeechDatasetBuilder,
     SpeechTokenizer,
 )
 from seamless_communication.models.unit_extractor import UnitExtractor
@@ -123,6 +124,7 @@ def download_fleurs_dataset(
     target_lang: str,
     split: str,
     save_directory: str,
+    max_samples: int = 100_000,
 ) -> str:
     _check_lang_code_mapping(source_lang)
     _check_lang_code_mapping(target_lang)
@@ -130,18 +132,23 @@ def download_fleurs_dataset(
         torch.device("cuda:0") if torch.cuda.device_count() > 0 else torch.device("cpu")
     )
     tokenizer = UnitSpeechTokenizer(device=device)
-    dataset_iterator = Speech2SpeechFleursDatasetBuilder(
-        source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
-        target_lang=UNITY_TO_FLEURS_LANG_MAPPING[target_lang],
-        dataset_cache_dir=save_directory,
-        speech_tokenizer=tokenizer,
-        skip_source_audio=True,  # don't extract units from source audio
-        skip_target_audio=False,
-        split=split,
-    )
+    if 1:
+        dataset_iterator = Speech2SpeechGigaSpeechDatasetBuilder(split=split, dataset_cache_dir=save_directory)
+    else:
+        dataset_iterator = Speech2SpeechFleursDatasetBuilder(
+            source_lang=UNITY_TO_FLEURS_LANG_MAPPING[source_lang],
+            target_lang=UNITY_TO_FLEURS_LANG_MAPPING[target_lang],
+            dataset_cache_dir=save_directory,
+            speech_tokenizer=tokenizer,
+            skip_source_audio=True,  # don't extract units from source audio
+            skip_target_audio=False,
+            split=split,
+        )
     manifest_path: str = os.path.join(save_directory, f"{split}_manifest.json")
     with open(manifest_path, "w") as fp_out:
         for idx, sample in enumerate(dataset_iterator.__iter__(), start=1):
+            if idx >= max_samples:
+                break
             # correction as FleursDatasetBuilder return fleurs lang codes
             sample.source.lang = source_lang
             sample.target.lang = target_lang
@@ -183,6 +190,12 @@ def init_parser() -> argparse.ArgumentParser:
         required=True,
         help="Directory where the datastets will be stored with HuggingFace datasets cache files",
     )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=100_000,
+        help="Max samples to use",
+    )
     return parser
 
 
@@ -193,6 +206,7 @@ def main() -> None:
         target_lang=args.target_lang,
         split=args.split,
         save_directory=args.save_dir,
+        max_samples=args.max_samples,
     )
     logger.info(f"Manifest saved to: {manifest_path}")
 
