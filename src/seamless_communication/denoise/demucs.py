@@ -11,22 +11,31 @@ from typing import Union
 from torch import Tensor
 import torchaudio
 from fairseq2.memory import MemoryBlock
+from dataclasses import dataclass
+from typing import Optional
 
 SAMPLING_RATE = 16000
 
-class Demucs():
+@dataclass
+class DenoisingConfig:
     def __init__(
-            self, 
-            sample_rate=SAMPLING_RATE,
+            self,
+            filter_width: int = 3,
             model="htdemucs", 
             two_stems=None,
             float32=False,
             int24=False):
-        self.sample_rate = SAMPLING_RATE
+        self.filter_width = filter_width
         self.model = model
         self.two_stems = two_stems
         self.float32 = float32
         self.int24 = int24
+
+class Demucs():
+    def __init__(
+            self, 
+            denoise_config: Optional[DenoisingConfig]):
+        self.denoise_config = denoise_config
 
     def run_command_with_temp_file(self, cmd):
         with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp:
@@ -40,7 +49,7 @@ class Demucs():
 
         if isinstance(audio, Tensor):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
-                torchaudio.save(temp_wav.name, audio, sample_rate=self.sample_rate)
+                torchaudio.save(temp_wav.name, audio, sample_rate=SAMPLING_RATE)
                 audio = temp_wav.name
 
         if not Path(audio).exists():
@@ -48,13 +57,13 @@ class Demucs():
             return None
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            cmd = ["python3", "-m", "demucs.separate", "-o", temp_dir, "-n", self.model]
-            if self.float32:
+            cmd = ["python3", "-m", "demucs.separate", "-o", temp_dir, "-n", self.denoise_config.model]
+            if self.denoise_config.float32:
                 cmd += ["--float32"]
-            if self.int24:
+            if self.denoise_config.int24:
                 cmd += ["--int24"]
-            if self.two_stems is not None:
-                cmd += [f"--two-stems={self.two_stems}"]
+            if self.denoise_config.two_stems is not None:
+                cmd += [f"--two-stems={self.denoise_config.two_stems}"]
 
             audio = [str(audio)]
 

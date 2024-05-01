@@ -4,7 +4,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union, Optional
 
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
@@ -19,7 +19,6 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
-from argparse import Namespace
 
 import torch
 import torch.nn as nn
@@ -30,9 +29,7 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
-from seamless_communication.denoise.demucs import Demucs
-
-import wave
+from seamless_communication.denoise.demucs import Demucs, DenoisingConfig
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
@@ -280,15 +277,12 @@ class Transcriber(nn.Module):
     @torch.inference_mode()
     def transcribe(
         self,
+        denoise_config: Optional[DenoisingConfig],
         audio: Union[str, Tensor],
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
         denoise: bool = False,
-        denoise_model: str = "htdemucs",
-        denoise_two_tems: bool = None,
-        denoise_float32: bool = False,
-        denoise_int24: bool = False,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -322,10 +316,7 @@ class Transcriber(nn.Module):
         if denoise:
             demucs = Demucs(
                 sample_rate=sample_rate,
-                model=denoise_model,
-                two_stems=denoise_two_tems,
-                float32=denoise_float32,
-                int24=denoise_int24,
+                denoise_config=denoise_config,
                 )
             audio = demucs.denoise(audio)
             decoded_audio = self.decode_audio(audio)
