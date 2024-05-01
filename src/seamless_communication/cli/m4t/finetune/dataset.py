@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from tqdm import tqdm
 
 import torch
 
@@ -159,9 +160,10 @@ def download_fleurs(
 def download_gigaspeech(subset: str, huggingface_token: str, save_directory: str):
     ds = load_dataset("speechcolab/gigaspeech", subset, cache_dir=f"gigaspeech/{subset}", token=huggingface_token)
     for split in ds:
-        manifest_path = os.path.join(save_directory, subset, f"{subset}_{split}_manifest.json")
+        manifest_path = os.path.join(save_directory, f"{subset}_{split}_manifest.json")
+        logger.info(f"Preparing {split} split...")
         with open(manifest_path, "w") as f:
-            for sample in ds[split]:
+            for sample in tqdm(ds[split]):
                 f.write(json.dumps({
                 "source": {
                     "id": sample["segment_id"],
