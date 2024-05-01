@@ -5,17 +5,12 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from shutil import rmtree
 import subprocess as sp
 import tempfile
-import select
-from typing import Union, Dict, Optional, Tuple, IO
+from typing import Union
 from torch import Tensor
 import torchaudio
-import io
-import sys
 from fairseq2.memory import MemoryBlock
-
 
 SAMPLING_RATE = 16000
 
@@ -33,32 +28,13 @@ class Demucs():
         self.float32 = float32
         self.int24 = int24
 
-    def copy_process_streams(self, process: sp.Popen):
-        def raw(stream: Optional[IO[bytes]]) -> IO[bytes]:
-            assert stream is not None
-            if isinstance(stream, io.BufferedIOBase):
-                stream = stream.raw
-            return stream
-
-        p_stdout, p_stderr = raw(process.stdout), raw(process.stderr)
-        stream_by_fd: Dict[int, Tuple[IO[bytes], io.StringIO, IO[str]]] = {
-            p_stdout.fileno(): (p_stdout, sys.stdout),
-            p_stderr.fileno(): (p_stderr, sys.stderr),
-        }
-        fds = list(stream_by_fd.keys())
-
-        while fds:
-            # `select` syscall will wait until one of the file descriptors has content.
-            ready, _, _ = select.select(fds, [], [])
-            for fd in ready:
-                p_stream, std = stream_by_fd[fd]
-                raw_buf = p_stream.read(2 ** 16)
-                if not raw_buf:
-                    fds.remove(fd)
-                    continue
-                buf = raw_buf.decode()
-                std.write(buf)
-                std.flush()
+    def run_command_with_temp_file(self, cmd):
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp:
+            result = sp.run(cmd, stdout=temp, stderr=temp, text=True)
+            # If there was an error, print the content of the file
+            if result.returncode != 0:
+                temp.seek(0)
+                print(temp.read())
 
     def denoise(self, audio: Union[str, Tensor]):
 
@@ -83,13 +59,7 @@ class Demucs():
             audio = [str(audio)]
 
             print("Executing command:", " ".join(cmd))
-            p = sp.Popen(cmd + audio, stdout=sp.PIPE, stderr=sp.PIPE)
-            self.copy_process_streams(p)
-            p.wait()
-
-            if p.returncode != 0:
-                print("Command failed, something went wrong.")
-                return None
+            self.run_command_with_temp_file(cmd + audio)
             
             separated_files = list(Path(temp_dir + "/htdemucs/noisy").glob("*vocals.wav*"))
             if not separated_files:
