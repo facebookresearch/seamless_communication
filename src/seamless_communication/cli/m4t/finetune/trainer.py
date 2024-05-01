@@ -249,7 +249,7 @@ class UnitYFinetune:
         params: FinetuneParams,
         train_data_loader: dataloader.UnitYDataLoader,
         eval_data_loader: Optional[dataloader.UnitYDataLoader] = None,
-        freeze_modules: Optional[List[Union[str, torch.nn.Module]]] = None,
+        freeze_modules: Optional[List[Union[str, torch.nn.Module]]] = None
     ):
         self.params = params
         self.calc_loss = CalcLoss(
@@ -312,17 +312,13 @@ class UnitYFinetune:
             find_unused_parameters=find_unused,
         )
         
-    def _freeze_modules(self, frozen_modules: List[Union[str, torch.nn.Module]]) -> None:
+    def _freeze_modules(self, frozen_modules: List[str] = []) -> None:
         for icecube in frozen_modules:
-            if type(icecube) == torch.nn.Module:
-                for param in icecube.parameters():
-                    param.requires_grad = False
-            if type(icecube) == str:
-                for (name, module) in self.model.named_modules():
-                    if name.startswith(icecube):
-                        print(name)
-                        for param in module.parameters():
-                            param.requires_grad = False
+            for (name, module) in self.model.named_modules():
+                if name.startswith(icecube):
+                    logger.info(f"Freezing Module: {name}")
+                    for param in module.parameters():
+                        param.requires_grad = False
 
     def _update_eval_stats(self, eval_loss: float) -> None:
         self.is_best_state = (

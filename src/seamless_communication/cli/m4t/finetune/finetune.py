@@ -117,11 +117,12 @@ def init_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--freeze",
+        "--freeze_layers",
         nargs="*",
         required=False,
+        default=None,
         # TODO: better description
-        help=("A list of modules to freeze in the model"),
+        help=("A list of modules to freeze in the model. If empty, everything will be trained."),
     )
     parser.add_argument(
         "--device",
@@ -205,7 +206,7 @@ def main() -> None:
         params=finetune_params,
         train_data_loader=train_dataloader,
         eval_data_loader=eval_dataloader,
-        freeze_modules=args.freeze
+        freeze_modules=args.freeze_layers
     )
     
     finetune.run()
