@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from tqdm import tqdm
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.distributed as dist
@@ -249,6 +249,7 @@ class UnitYFinetune:
         params: FinetuneParams,
         train_data_loader: dataloader.UnitYDataLoader,
         eval_data_loader: Optional[dataloader.UnitYDataLoader] = None,
+        freeze_modules: Optional[List[Union[str, torch.nn.Module]]] = None,
     ):
         self.params = params
         self.calc_loss = CalcLoss(
@@ -258,9 +259,15 @@ class UnitYFinetune:
             if model.t2u_model is not None
             else None,
         )
+        
         self.model = self._wrap_model_for_trainining(model=model)
+        if freeze_modules:
+            self._freeze_modules(freeze_modules)
+        
         self.train_data_loader = train_data_loader
         self.eval_data_loader = eval_data_loader
+        
+        self.grad_scaler = torch.cuda.amp.GradScaler()  # type: ignore
         self.optimizer = AdamW(
             params=self.model.parameters(),
             lr=self.params.learning_rate,
@@ -270,7 +277,6 @@ class UnitYFinetune:
             weight_decay=0.0,
             fused=(self.params.device.type == "cuda"),
         )
-        self.grad_scaler = torch.cuda.amp.GradScaler()  # type: ignore
         self.lr_scheduler = MyleLR(
             optimizer=self.optimizer,
             num_warmup_steps=self.params.warmup_steps,
@@ -306,9 +312,17 @@ class UnitYFinetune:
             find_unused_parameters=find_unused,
         )
         
-    def _freeze_module(self, module: torch.nn.Module) -> None:
-        for param in module.parameters():
-            param.requires_grad = False
+    def _freeze_modules(self, frozen_modules: List[Union[str, torch.nn.Module]]) -> None:
+        for icecube in frozen_modules:
+            if type(icecube) == torch.nn.Module:
+                for param in icecube.parameters():
+                    param.requires_grad = False
+            if type(icecube) == str:
+                for (name, module) in self.model.named_modules():
+                    if name.startswith(icecube):
+                        print(name)
+                        for param in module.parameters():
+                            param.requires_grad = False
 
     def _update_eval_stats(self, eval_loss: float) -> None:
         self.is_best_state = (
@@ -395,7 +409,7 @@ class UnitYFinetune:
         if dist_utils.is_dist_initialized():
             dist.barrier()
 
-    def run(self, stop_at: Optional[int] = None) -> None:
+    def run(self) -> None:
         logger.info("Start Finetuning")
         self._reset_stats()
         self._eval_model()
@@ -407,15 +421,11 @@ class UnitYFinetune:
                 # Run batch through train step
                 self._train_forward(train_batch)
                 
-                # Stop at some batch index if told to do so
-                if stop_at and stop_at == self.update_idx:
-                    return
-                
                 # Perform eval if its time to eval
                 if not self.update_idx or self.update_idx % self.params.eval_steps != 0:
                     continue
                 
-                # Clear GPU memory for eval and re-init
+                # Clear GPU memory for eval
                 torch.cuda.empty_cache()
                 try:
                     self._eval_model(n_batches=100)

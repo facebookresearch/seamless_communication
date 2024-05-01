@@ -10,12 +10,9 @@ import os
 from pathlib import Path
 
 import torch
-from fairseq2.models.nllb.tokenizer import NllbTokenizer
 
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
-    UnitTokenizer,
-    UnitYModel,
     load_unity_model,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
@@ -85,12 +82,6 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Max number of training epochs"),
     )
     parser.add_argument(
-        "--max_batches",
-        type=int,
-        default=None,
-        help=("Max number of training batches"),
-    )
-    parser.add_argument(
         "--learning_rate",
         type=float,
         default=1e-7,
@@ -126,6 +117,13 @@ def init_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--freeze",
+        nargs="*",
+        required=False,
+        # TODO: better description
+        help=("A list of modules to freeze in the model"),
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda",
@@ -140,8 +138,8 @@ def main() -> None:
     dist_utils.init_distributed([logger, trainer.logger])
     float_dtype = torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16
     
-    text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
-    unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
+    text_tokenizer = load_unity_text_tokenizer(args.model_name)
+    unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
     
     finetune_params = trainer.FinetuneParams(
         model_name=args.model_name,
@@ -158,13 +156,12 @@ def main() -> None:
         eval_steps=args.eval_steps,
         log_steps=args.log_steps,
     )
-    logger.info(f"Finetune params: {finetune_params}")
-    model: UnitYModel = load_unity_model(
+    logger.info(f"Finetune Params: {finetune_params}")
+    
+    model = load_unity_model(
         args.model_name, device=torch.device("cpu"), dtype=torch.float32
     )
-    
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    # TODO: delete unused params to reduce GPU memory consumption
     
     if (
         finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT
@@ -175,9 +172,10 @@ def main() -> None:
     if model.text_encoder is not None:
         model.text_encoder = None
     
+    # Put model on selected device
     model = model.to(finetune_params.device)
-    # logger.debug(f"<{args.model_name}> {model}")
 
+    # TODO: delete unused params to reduce GPU memory consumption
     train_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
@@ -206,10 +204,11 @@ def main() -> None:
         model=model,
         params=finetune_params,
         train_data_loader=train_dataloader,
-        eval_data_loader=eval_dataloader
+        eval_data_loader=eval_dataloader,
+        freeze_modules=args.freeze
     )
     
-    finetune.run(stop_at=args.max_batches)
+    finetune.run()
 
 
 if __name__ == "__main__":
