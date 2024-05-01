@@ -273,6 +273,18 @@ class Transcriber(nn.Module):
             step_scores=step_scores,
         )
         return Transcription(stats)
+    
+    def denoise_audio(
+            self, 
+            audio: Union[str, Tensor], 
+            sample_rate: int, 
+            denoise_config: Optional[DenoisingConfig]
+            ) -> Dict:
+        demucs = Demucs(
+            sample_rate=sample_rate, 
+            denoise_config=denoise_config)
+        audio = demucs.denoise(audio)
+        return self.decode_audio(audio)
 
     @torch.inference_mode()
     def transcribe(
@@ -314,12 +326,7 @@ class Transcriber(nn.Module):
         """
 
         if denoise:
-            demucs = Demucs(
-                sample_rate=sample_rate,
-                denoise_config=denoise_config,
-                )
-            audio = demucs.denoise(audio)
-            decoded_audio = self.decode_audio(audio)
+            decoded_audio = self.denoise_audio(audio, sample_rate, denoise_config)
         else:            
             if isinstance(audio, str):
                 with Path(audio).open("rb") as fb:
