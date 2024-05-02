@@ -70,12 +70,15 @@ class Demucs():
             if self.denoise_config.two_stems is not None:
                 cmd += [f"--two-stems={self.denoise_config.two_stems}"]
 
+            audio_path = Path(audio)
+            audio_name = audio_path.stem
             audio = [str(audio)]
 
             print("Executing command:", " ".join(cmd))
             self.run_command_with_temp_file(cmd + audio)
+
+            separated_files = list(Path(temp_dir + "/htdemucs/" + audio_name).glob("*vocals.wav*"))
             
-            separated_files = list(Path(temp_dir + "/htdemucs/noisy").glob("*vocals.wav*"))
             if not separated_files:
                 print("Separated vocals file not found.")
                 return None
@@ -97,3 +100,4 @@ class Demucs():
                 block = MemoryBlock(fb.read()) 
 
             return block
+        
