@@ -18,11 +18,16 @@ class TestDemucs(unittest.TestCase):
         self.assertEqual(demucs.denoise_config.sample_rate, 16000)
 
     @patch("seamless_communication.denoise.demucs.torchaudio.load")
+    @patch("seamless_communication.denoise.demucs.torchaudio.save")
+    @patch("seamless_communication.denoise.demucs.Path")
     @patch("seamless_communication.denoise.demucs.sp.run")
-    def test_denoise(self, mock_run, mock_load):
+    def test_denoise(self, mock_run, mock_path, mock_load):
 
         mock_run.return_value = MagicMock(returncode=0)
         mock_load.return_value = (torch.randn(1, 16000), 16000)
+        mock_path.return_value.exists.return_value = True
+        mock_path.return_value.glob.return_value = [MagicMock()]
+        mock_path.return_value.open.return_value.__enter__.return_value.read.return_value = b""
         config = DenoisingConfig(model="htdemucs", sample_rate=16000)
         demucs = Demucs(denoise_config=config)
         result = demucs.denoise(audio=None)
