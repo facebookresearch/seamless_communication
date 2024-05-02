@@ -5,7 +5,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from setuptools import find_packages, setup
- 
+
 setup(
     name="seamless_communication",
     version="1.0.0",
@@ -21,7 +21,6 @@ setup(
     url="https://github.com/facebookresearch/seamless_communication",
     license="Creative Commons",
     install_requires=[
-        "git+https://github.com/facebookresearch/demucs#egg=demucs",
         "datasets",
         "fairseq2==0.2.*",
         "fire",
