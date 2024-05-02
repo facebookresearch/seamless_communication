@@ -30,3 +30,4 @@ class TestDemucs(unittest.TestCase):
         mock_run.assert_called_once()
         mock_load.assert_called_once()
         self.assertIsInstance(result, MemoryBlock)
+        

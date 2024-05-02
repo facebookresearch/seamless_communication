@@ -324,7 +324,7 @@ class Transcriber(nn.Module):
         """
 
         if denoise:
-            decoded_audio = self.denoise_audio(audio, sample_rate, denoise_config)
+            decoded_audio = self.denoise_audio(audio, denoise_config)
         else:            
             if isinstance(audio, str):
                 with Path(audio).open("rb") as fb:
