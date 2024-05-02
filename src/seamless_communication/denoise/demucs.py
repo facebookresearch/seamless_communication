@@ -22,7 +22,7 @@ class DenoisingConfig:
             self,
             filter_width: int = 3,
             model="htdemucs", 
-            sample_rate=16000,
+            sample_rate=SAMPLING_RATE,
             two_stems=None,
             float32=False,
             int24=False):
@@ -49,10 +49,12 @@ class Demucs():
 
     def denoise(self, audio: Union[str, Tensor]):
 
+        if self.denoise_config is None:
+          self.denoise_config = DenoisingConfig()
+
         if isinstance(audio, Tensor):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
-                sample_rate = self.denoise_config.sample_rate if self.denoise_config else SAMPLING_RATE
-                torchaudio.save(temp_wav.name, audio, sample_rate=sample_rate)
+                torchaudio.save(temp_wav.name, audio, self.denoise_config.sample_rate)
                 audio = temp_wav.name
 
         if not Path(audio).exists():

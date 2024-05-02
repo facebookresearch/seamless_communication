@@ -277,11 +277,9 @@ class Transcriber(nn.Module):
     def denoise_audio(
             self, 
             audio: Union[str, Tensor], 
-            sample_rate: int, 
             denoise_config: Optional[DenoisingConfig]
             ) -> Dict:
         demucs = Demucs(
-            sample_rate=sample_rate, 
             denoise_config=denoise_config)
         audio = demucs.denoise(audio)
         return self.decode_audio(audio)
@@ -289,12 +287,12 @@ class Transcriber(nn.Module):
     @torch.inference_mode()
     def transcribe(
         self,
-        denoise_config: Optional[DenoisingConfig],
         audio: Union[str, Tensor],
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
         denoise: bool = False,
+        denoise_config: Optional[DenoisingConfig] = None,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
