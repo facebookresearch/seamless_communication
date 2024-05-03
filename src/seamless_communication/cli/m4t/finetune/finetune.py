@@ -157,11 +157,10 @@ def main() -> None:
         eval_steps=args.eval_steps,
         log_steps=args.log_steps,
     )
+    
     logger.info(f"Finetune Params: {finetune_params}")
     
-    model = load_unity_model(
-        args.model_name, device=torch.device("cpu"), dtype=torch.float32
-    )
+    model = load_unity_model(args.model_name, device=torch.device("cpu"), dtype=torch.float32)
     assert model.target_vocab_info == text_tokenizer.vocab_info
     
     if (
@@ -187,8 +186,8 @@ def main() -> None:
             max_audio_length_sec=15.0,
             float_dtype=finetune_params.float_dtype,
         ),
-        dataset_manifest_path=args.train_dataset,
-    )
+        dataset_manifest_path=args.train_dataset)
+    
     eval_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
@@ -199,15 +198,14 @@ def main() -> None:
             max_audio_length_sec=75.0,
             float_dtype=finetune_params.float_dtype,
         ),
-        dataset_manifest_path=args.eval_dataset,
-    )
+        dataset_manifest_path=args.eval_dataset)
+    
     finetune = trainer.UnitYFinetune(
         model=model,
         params=finetune_params,
         train_data_loader=train_dataloader,
         eval_data_loader=eval_dataloader,
-        freeze_modules=args.freeze_layers
-    )
+        freeze_modules=args.freeze_layers)
     
     finetune.run()
 
