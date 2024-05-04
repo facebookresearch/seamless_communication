@@ -73,7 +73,6 @@ class Demucs():
             return None
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            self.temp_files.append(temp_dir.name)
             cmd = ["python3", "-m", "demucs.separate", "-o", temp_dir, "-n", self.denoise_config.model]
             if self.denoise_config.float32:
                 cmd += ["--float32"]
@@ -105,7 +104,6 @@ class Demucs():
                 sample_rate = 16000
 
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp_wav2:
-                self.temp_files.append(temp_wav2.name)
                 torchaudio.save(temp_wav2.name, waveform, sample_rate=sample_rate)
                 block = MemoryBlock(temp_wav2.read())
 
