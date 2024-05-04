@@ -310,14 +310,8 @@ class Transcriber(nn.Module):
             See BeamSearchSeq2SeqGenerator.
         :params denoise:
             Whether to denoise the audio.
-        :params denoise_model:
-            Denoising model to use.
-        :params denoise_two_stems:
-            Whether to use two stems for denoising.
-        :params denoise_float32:
-            Whether to use float32 for denoising.
-        :params denoise_int24:
-            Whether to use int24 for denoising.
+        :params denoise_config:
+            Configuration for denoising.
 
         :returns:
             - List of Tokens with timestamps.

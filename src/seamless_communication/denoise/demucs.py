@@ -13,6 +13,7 @@ import torchaudio
 from fairseq2.memory import MemoryBlock
 from dataclasses import dataclass
 from typing import Optional
+import os
 
 SAMPLING_RATE = 16000
 
@@ -38,14 +39,23 @@ class Demucs():
             self, 
             denoise_config: Optional[DenoisingConfig]):
         self.denoise_config = denoise_config
+        self.temp_files = []
 
     def run_command_with_temp_file(self, cmd):
         with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp:
+            self.temp_files.append(temp.name)
             result = sp.run(cmd, stdout=temp, stderr=temp, text=True)
             # If there was an error, print the content of the file
             if result.returncode != 0:
                 temp.seek(0)
                 print(temp.read())
+
+    def cleanup_temp_files(self):
+        for temp_file in self.temp_files:
+            try:
+                os.remove(temp_file)  
+            except Exception as e:
+                print(f"Failed to remove temporary file: {temp_file}. Error: {e}")
 
     def denoise(self, audio: Union[str, Tensor]):
 
@@ -54,6 +64,7 @@ class Demucs():
 
         if isinstance(audio, Tensor):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                self.temp_files.append(temp_wav.name)
                 torchaudio.save(temp_wav.name, audio, self.denoise_config.sample_rate)
                 audio = temp_wav.name
 
@@ -62,6 +73,7 @@ class Demucs():
             return None
 
         with tempfile.TemporaryDirectory() as temp_dir:
+            self.temp_files.append(temp_dir.name)
             cmd = ["python3", "-m", "demucs.separate", "-o", temp_dir, "-n", self.denoise_config.model]
             if self.denoise_config.float32:
                 cmd += ["--float32"]
@@ -92,12 +104,12 @@ class Demucs():
                 waveform = resampler(waveform)
                 sample_rate = 16000
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
-                torchaudio.save(temp_wav.name, waveform, sample_rate=sample_rate)
-                audio = temp_wav.name
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp_wav2:
+                self.temp_files.append(temp_wav2.name)
+                torchaudio.save(temp_wav2.name, waveform, sample_rate=sample_rate)
+                block = MemoryBlock(temp_wav2.read())
 
-            with Path(audio).open("rb") as fb:
-                block = MemoryBlock(fb.read()) 
+            self.cleanup_temp_files()
 
             return block
         
