@@ -14,6 +14,7 @@ from fairseq2.memory import MemoryBlock
 from dataclasses import dataclass
 from typing import Optional
 import os
+import logging
 
 SAMPLING_RATE = 16000
 
@@ -45,17 +46,17 @@ class Demucs():
         with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp:
             self.temp_files.append(temp.name)
             result = sp.run(cmd, stdout=temp, stderr=temp, text=True)
-            # If there was an error, print the content of the file
+            # If there was an error, log the content of the file
             if result.returncode != 0:
                 temp.seek(0)
-                print(temp.read())
+                logging.info(temp.read())
 
     def cleanup_temp_files(self):
         for temp_file in self.temp_files:
             try:
                 os.remove(temp_file)  
             except Exception as e:
-                print(f"Failed to remove temporary file: {temp_file}. Error: {e}")
+                logging.info(f"Failed to remove temporary file: {temp_file}. Error: {e}")
 
     def denoise(self, audio: Union[str, Tensor]):
 
@@ -69,7 +70,7 @@ class Demucs():
                 audio = temp_wav.name
 
         if not Path(audio).exists():
-            print("Input file does not exist.")
+            logging.info("Input file does not exist.")
             return None
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -85,13 +86,13 @@ class Demucs():
             audio_name = audio_path.stem
             audio = [str(audio)]
 
-            print("Executing command:", " ".join(cmd))
+            logging.info("Executing command:", " ".join(cmd))
             self.run_command_with_temp_file(cmd + audio)
 
             separated_files = list(Path(temp_dir + "/htdemucs/" + audio_name).glob("*vocals.wav*"))
             
             if not separated_files:
-                print("Separated vocals file not found.")
+                logging.info("Separated vocals file not found.")
                 return None
 
             waveform, sample_rate = torchaudio.load(separated_files[0])
