@@ -21,7 +21,7 @@ setup(
     url="https://github.com/facebookresearch/seamless_communication",
     license="Creative Commons",
     install_requires=[
-        "datasets",
+        "datasets==2.18.0",
         "fairseq2==0.2.*",
         "fire",
         "librosa",
