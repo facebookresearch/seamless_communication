@@ -186,6 +186,7 @@ def main() -> None:
     
     model = load_unity_model(args.model_name, device=torch.device("cpu"), dtype=torch.float32)
     classification_head = ClassificationHead(args.input_dim, args.num_languages, args.hidden_dim, args.num_layers)
+    model.add_module('classification_head', classification_head)
     # TODO: add classification head layers to model
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
