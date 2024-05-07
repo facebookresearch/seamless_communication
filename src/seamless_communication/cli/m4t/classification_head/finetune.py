@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import List
 from tqdm import tqdm
+from dataclasses import dataclass
 
 import torch
 from torch.optim import AdamW
@@ -30,6 +31,29 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("finetune")
+
+
+
+@dataclass
+class ClassificationHeadTrainParams:
+    max_epochs: int = 10
+    """ Maximum number of trainign epochs"""
+
+    label_smoothing: float = 0.2
+    """ Label smoothing coefficient for nll_loss """
+
+    warmup_steps: int = 100
+    """ Number of steps with linearly increasing LR"""
+
+    learning_rate: float = 1e-5
+    """ Optimizer learining rate """
+
+    batch_size: int = 5
+    """The batch size during train steps"""
+
+    device = torch.device("cuda")
+    """ Where to run computation"""
+
 
 
 def init_parser() -> argparse.ArgumentParser:
@@ -164,7 +188,7 @@ def trainer(self,
             head,
             frozen_model,
             dataloader,
-            params):
+            params: ClassificationHeadTrainParams):
     
     logger.info("Start Training Language Head")
     dataloader = dataloader.get_dataloader()
@@ -180,8 +204,8 @@ def trainer(self,
         weight_decay=0.0,
         fused=(params.device.type == "cuda"))
     lr_scheduler = MyleLR(
-        optimizer=self.optimizer,
-        num_warmup_steps=self.params.warmup_steps,
+        optimizer=optimizer,
+        num_warmup_steps=params.warmup_steps,
         start_lr=1e-9)
 
     losslog = list()
@@ -192,12 +216,14 @@ def trainer(self,
             # Run batch through train step
             optimizer.zero_grad()
             with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
-                tokens, units = frozen_model.encode(batch)
+                # TODO: Figure out what the encode function will output
+                latent = frozen_model.encode(batch)
             
             # Classification head
+            # latent
             _y = head(...)
             
-            loss = calc_loss(batch, tokens, units)
+            loss = calc_loss(batch, _y)
             if loss.isnan().any().item():
                 logger.error(batch.speech_to_text)
                 raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
@@ -230,6 +256,8 @@ def main() -> None:
             param.requires_grad = False
 
     classification_head = ClassificationHead(args.input_dim, args.num_languages, args.hidden_dim, args.num_layers)
+    # TODO: based on base model, find what params to send here ^^^
+    
     model.add_module('classification_head', classification_head)
     # TODO: add classification head layers to model
     
@@ -237,7 +265,6 @@ def main() -> None:
     # classification_head.load_state_dict(obj)
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    
     if model.text_encoder is not None:
         model.text_encoder = None
     
@@ -261,8 +288,10 @@ def main() -> None:
         head=classification_head,
         frozen_model=model,
         dataloader=train_dataloader,
-        params=...
-        # TODO: Create a class for parameters like FinetuneParams
+        params=ClassificationHeadTrainParams(
+            ...
+            # TODO: Create a class for parameters like ClassificationHeadTrainParams
+        )
     )
     
     # plot losslog
