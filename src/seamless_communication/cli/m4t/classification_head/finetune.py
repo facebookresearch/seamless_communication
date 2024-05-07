@@ -166,36 +166,22 @@ def main() -> None:
     text_tokenizer = load_unity_text_tokenizer(args.model_name)
     unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
     
-    finetune_params = trainer.FinetuneParams(
-        model_name=args.model_name,
-        finetune_mode=args.mode,
-        save_model_path=args.save_model_to,
-        device=torch.device(args.device),
-        float_dtype=float_dtype,
-        train_batch_size=args.batch_size,
-        eval_batch_size=args.batch_size,
-        patience=args.patience,
-        max_epochs=args.max_epochs,
-        learning_rate=args.learning_rate,
-        warmup_steps=args.warmup_steps,
-        eval_steps=args.eval_steps,
-        log_steps=args.log_steps,
-    )
-    
-    logger.info(f"Finetune Params: {finetune_params}")
-    
     model = load_unity_model(args.model_name, device=torch.device("cpu"), dtype=torch.float32)
+    # Freeze everything in the model, only train classification head
+    for _, module in model.named_modules():
+        for param in module.parameters():
+            param.requires_grad = False
+
     classification_head = ClassificationHead(args.input_dim, args.num_languages, args.hidden_dim, args.num_layers)
     model.add_module('classification_head', classification_head)
     # TODO: add classification head layers to model
+    
+    # torch.save(classification_head.state_dict(), params.save_model_path)
+    
+    # obj = torch.load(params.save_model_path)
+    # classification_head.load_state_dict(obj)
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    
-    if (
-        finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT
-        and model.t2u_model is not None
-    ):
-        model.t2u_model = None
     
     if model.text_encoder is not None:
         model.text_encoder = None
@@ -224,18 +210,18 @@ def main() -> None:
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
             max_audio_length_sec=75.0,
-            float_dtype=finetune_params.float_dtype,
+            float_dtype=float_dtype,
         ),
         dataset_manifest_path=args.eval_dataset)
     
-    finetune = trainer.UnitYFinetune(
-        model=model,
-        params=finetune_params,
-        train_data_loader=train_dataloader,
-        eval_data_loader=eval_dataloader,
-        freeze_modules=freeze_layers)
+    # finetune = trainer.UnitYFinetune(
+    #     model=model,
+    #     params=finetune_params,
+    #     train_data_loader=train_dataloader,
+    #     eval_data_loader=eval_dataloader,
+    #     freeze_modules=freeze_layers)
     
-    finetune.run()
+    # finetune.run()
 
 
 if __name__ == "__main__":
