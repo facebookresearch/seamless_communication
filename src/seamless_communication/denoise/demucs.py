@@ -56,14 +56,14 @@ class Demucs():
             # If there was an error, log the content of the file
             if result.returncode != 0:
                 temp.seek(0)
-                logging.info(temp.read())
+                logger.info(temp.read())
 
     def cleanup_temp_files(self):
         for temp_file in self.temp_files:
             try:
                 os.remove(temp_file)  
             except Exception as e:
-                logging.info(f"Failed to remove temporary file: {temp_file}. Error: {e}")
+                logger.info(f"Failed to remove temporary file: {temp_file}. Error: {e}")
 
     def denoise(self, audio: Union[str, Tensor]):
 
@@ -77,7 +77,7 @@ class Demucs():
                 audio = temp_wav.name
 
         if not Path(audio).exists():
-            logging.info("Input file does not exist.")
+            logger.info("Input file does not exist.")
             return None
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -93,13 +93,13 @@ class Demucs():
             audio_name = audio_path.stem
             audio = [str(audio)]
 
-            logging.info("Executing command:", " ".join(cmd))
+            logger.info("Executing command:", " ".join(cmd))
             self.run_command_with_temp_file(cmd + audio)
 
             separated_files = list(Path(temp_dir + "/htdemucs/" + audio_name).glob("*vocals.wav*"))
             
             if not separated_files:
-                logging.info("Separated vocals file not found.")
+                logger.info("Separated vocals file not found.")
                 return None
 
             waveform, sample_rate = torchaudio.load(separated_files[0])
