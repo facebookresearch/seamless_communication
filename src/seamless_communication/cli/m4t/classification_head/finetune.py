@@ -9,8 +9,12 @@ import logging
 import os
 from pathlib import Path
 from typing import List
+from tqdm import tqdm
 
 import torch
+from torch.optim import AdamW
+from torch.nn import CrossEntropyLoss
+from fairseq2.optim.lr_scheduler import MyleLR
 
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
@@ -150,15 +154,68 @@ def init_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-def load_layers_from_file(file_path: str) -> List[str]:
-    with open(file_path, 'r') as file:
-        layers = [line.strip() for line in file]
-    return layers
+
+def calc_loss():
+    ...
+    CrossEntropyLoss
+    # return loss
+
+def trainer(self,
+            head,
+            frozen_model,
+            dataloader,
+            params):
+    
+    logger.info("Start Training Language Head")
+    dataloader = dataloader.get_dataloader()
+    frozen_model.train()
+    
+    grad_scaler = torch.cuda.amp.GradScaler()
+    optimizer = AdamW(
+        params=frozen_model.parameters(),
+        lr=params.learning_rate,
+        betas=(0.9, 0.98),
+        eps=1e-08,
+        maximize=False,
+        weight_decay=0.0,
+        fused=(params.device.type == "cuda"))
+    lr_scheduler = MyleLR(
+        optimizer=self.optimizer,
+        num_warmup_steps=self.params.warmup_steps,
+        start_lr=1e-9)
+
+    losslog = list()
+    # TODO: Implement training accoutrements: logging, capture interrupts etc
+    for epoch in range(params.max_epochs):
+        logger.info(f"Epoch {epoch}")
+        for batch in tqdm(dataloader, desc="Training Steps"):
+            # Run batch through train step
+            optimizer.zero_grad()
+            with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
+                tokens, units = frozen_model.encode(batch)
+            
+            # Classification head
+            _y = head(...)
+            
+            loss = calc_loss(batch, tokens, units)
+            if loss.isnan().any().item():
+                logger.error(batch.speech_to_text)
+                raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
+            losslog.append(loss.item())
+            
+            grad_scaler.scale(loss).backward()
+            grad_scaler.step(optimizer)
+            grad_scaler.update()
+            lr_scheduler.step()
+            
+            assert batch.speech_to_text.src_tokens is not None
+            
+    return head, losslog
 
 
 def main() -> None:
     args = init_parser().parse_args()
-    freeze_layers = load_layers_from_file('all_layers.txt')
+    device = torch.device(args.device)
     
     dist_utils.init_distributed([logger, trainer.logger])
     float_dtype = torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16
@@ -176,8 +233,6 @@ def main() -> None:
     model.add_module('classification_head', classification_head)
     # TODO: add classification head layers to model
     
-    # torch.save(classification_head.state_dict(), params.save_model_path)
-    
     # obj = torch.load(params.save_model_path)
     # classification_head.load_state_dict(obj)
 
@@ -187,42 +242,33 @@ def main() -> None:
         model.text_encoder = None
     
     # Put model on selected device
-    model = model.to(finetune_params.device)
+    model = model.to(device)
 
-    # TODO: delete unused params to reduce GPU memory consumption
+    # Create daataloaders
     train_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
         batching_config=dataloader.BatchingConfig(
-            batch_size=finetune_params.train_batch_size,
+            batch_size=args.batch_size,
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
             max_audio_length_sec=15.0,
-            float_dtype=finetune_params.float_dtype,
+            float_dtype=float_dtype,
         ),
         dataset_manifest_path=args.train_dataset)
     
-    eval_dataloader = dataloader.UnitYDataLoader(
-        text_tokenizer=text_tokenizer,
-        unit_tokenizer=unit_tokenizer,
-        batching_config=dataloader.BatchingConfig(
-            batch_size=finetune_params.eval_batch_size,
-            rank=dist_utils.get_rank(),
-            world_size=dist_utils.get_world_size(),
-            max_audio_length_sec=75.0,
-            float_dtype=float_dtype,
-        ),
-        dataset_manifest_path=args.eval_dataset)
+    trained_head, losslog = trainer(
+        head=classification_head,
+        frozen_model=model,
+        dataloader=train_dataloader,
+        params=...
+        # TODO: Create a class for parameters like FinetuneParams
+    )
     
-    # finetune = trainer.UnitYFinetune(
-    #     model=model,
-    #     params=finetune_params,
-    #     train_data_loader=train_dataloader,
-    #     eval_data_loader=eval_dataloader,
-    #     freeze_modules=freeze_layers)
+    # plot losslog
+    # save trained head
+    # torch.save(classification_head.state_dict(), params.save_model_path)
     
-    # finetune.run()
-
 
 if __name__ == "__main__":
     main()
