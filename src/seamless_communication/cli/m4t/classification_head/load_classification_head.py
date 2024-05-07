@@ -12,6 +12,9 @@ class ClassificationHead(nn.Module):
         self.output_layer = nn.Linear(hidden_dim, num_languages)
 
     def forward(self, x):
+        '''
+        Returns probabilities of each language
+        '''
         for layer in self.layers:
             x = layer(x)
         return torch.softmax(self.output_layer(x), dim=-1)
