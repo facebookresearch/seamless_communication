@@ -18,6 +18,13 @@ import logging
 
 SAMPLING_RATE = 16000
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s -- %(name)s: %(message)s",
+)
+
+logger = logging.getLogger("demucs")
+
 @dataclass
 class DenoisingConfig:
     def __init__(
