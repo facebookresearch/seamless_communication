@@ -30,9 +30,7 @@ logging.basicConfig(
     format=f"%(asctime)s %(levelname)s -- %(name)s.{os.getpid()}: %(message)s",
 )
 
-logger = logging.getLogger("finetune")
-
-
+logger = logging.getLogger("train_classification_head")
 
 @dataclass
 class ClassificationHeadTrainParams:
@@ -53,8 +51,6 @@ class ClassificationHeadTrainParams:
 
     device = torch.device("cuda")
     """ Where to run computation"""
-
-
 
 def init_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -153,22 +149,10 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Device to fine-tune on. See `torch.device`."),
     )
     parser.add_argument(
-        "--input_dim", 
-        type=int, 
-        default=768, 
-        help="The size of the output from your model"
-    )
-    parser.add_argument(
         "--num_languages", 
         type=int, 
         default=2, 
-        help="The number of classes you have"
-    )
-    parser.add_argument(
-        "--hidden_dim", 
-        type=int, 
-        default=256, 
-        help="The size of the hidden layer in the classification head"
+        help="The number of classes"
     )
     parser.add_argument(
         "--num_layers", 
@@ -179,10 +163,13 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def calc_loss():
-    ...
-    CrossEntropyLoss
-    # return loss
+def calc_loss(actual, prediction):
+    """
+    Calculate CrossEntropyLoss between the predicted labels and the actual labels.
+    """
+    loss_fn = CrossEntropyLoss()
+    loss = loss_fn(prediction, actual)
+    return loss
 
 def trainer(self,
             head,
@@ -218,10 +205,12 @@ def trainer(self,
             with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
                 # TODO: Figure out what the encode function will output
                 latent = frozen_model.encode(batch)
+                print("encode output ", type(latent))
             
             # Classification head
             # latent
-            _y = head(...)
+            # TODO: pass encoder output to classification head
+            _y = head.forward(latent)
             
             loss = calc_loss(batch, _y)
             if loss.isnan().any().item():
@@ -254,8 +243,20 @@ def main() -> None:
     for _, module in model.named_modules():
         for param in module.parameters():
             param.requires_grad = False
+    
+    last_layer = list(model.children())[-1]
+    if isinstance(last_layer, torch.nn.Linear):
+        input_dim = last_layer.out_features
+    elif hasattr(last_layer, 'output_dim'):
+        input_dim = last_layer.output_dim
+    else:
+        raise ValueError(
+            "Last layer is not a Linear layer or does not have an output_dim attribute, \
+            unsure how to get output dimension")
+    
+    hidden_dim = input_dim
 
-    classification_head = ClassificationHead(args.input_dim, args.num_languages, args.hidden_dim, args.num_layers)
+    classification_head = ClassificationHead(input_dim, args.num_languages, hidden_dim, args.num_layers)
     # TODO: based on base model, find what params to send here ^^^
     
     model.add_module('classification_head', classification_head)
@@ -289,11 +290,16 @@ def main() -> None:
         frozen_model=model,
         dataloader=train_dataloader,
         params=ClassificationHeadTrainParams(
-            ...
-            # TODO: Create a class for parameters like ClassificationHeadTrainParams
+            max_epochs=args.max_epochs,
+            label_smoothing=args.label_smoothing,
+            warmup_steps=args.warmup_steps,
+            learning_rate=args.learning_rate,
+            batch_size=args.batch_size,
+            device=device
         )
     )
-    
+
+   
     # plot losslog
     # save trained head
     # torch.save(classification_head.state_dict(), params.save_model_path)
