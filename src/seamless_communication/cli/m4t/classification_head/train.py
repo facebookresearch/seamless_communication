@@ -14,7 +14,6 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 
 import torch
-import torch.nn as nn
 
 from torch.optim import AdamW
 from fairseq2.optim.lr_scheduler import MyleLR
@@ -161,11 +160,16 @@ def train(head: torch.nn.Module,
         start_lr=1e-9)
 
     losslog = list()
-    try:
-        for epoch in range(params.max_epochs):
-            logger.info(f"Epoch {epoch}")
+    # TODO: Implement training accoutrements: logging, capture interrupts etc
+    for epoch in range(params.max_epochs):
+        logger.info(f"Epoch {epoch}")
+        for batch in tqdm(dataloader, desc="Training Steps"):
+            # Run batch through train step
+            optimizer.zero_grad()
+            with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
+                vector, _ = frozen_model.encode(batch)
             
-            _y = head(latent)
+            _y = head(vector)
             
             loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
             if loss.isnan().any().item():
@@ -197,11 +201,7 @@ def main() -> None:
         for param in module.parameters():
             param.requires_grad = False
 
-    classification_head = ClassificationHead(input_dim, args.num_languages, hidden_dim, args.num_layers)
-    # TODO: based on base model, find what params to send here ^^^
-    
-    # model.add_module('classification_head', classification_head)
-    # TODO: add classification head layers to model
+    classification_head = ClassificationHead(args.num_languages, args.num_layers)
     
     # obj = torch.load(params.save_model_path)
     # classification_head.load_state_dict(obj)
@@ -249,4 +249,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
