@@ -1,19 +1,21 @@
+import torch
 from torch import nn
 
 class ClassificationHead(nn.Module):
-    def __init__(self, embed_dim, n_layers, n_classes):
+    def __init__(self, input_dim, num_languages, hidden_dim, num_layers):
         super(ClassificationHead, self).__init__()
-        self.num_languages = n_classes
-        self.num_layers = n_layers
-        
-        self.attn = nn.MultiheadAttention(embed_dim, num_heads=1)
-        self.layers = nn.ModuleList(
-            [ nn.Linear(embed_dim, embed_dim) for _ in range(n_layers) ] + \
-            [ nn.Linear(embed_dim, n_classes) ])
+        self.layers = nn.ModuleList()
+        for _ in range(num_layers):
+            self.layers.append(nn.Linear(input_dim, hidden_dim))
+            self.layers.append(nn.ReLU())
+            input_dim = hidden_dim
+        self.output_layer = nn.Linear(hidden_dim, num_languages)
 
     def forward(self, x):
-        x, _ = self.attn(x, x, x)
+        '''
+        Returns probabilities of each language
+        '''
         for layer in self.layers:
-            x = nn.functional.relu(layer(x))
-        return nn.functional.softmax(x[:, 0]).float()
+            x = layer(x)
+        return torch.softmax(self.output_layer(x), dim=-1)
     

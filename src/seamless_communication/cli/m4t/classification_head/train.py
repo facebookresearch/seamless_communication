@@ -14,13 +14,11 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 
 import torch
-
 from torch.optim import AdamW
 from fairseq2.optim.lr_scheduler import MyleLR
-from fairseq2.nn.padding import PaddingMask
 
-from seamless_communication.cli.m4t.classification_head import dataloader
 from seamless_communication.models.unity import UnitYModel
+from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
@@ -138,24 +136,11 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def plot_losslog(losslog: list, save_to: str = None):
-    # TODO: Make this look good
-    plt.plot(losslog)
-    plt.title('Training Loss')
-    plt.xlabel('Batch')
-    plt.ylabel('Loss')
-    if save_to:
-        plt.savefig(save_to)
-        plt.clf()
-    else:
-        plt.show()
-
-
-def train(head: torch.nn.Module,
-          frozen_model: UnitYModel,
-          dataloader: dataloader.UnitYLanguageIDDataLoader,
-          params: ClassificationHeadTrainParams,
-          label_weights: torch.Tensor = None):
+def trainer(head: torch.Module,
+            frozen_model: UnitYModel,
+            dataloader: dataloader.UnitYDataLoader,
+            params: ClassificationHeadTrainParams,
+            label_weights: torch.Tensor = None):
     
     logger.info("Start Training Language Head")
     
@@ -178,50 +163,22 @@ def train(head: torch.nn.Module,
         for epoch in range(params.max_epochs):
             logger.info(f"Epoch {epoch}")
             
-            # Run batches through train step
-            for seqs, labels in tqdm(dataloader.get_dataloader(), desc="Training Steps"):
-                assert seqs.src_tokens is not None
-                optimizer.zero_grad()
-                seqs.src_tokens = seqs.src_tokens.to(params.device)
-                labels = labels.to(params.device)
-                
-                with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
-                    mask = PaddingMask(seqs.src_lengths, seqs.src_tokens.size(1)).to(params.device)
-                    vector, _ = frozen_model.encode(seqs.src_tokens, padding_mask=mask)
-                
-                probs = head(vector)
-                
-                loss = torch.nn.functional.cross_entropy(labels, probs, weight=label_weights)
-                if loss.isnan().any().item():
-                    error = RuntimeError("Train loss is NaN! Something is wrong in the model!")
-                    logger.error(seqs)
-                    logger.error(error)
-                    raise error
-                
-                losslog.append(loss.cpu().item())
-                if len(losslog) % 5 == 0:
-                    logger.info(f"Train Loss: {sum(losslog[-5:]) / 5}")
-                    plot_losslog(losslog, save_to=params.save_model_path.parent / ".checkpoints/losslog.png")
-                    
-                    if len(losslog) % 2 == 0:
-                        torch.save(head.state_dict(),
-                            params.save_model_path.parent / f".checkpoints/checkpoint-{len(losslog)//10}.pt")
-                
-                grad_scaler.scale(loss).backward()
-                grad_scaler.step(optimizer)
-                grad_scaler.update()
-                lr_scheduler.step()
-    # Catch SIGINT (^C) keyboard interrupt, and save model before terminating
-    except KeyboardInterrupt:
-        logger.info("[SIGINT] Saving optimizer state. Exiting cleanly...")
-        torch.save(optimizer.state_dict(), params.save_model_path / "optimizer_state.pth")
-
-    # Log average loss over last 5 batches, this is more stable
-    logger.info(f"Final Loss: {sum(losslog[-5:]) / 5}")
+            _y = head(latent)
             
-    # Return trained head and losslog as tensor
-    # This makes it possible to do math operations easily
-    return head, torch.tensor(losslog)
+            loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
+            if loss.isnan().any().item():
+                logger.error(batch.speech_to_text)
+                raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
+            losslog.append(loss.item())
+            
+            grad_scaler.scale(loss).backward()
+            grad_scaler.step(optimizer)
+            grad_scaler.update()
+            lr_scheduler.step()
+            
+            assert batch.speech_to_text.src_tokens is not None
+            
+    return head, losslog
 
 
 def main() -> None:
@@ -238,9 +195,14 @@ def main() -> None:
         for param in module.parameters():
             param.requires_grad = False
 
-    # TODO: Find embed dim from model
-    head = ClassificationHead(1024, args.num_layers, args.num_languages)
-    head.train()
+    classification_head = ClassificationHead(input_dim, args.num_languages, hidden_dim, args.num_layers)
+    # TODO: based on base model, find what params to send here ^^^
+    
+    # model.add_module('classification_head', classification_head)
+    # TODO: add classification head layers to model
+    
+    # obj = torch.load(params.save_model_path)
+    # classification_head.load_state_dict(obj)
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
     if model.text_encoder is not None:
@@ -277,7 +239,10 @@ def main() -> None:
         )
     )
 
+    # save trained head
     torch.save(trained_head.state_dict(), args.save_model_path)
+    
+    # plot losslog
     
 
 if __name__ == "__main__":
