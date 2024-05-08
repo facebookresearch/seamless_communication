@@ -14,16 +14,16 @@ from dataclasses import dataclass
 
 import torch
 from torch.optim import AdamW
-from torch.nn import CrossEntropyLoss
 from fairseq2.optim.lr_scheduler import MyleLR
 
+from seamless_communication.models.unity import UnitYModel
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.cli.m4t.classification_head.load_classification_head import ClassificationHead
+from seamless_communication.cli.m4t.classification_head.model import ClassificationHead
 
 logging.basicConfig(
     level=logging.INFO,
@@ -163,19 +163,11 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def calc_loss(actual, prediction):
-    """
-    Calculate CrossEntropyLoss between the predicted labels and the actual labels.
-    """
-    loss_fn = CrossEntropyLoss()
-    loss = loss_fn(prediction, actual)
-    return loss
-
-def trainer(self,
-            head,
-            frozen_model,
-            dataloader,
-            params: ClassificationHeadTrainParams):
+def trainer(head: torch.Module,
+            frozen_model: UnitYModel,
+            dataloader: dataloader.UnitYDataLoader,
+            params: ClassificationHeadTrainParams,
+            label_weights: torch.Tensor = None):
     
     logger.info("Start Training Language Head")
     dataloader = dataloader.get_dataloader()
@@ -207,12 +199,9 @@ def trainer(self,
                 latent = frozen_model.encode(batch)
                 print("encode output ", type(latent))
             
-            # Classification head
-            # latent
-            # TODO: pass encoder output to classification head
-            _y = head.forward(latent)
+            _y = head(latent)
             
-            loss = calc_loss(batch, _y)
+            loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
             if loss.isnan().any().item():
                 logger.error(batch.speech_to_text)
                 raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
@@ -259,7 +248,7 @@ def main() -> None:
     classification_head = ClassificationHead(input_dim, args.num_languages, hidden_dim, args.num_layers)
     # TODO: based on base model, find what params to send here ^^^
     
-    model.add_module('classification_head', classification_head)
+    # model.add_module('classification_head', classification_head)
     # TODO: add classification head layers to model
     
     # obj = torch.load(params.save_model_path)
@@ -299,10 +288,10 @@ def main() -> None:
         )
     )
 
-   
-    # plot losslog
     # save trained head
-    # torch.save(classification_head.state_dict(), params.save_model_path)
+    torch.save(trained_head.state_dict(), args.save_model_path)
+    
+    # plot losslog
     
 
 if __name__ == "__main__":
