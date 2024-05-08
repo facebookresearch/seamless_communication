@@ -13,6 +13,8 @@ from tqdm import tqdm
 from dataclasses import dataclass
 
 import torch
+import torch.nn as nn
+
 from torch.optim import AdamW
 from fairseq2.optim.lr_scheduler import MyleLR
 
@@ -61,12 +63,6 @@ def init_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="Path to manifest with train samples",
-    )
-    parser.add_argument(
-        "--eval_dataset",
-        type=Path,
-        required=True,
-        help="Path to manifest with eval samples",
     )
     parser.add_argument(
         "--model_name",
@@ -163,7 +159,7 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def trainer(head: torch.Module,
+def train(head: torch.nn.Module,
             frozen_model: UnitYModel,
             dataloader: dataloader.UnitYDataLoader,
             params: ClassificationHeadTrainParams,
@@ -274,7 +270,7 @@ def main() -> None:
         ),
         dataset_manifest_path=args.train_dataset)
     
-    trained_head, losslog = trainer(
+    trained_head, losslog = train(
         head=classification_head,
         frozen_model=model,
         dataloader=train_dataloader,
@@ -296,3 +292,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
