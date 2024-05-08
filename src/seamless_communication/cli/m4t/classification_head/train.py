@@ -184,28 +184,44 @@ def train(head: torch.nn.Module,
 
     losslog = list()
     # TODO: Implement training accoutrements: logging, capture interrupts etc
-    for epoch in range(params.max_epochs):
-        logger.info(f"Epoch {epoch}")
-        for batch in tqdm(dataloader, desc="Training Steps"):
-            # Run batch through train step
-            optimizer.zero_grad()
-            with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
-                vector, _ = frozen_model.encode(batch)
-            
-            _y = head(vector)
-            
-            loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
-            if loss.isnan().any().item():
-                logger.error(batch.speech_to_text)
-                raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
-            losslog.append(loss.item())
-            
-            grad_scaler.scale(loss).backward()
-            grad_scaler.step(optimizer)
-            grad_scaler.update()
-            lr_scheduler.step()
-            
-            assert batch.speech_to_text.src_tokens is not None
+    try:
+        for epoch in range(params.max_epochs):
+            logger.info(f"Epoch {epoch}")
+            epoch_loss = 0.0
+            for batch in tqdm(dataloader, desc="Training Steps"):
+                # Run batch through train step
+                optimizer.zero_grad()
+                with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
+                    vector, _ = frozen_model.encode(batch)
+                
+                _y = head(vector)
+                
+                loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
+                if loss.isnan().any().item():
+                    logger.error(batch.speech_to_text)
+                    raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
+                losslog.append(loss.item())
+                epoch_loss += loss.item()
+                
+                grad_scaler.scale(loss).backward()
+                grad_scaler.step(optimizer)
+                grad_scaler.update()
+                lr_scheduler.step()
+                
+                assert batch.speech_to_text.src_tokens is not None
+            logger.info(f"Epoch {epoch} Loss: {epoch_loss / len(dataloader)}")
+
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user. Saving model state...")
+        torch.save({
+            'model_state_dict': head.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': loss,
+        }, "interrupted_model.pth")
+        logger.info("Model state saved. Exiting...")
+        exit()
+
+    logger.info(f"Final Loss: {sum(losslog) / len(losslog)}")
             
     return head, losslog
 
