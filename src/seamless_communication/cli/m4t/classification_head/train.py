@@ -160,7 +160,6 @@ def train(head: torch.nn.Module,
         start_lr=1e-9)
 
     losslog = list()
-    # TODO: Implement training accoutrements: logging, capture interrupts etc
     try:
         for epoch in range(params.max_epochs):
             logger.info(f"Epoch {epoch}")
@@ -257,10 +256,14 @@ def main() -> None:
         )
     )
 
-    # save trained head
     torch.save(trained_head.state_dict(), args.save_model_path)
     
     # plot losslog
+    plt.plot(losslog)
+    plt.title('Training Loss')
+    plt.xlabel('Batch')
+    plt.ylabel('Loss')
+    plt.show()
     
 
 if __name__ == "__main__":
