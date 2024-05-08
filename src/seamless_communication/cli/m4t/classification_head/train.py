@@ -13,7 +13,6 @@ from tqdm import tqdm
 from dataclasses import dataclass
 
 import torch
-import torch.nn as nn
 
 from torch.optim import AdamW
 from fairseq2.optim.lr_scheduler import MyleLR
@@ -191,11 +190,9 @@ def train(head: torch.nn.Module,
             # Run batch through train step
             optimizer.zero_grad()
             with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
-                # TODO: Figure out what the encode function will output
-                latent = frozen_model.encode(batch)
-                print("encode output ", type(latent))
+                vector, _ = frozen_model.encode(batch)
             
-            _y = head(latent)
+            _y = head(vector)
             
             loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
             if loss.isnan().any().item():
@@ -228,24 +225,8 @@ def main() -> None:
     for _, module in model.named_modules():
         for param in module.parameters():
             param.requires_grad = False
-    
-    last_layer = list(model.children())[-1]
-    if isinstance(last_layer, torch.nn.Linear):
-        input_dim = last_layer.out_features
-    elif hasattr(last_layer, 'output_dim'):
-        input_dim = last_layer.output_dim
-    else:
-        raise ValueError(
-            "Last layer is not a Linear layer or does not have an output_dim attribute, \
-            unsure how to get output dimension")
-    
-    hidden_dim = input_dim
 
-    classification_head = ClassificationHead(input_dim, args.num_languages, hidden_dim, args.num_layers)
-    # TODO: based on base model, find what params to send here ^^^
-    
-    # model.add_module('classification_head', classification_head)
-    # TODO: add classification head layers to model
+    classification_head = ClassificationHead(args.num_languages, args.num_layers)
     
     # obj = torch.load(params.save_model_path)
     # classification_head.load_state_dict(obj)
@@ -292,4 +273,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
