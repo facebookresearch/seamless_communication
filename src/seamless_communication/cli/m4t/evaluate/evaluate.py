@@ -305,7 +305,8 @@ def run_eval(
                         unit_generation_opts=ctx.unit_generation_opts,
                         unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
                     )
-                except RuntimeError:
+                except RuntimeError as e:
+                    logger.exception(f"Caught RuntimeError: {e}")
                     continue
             else:
                 text_output = []
