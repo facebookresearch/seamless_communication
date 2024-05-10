@@ -17,9 +17,10 @@ import torch
 
 from torch.optim import AdamW
 from fairseq2.optim.lr_scheduler import MyleLR
+from fairseq2.nn.padding import PaddingMask
 
+from seamless_communication.cli.m4t.classification_head import dataloader
 from seamless_communication.models.unity import UnitYModel
-from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
@@ -73,11 +74,6 @@ def init_parser() -> argparse.ArgumentParser:
         help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
     )
     parser.add_argument(
-        "--num_languages", 
-        type=int, 
-        help="The number of classes"
-    )
-    parser.add_argument(
         "--save_model_path",
         type=Path,
         required=True,
@@ -123,6 +119,18 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Number of steps with linearly increasing learning rate"),
     )
     parser.add_argument(
+        "--eval_steps",
+        type=int,
+        default=50,
+        help=("Get eval loss after each `eval_steps` training steps "),
+    )
+    parser.add_argument(
+        "--log_steps",
+        type=int,
+        default=10,
+        help=("Log inner loss after each `log_steps` training steps"),
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda",
@@ -138,10 +146,10 @@ def init_parser() -> argparse.ArgumentParser:
 
 
 def train(head: torch.nn.Module,
-            frozen_model: UnitYModel,
-            dataloader: dataloader.UnitYDataLoader,
-            params: ClassificationHeadTrainParams,
-            label_weights: torch.Tensor = None):
+          frozen_model: UnitYModel,
+          dataloader: dataloader.UnitYLanguageIDDataLoader,
+          params: ClassificationHeadTrainParams,
+          label_weights: torch.Tensor = None):
     
     logger.info("Start Training Language Head")
     
@@ -163,43 +171,44 @@ def train(head: torch.nn.Module,
     try:
         for epoch in range(params.max_epochs):
             logger.info(f"Epoch {epoch}")
-            epoch_loss = 0.0
-            for batch in tqdm(dataloader, desc="Training Steps"):
-                # Run batch through train step
+            
+            # Run batches through train step
+            for seqs, labels in tqdm(dataloader.get_dataloader(), desc="Training Steps"):
                 optimizer.zero_grad()
+                assert seqs.src_tokens is not None
+                seqs.src_tokens = seqs.src_tokens.to(params.device)
                 with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
-                    vector, _ = frozen_model.encode(batch)
+                    mask = PaddingMask(seqs.src_lengths, seqs.src_tokens.size(1)).to(params.device)
+                    vector, _ = frozen_model.encode(seqs.src_tokens, padding_mask=mask)
                 
-                _y = head(vector)
+                probs = head(vector)
                 
-                loss = torch.nn.functional.cross_entropy(batch, _y, weight=label_weights)
+                loss = torch.nn.functional.cross_entropy(labels, probs, weight=label_weights)
                 if loss.isnan().any().item():
-                    logger.error(batch.speech_to_text)
-                    raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
-                losslog.append(loss.item())
-                epoch_loss += loss.item()
+                    error = RuntimeError("Train loss is NaN! Something is wrong in the model!")
+                    logger.error(seqs)
+                    logger.error(error)
+                    raise error
+                
+                losslog.append(loss.cpu().item())
+                if len(losslog) % 5 == 0:
+                    logger.info(f"Train Loss: {sum(losslog[-5:]) / 5}")
                 
                 grad_scaler.scale(loss).backward()
                 grad_scaler.step(optimizer)
                 grad_scaler.update()
                 lr_scheduler.step()
-                
-                assert batch.speech_to_text.src_tokens is not None
-            logger.info(f"Epoch {epoch} Loss: {epoch_loss / len(dataloader)}")
-
+    # Catch SIGINT (^C) keyboard interrupt, and save model before terminating
     except KeyboardInterrupt:
-        logger.info("Interrupted by user. Saving model state...")
-        torch.save({
-            'model_state_dict': head.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-        }, "interrupted_model.pth")
-        logger.info("Model state saved. Exiting...")
-        exit()
+        logger.info("[SIGINT] Saving optimizer state. Exiting cleanly...")
+        torch.save(optimizer.state_dict(), params.save_model_path / "optimizer_state.pth")
 
-    logger.info(f"Final Loss: {sum(losslog) / len(losslog)}")
+    # Log average loss over last 5 batches, this is more stable
+    logger.info(f"Final Loss: {sum(losslog[-5:]) / 5}")
             
-    return head, losslog
+    # Return trained head and losslog as tensor
+    # This makes it possible to do math operations easily
+    return head, torch.tensor(losslog)
 
 
 def main() -> None:
@@ -216,10 +225,7 @@ def main() -> None:
         for param in module.parameters():
             param.requires_grad = False
 
-    classification_head = ClassificationHead(args.num_languages, args.num_layers)
-    
-    # obj = torch.load(params.save_model_path)
-    # classification_head.load_state_dict(obj)
+    head = ClassificationHead(1024, args.num_layers, args.num_languages)
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
     if model.text_encoder is not None:
@@ -231,7 +237,6 @@ def main() -> None:
 
     # Create daataloaders
     train_dataloader = dataloader.UnitYLanguageIDDataLoader(
-        num_languages=args.num_languages,
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
         batching_config=dataloader.BatchingConfig(
@@ -242,7 +247,7 @@ def main() -> None:
         dataset_manifest_path=args.train_dataset)
     
     trained_head, losslog = train(
-        head=classification_head,
+        head=head,
         frozen_model=model,
         dataloader=train_dataloader,
         params=ClassificationHeadTrainParams(
