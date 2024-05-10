@@ -1,22 +1,19 @@
 from torch import nn
 
 class ClassificationHead(nn.Module):
-    def __init__(self, num_languages, num_layers):
+    def __init__(self, input_dim, n_layers, n_classes):
         super(ClassificationHead, self).__init__()
-        self.num_languages = num_languages
-        self.num_layers = num_layers
-        self.hidden_dim = None
-        self.input_dim = None
-        self.layers = None
+        self.num_languages = n_classes
+        self.num_layers = n_layers
+        self.input_dim = input_dim
+        self.hidden_dim = self.input_dim
+        
+        self.layers = nn.ModuleList(
+            [ nn.Linear(input_dim, input_dim) for _ in range(n_layers) ] + \
+            [ nn.Linear(input_dim, n_classes) ])
 
     def forward(self, x):
-        if self.layers is None:
-            self.input_dim = x.size(-1)
-            self.hidden_dim = self.input_dim
-            self.layers = nn.Sequential(
-                nn.Linear(self.input_dim, self.hidden_dim),
-                nn.ReLU(),
-                nn.Linear(self.hidden_dim, self.num_languages)
-            )
-        return self.layers(x)
+        for layer in self.layers:
+            x = nn.functional.relu(layer(x))
+        return nn.functional.softmax(x)
     
