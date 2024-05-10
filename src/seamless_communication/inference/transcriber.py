@@ -4,7 +4,7 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union, Optional
 
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
@@ -32,6 +32,7 @@ from seamless_communication.models.unity import (
 )
 from seamless_communication.segment.silero_vad import SileroVADSegmenter
 import wave
+from seamless_communication.denoise.demucs import Demucs, DenoisingConfig
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
@@ -275,6 +276,16 @@ class Transcriber(nn.Module):
             step_scores=step_scores,
         )
         return Transcription(stats)
+    
+    def denoise_audio(
+            self, 
+            audio: Union[str, Tensor], 
+            denoise_config: Optional[DenoisingConfig]
+            ) -> Dict:
+        demucs = Demucs(
+            denoise_config=denoise_config)
+        audio = demucs.denoise(audio)
+        return self.decode_audio(audio)
 
     @torch.inference_mode()
     def transcribe(
@@ -285,6 +296,8 @@ class Transcriber(nn.Module):
         sample_rate: int = 16000,
         chunk_size_sec: int = 20,
         pause_length_sec: float = 1,
+        denoise: bool = False,
+        denoise_config: Optional[DenoisingConfig] = None,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -306,6 +319,10 @@ class Transcriber(nn.Module):
             For segmenting audio.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
+        :params denoise:
+            Whether to denoise the audio.
+        :params denoise_config:
+            Configuration for denoising.
 
         :returns:
             - List of Tokens with timestamps.
@@ -321,6 +338,20 @@ class Transcriber(nn.Module):
                 "sample_rate": sample_rate,
                 "format": -1,
             }
+
+        if denoise:
+            decoded_audio = self.denoise_audio(audio, denoise_config)
+        else:            
+            if isinstance(audio, str):
+                with Path(audio).open("rb") as fb:
+                    block = MemoryBlock(fb.read())
+                decoded_audio = self.decode_audio(block)
+            else:
+                decoded_audio = {
+                    "waveform": audio,
+                    "sample_rate": sample_rate,
+                    "format": -1,
+                }
 
         src = self.convert_to_fbank(decoded_audio)["fbank"]
 
