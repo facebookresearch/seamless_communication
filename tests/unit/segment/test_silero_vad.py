@@ -7,7 +7,8 @@
 import unittest
 from argparse import Namespace
 from unittest.mock import Mock
-from seamless_communication.segment.silero_vad import SileroVADSegmenter
+from seamless_communication.segment.silero_vad import SileroVADSegmenter, Segment
+import numpy as np
 
 class TestSileroVADSegmenter(unittest.TestCase):
     def test_init_works(self):
@@ -24,3 +25,16 @@ class TestSileroVADSegmenter(unittest.TestCase):
         segments = self.segmenter.segment_long_input(audio=None)
         expected_segments = [[0, 10000], [20000, 30000]]
         self.assertEqual(segments, expected_segments)
+
+    def test_recursive_split():
+        sgm = Segment(0, 10000, np.random.rand(10000))
+        segments = []
+        max_segment_length = 5000
+        min_segment_length = 1000
+        window_size_samples = 100
+        threshold = .5
+
+        SileroVADSegmenter.recursive_split(sgm, segments, max_segment_length, min_segment_length, window_size_samples, threshold)
+
+        assert all([seg.duration < max_segment_length for seg in segments])
+        assert all([seg.duration > min_segment_length for seg in segments])

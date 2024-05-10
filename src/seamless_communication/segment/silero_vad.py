@@ -91,6 +91,41 @@ class SileroVADSegmenter:  # type: ignore
         speech_timestamps = [(seg.start, seg.end) for seg in segments]
 
         return speech_timestamps
+    
+    def recursive_split(
+            self, 
+            sgm, 
+            segments, 
+            max_segment_length, 
+            min_segment_length, 
+            window_size_samples, 
+            threshold
+            ):
+            if sgm.duration < max_segment_length:
+                segments.append(sgm)
+            else:
+                j = 0
+                sorted_indices = np.argsort(sgm.probs)
+                while j < len(sorted_indices):
+                    split_idx = sorted_indices[j]
+                    sgm_a, sgm_b = self.split(
+                      sgm, 
+                      split_idx, 
+                      window_size_samples, 
+                      threshold)
+                    if (
+                        sgm_a.duration > min_segment_length
+                        and sgm_b.duration > min_segment_length
+                    ):
+                        self.recursive_split(sgm_a)
+                        self.recursive_split(sgm_b)
+                        break
+                    j += 1
+                else:
+                    if sgm_a.duration > min_segment_length:
+                        self.recursive_split(sgm_a)
+                    if sgm_b.duration > min_segment_length:
+                        self.recursive_split(sgm_b)
 
     def pdac(
             self,
@@ -105,33 +140,7 @@ class SileroVADSegmenter:  # type: ignore
         segments = []
         sgm = Segment(0, len(probs)*window_size_samples, probs)
 
-        def recursive_split(sgm):
-            if sgm.duration < max_segment_length:
-                segments.append(sgm)
-            else:
-                j = 0
-                sorted_indices = np.argsort(sgm.probs)
-                while j < len(sorted_indices):
-                    split_idx = sorted_indices[j]
-                    sgm_a, sgm_b = self.split(
-                      sgm, 
-                      split_idx, 
-                      window_size_samples, 
-                      threshold=.5)
-                    if (
-                        sgm_a.duration > min_segment_length
-                        and sgm_b.duration > min_segment_length
-                    ):
-                        recursive_split(sgm_a)
-                        recursive_split(sgm_b)
-                        break
-                    j += 1
-                else:
-                    if sgm_a.duration > min_segment_length:
-                        recursive_split(sgm_a)
-                    if sgm_b.duration > min_segment_length:
-                        recursive_split(sgm_b)
-        recursive_split(sgm)
+        self.recursive_split(sgm, segments, max_segment_length, min_segment_length, window_size_samples, .5)
         
         return segments
 
@@ -177,6 +186,20 @@ class SileroVADSegmenter:  # type: ignore
         return sgm_a, sgm_b
     
     @staticmethod
+    def resample_audio(wav: torch.Tensor, sample_rate: int) -> torch.Tensor:
+        """
+        Resample audio to the model's sample rate.
+        """
+        assert sample_rate <= sample_rate
+        if sample_rate == sample_rate:
+            return wav
+
+        tgt_frames = wav.shape[-1] * sample_rate // sample_rate
+        coeff = sample_rate / sample_rate
+        indices = (torch.arange(tgt_frames) * coeff).to(torch.int32)
+        return wav[:, indices]
+    
+    @staticmethod
     def get_speech_probs(
         audio: torch.Tensor,
         model,
@@ -199,15 +222,7 @@ class SileroVADSegmenter:  # type: ignore
                 audio.ndim == 1
             ), "More than one dimension in audio. Are you trying to process audio with 2 channels?"
 
-        if sampling_rate > 16000 and (sampling_rate % 16000 == 0):
-            step = sampling_rate // 16000
-            sampling_rate = 16000
-            audio = audio[::step]
-            warnings.warn(
-                "Sampling rate is a multiply of 16000, casting to 16000 manually!"
-            )
-        else:
-            step = 1
+        audio = SileroVADSegmenter.resample_audio(audio, sampling_rate)
 
         if sampling_rate == 8000 and window_size_samples > 768:
             warnings.warn(

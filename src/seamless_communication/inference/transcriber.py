@@ -30,9 +30,8 @@ from seamless_communication.models.unity import (
     load_unity_model,
     load_unity_text_tokenizer,
 )
-from seamless_communication.segment.silero_vad import SileroVADSegmenter
-import wave
 from seamless_communication.denoise.demucs import Demucs, DenoisingConfig
+from seamless_communication.segment.silero_vad import SileroVADSegmenter
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
@@ -294,10 +293,10 @@ class Transcriber(nn.Module):
         src_lang: str,
         filter_width: int = 3,
         sample_rate: int = 16000,
-        chunk_size_sec: int = 20,
-        pause_length_sec: float = 1,
         denoise: bool = False,
         denoise_config: Optional[DenoisingConfig] = None,
+        chunk_size_sec: int = 20,
+        pause_length_sec: float = 1,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -327,25 +326,14 @@ class Transcriber(nn.Module):
         :returns:
             - List of Tokens with timestamps.
         """
-        
-        if isinstance(audio, str):
-            with Path(audio).open("rb") as fb:
-                block = MemoryBlock(fb.read())
-            decoded_audio = self.decode_audio(block)
-        else:
-            decoded_audio = {
-                "waveform": audio,
-                "sample_rate": sample_rate,
-                "format": -1,
-            }
 
         if denoise:
             decoded_audio = self.denoise_audio(audio, denoise_config)
         else:            
             if isinstance(audio, str):
-                with Path(audio).open("rb") as fb:
-                    block = MemoryBlock(fb.read())
-                decoded_audio = self.decode_audio(block)
+                    with Path(audio).open("rb") as fb:
+                        block = MemoryBlock(fb.read())
+                    decoded_audio = self.decode_audio(block)
             else:
                 decoded_audio = {
                     "waveform": audio,
@@ -353,32 +341,31 @@ class Transcriber(nn.Module):
                     "format": -1,
                 }
 
-        src = self.convert_to_fbank(decoded_audio)["fbank"]
+            src = self.convert_to_fbank(decoded_audio)["fbank"]
 
-        length_seconds = (
-            decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
-        )
-
-        if length_seconds > chunk_size_sec:
+            length_seconds = (
+                decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
+            )
 
             waveform_2d = decoded_audio.get("waveform")
             waveform_1d = decoded_audio.get("waveform").view(-1)
             segmenter = SileroVADSegmenter(
-              sample_rate=sample_rate,
-              chunk_size_sec=chunk_size_sec,
-              pause_length=pause_length_sec,
-              )
-            segmented_audios = segmenter.segment_long_input(waveform_1d)
+                sample_rate=sample_rate,
+                chunk_size_sec=chunk_size_sec,
+                pause_length=pause_length_sec,
+            )
+
+            if length_seconds > chunk_size_sec:
+                src_segments = segmenter.segment_long_input(waveform_1d)
+            else:
+                src_segments = [(0, waveform_1d.size(0))]
+
             transcriptions = []
-            for start, end in segmented_audios:
+            for start, end in src_segments:
                 segment = waveform_2d[start:end, :]
-                src_segment = self.convert_to_fbank(
-                    {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
-                     "format": decoded_audio.get("format")})["fbank"]
-                print(src_segment.device)
                 length_seconds_segment = segment.size(0) / sample_rate
                 transcription_segment = self.run_inference(
-                    src_segment,
+                    segment,
                     src_lang,
                     length_seconds_segment,
                     filter_width,
@@ -387,12 +374,3 @@ class Transcriber(nn.Module):
                 transcriptions.append(str(transcription_segment))
 
             return " ".join(transcriptions)
-        else:
-
-            return self.run_inference(
-                src,
-                src_lang,
-                length_seconds,
-                filter_width,
-                sequence_generator_options,
-            )
