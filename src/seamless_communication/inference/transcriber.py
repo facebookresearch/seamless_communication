@@ -341,8 +341,6 @@ class Transcriber(nn.Module):
                     "format": -1,
                 }
 
-            src = self.convert_to_fbank(decoded_audio)["fbank"]
-
             length_seconds = (
                 decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
             )
