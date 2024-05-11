@@ -36,32 +36,16 @@ logger = logging.getLogger(__name__)
 class SeqsBatch:
     src_tokens: Optional[Tensor]
     src_lengths: Optional[Tensor]
-    target_tokens: Optional[Tensor] = None
-    prev_output_tokens: Optional[Tensor] = None
-    target_lengths: Optional[Tensor] = None
 
     def __del__(self) -> None:
         """Explicitly delete tensors
         to force GPU memory cleanup"""
         for tensor in [
             self.src_tokens,
-            self.src_lengths,
-            self.target_tokens,
-            self.prev_output_tokens,
-            self.target_lengths,
+            self.src_lengths
         ]:
             if tensor is not None:
                 del tensor
-
-
-@dataclass
-class MultimodalSeqsBatch:
-    speech_to_text: SeqsBatch
-    text_to_units: SeqsBatch
-
-    def __del__(self) -> None:
-        del self.speech_to_text
-        del self.text_to_units
 
 
 @dataclass
@@ -97,11 +81,13 @@ class UnitYLanguageIDDataLoader:
 
     def __init__(
         self,
+        num_languages: int,
         text_tokenizer: NllbTokenizer,
         unit_tokenizer: UnitTokenizer,
         dataset_manifest_path: str,
         batching_config: BatchingConfig,
     ):
+        self.num_languages = num_languages
         self.text_tokenizer = text_tokenizer
         self.text_encoders_per_lang: Dict[str, TextTokenEncoder] = {}
         self.unit_tokenizer = unit_tokenizer
@@ -196,7 +182,14 @@ class UnitYLanguageIDDataLoader:
         ## Output Label
         le = LabelEncoder()
         source_langs = [ sample.source.lang for sample in samples ]
-        onehot_labels = torch.nn.functional.one_hot(torch.tensor(le.fit_transform(source_langs)))
+        onehot_labels = torch.nn.functional.one_hot(
+            torch.tensor(le.fit_transform(source_langs)),
+            num_classes=self.num_languages).float()
+        
+        while src_tokens.size(0) < self.batching_config.batch_size:
+            src_tokens = torch.cat((src_tokens, src_tokens[-1].unsqueeze(0)), dim=0)
+            src_lengths = torch.cat((src_lengths, src_lengths[-1].unsqueeze(0)), dim=0)
+            onehot_labels = torch.cat((onehot_labels, onehot_labels[-1].unsqueeze(0)), dim=0)
             
         return SeqsBatch(src_tokens=src_tokens, src_lengths=src_lengths), onehot_labels
 

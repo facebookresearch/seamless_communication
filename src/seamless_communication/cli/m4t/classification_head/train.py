@@ -74,6 +74,11 @@ def init_parser() -> argparse.ArgumentParser:
         help="Base model name (`seamlessM4T_medium`, `seamlessM4T_large`)",
     )
     parser.add_argument(
+        "--num_languages", 
+        type=int, 
+        help="The number of classes"
+    )
+    parser.add_argument(
         "--save_model_path",
         type=Path,
         required=True,
@@ -119,18 +124,6 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Number of steps with linearly increasing learning rate"),
     )
     parser.add_argument(
-        "--eval_steps",
-        type=int,
-        default=50,
-        help=("Get eval loss after each `eval_steps` training steps "),
-    )
-    parser.add_argument(
-        "--log_steps",
-        type=int,
-        default=10,
-        help=("Log inner loss after each `log_steps` training steps"),
-    )
-    parser.add_argument(
         "--device",
         type=str,
         default="cuda",
@@ -143,6 +136,19 @@ def init_parser() -> argparse.ArgumentParser:
         help="The number of layers in the classification head"
     )
     return parser
+
+
+def plot_losslog(losslog: list, save_to: str = None):
+    # TODO: Make this look good
+    plt.plot(losslog)
+    plt.title('Training Loss')
+    plt.xlabel('Batch')
+    plt.ylabel('Loss')
+    if save_to:
+        plt.savefig(save_to)
+        plt.clf()
+    else:
+        plt.show()
 
 
 def train(head: torch.nn.Module,
@@ -174,9 +180,11 @@ def train(head: torch.nn.Module,
             
             # Run batches through train step
             for seqs, labels in tqdm(dataloader.get_dataloader(), desc="Training Steps"):
-                optimizer.zero_grad()
                 assert seqs.src_tokens is not None
+                optimizer.zero_grad()
                 seqs.src_tokens = seqs.src_tokens.to(params.device)
+                labels = labels.to(params.device)
+                
                 with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
                     mask = PaddingMask(seqs.src_lengths, seqs.src_tokens.size(1)).to(params.device)
                     vector, _ = frozen_model.encode(seqs.src_tokens, padding_mask=mask)
@@ -193,6 +201,11 @@ def train(head: torch.nn.Module,
                 losslog.append(loss.cpu().item())
                 if len(losslog) % 5 == 0:
                     logger.info(f"Train Loss: {sum(losslog[-5:]) / 5}")
+                    plot_losslog(losslog, save_to=params.save_model_path.parent / ".checkpoints/losslog.png")
+                    
+                    if len(losslog) % 2 == 0:
+                        torch.save(head.state_dict(),
+                            params.save_model_path.parent / f".checkpoints/checkpoint-{len(losslog)//10}.pt")
                 
                 grad_scaler.scale(loss).backward()
                 grad_scaler.step(optimizer)
@@ -225,7 +238,9 @@ def main() -> None:
         for param in module.parameters():
             param.requires_grad = False
 
+    # TODO: Find embed dim from model
     head = ClassificationHead(1024, args.num_layers, args.num_languages)
+    head.train()
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
     if model.text_encoder is not None:
@@ -237,6 +252,7 @@ def main() -> None:
 
     # Create daataloaders
     train_dataloader = dataloader.UnitYLanguageIDDataLoader(
+        num_languages=args.num_languages,
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
         batching_config=dataloader.BatchingConfig(
@@ -262,13 +278,6 @@ def main() -> None:
     )
 
     torch.save(trained_head.state_dict(), args.save_model_path)
-    
-    # plot losslog
-    plt.plot(losslog)
-    plt.title('Training Loss')
-    plt.xlabel('Batch')
-    plt.ylabel('Loss')
-    plt.show()
     
 
 if __name__ == "__main__":
