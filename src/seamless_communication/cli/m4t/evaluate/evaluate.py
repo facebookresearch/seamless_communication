@@ -32,6 +32,7 @@ from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
+from seamless_communication.models.unity import UnitYModel
 from seamless_communication.inference import (
     BatchedSpeechOutput,
     Modality,
@@ -361,6 +362,26 @@ def run_eval(
     )
 
 
+def load_checkpoint(model: UnitYModel, path: str, device = torch.device("cpu")) -> None:
+    saved_model = torch.load(path, map_location=device)["model"]
+    saved_model = { k.replace("model.", ""): v for k, v in saved_model.items() }
+
+    def _select_keys(state_dict: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+        return {key.replace(prefix, ""): value for key, value in state_dict.items() if key.startswith(prefix)}
+
+    model.speech_encoder_frontend.load_state_dict(_select_keys(saved_model, "model.speech_encoder_frontend."))
+    model.speech_encoder.load_state_dict(_select_keys(saved_model, "model.speech_encoder."))
+
+    assert model.text_decoder_frontend is not None
+    model.text_decoder_frontend.load_state_dict(_select_keys(saved_model, "model.text_decoder_frontend."))
+
+    assert model.text_decoder is not None
+    model.text_decoder.load_state_dict(_select_keys(saved_model, "model.text_decoder."))
+
+    assert model.final_proj is not None
+    model.final_proj.load_state_dict(_select_keys(saved_model, "model.final_proj."))
+
+
 def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     parser = argparse.ArgumentParser(
         description="M4T evaluation for tasks supported by Translator."
@@ -454,11 +475,8 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         output_modality=output_modality,
     )
     
-    # HACK: Get a quick model load
     if args.load_checkpoint:
-        saved_model = torch.load(args.load_checkpoint, map_location=device)["model"]
-        saved_model = { k.replace("model.", ""): v for k, v in saved_model.items() }
-        translator.model.load_state_dict(saved_model)
+        load_checkpoint(translator.model, path=args.load_checkpoint, device=device)
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
 

@@ -106,6 +106,12 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Log inner loss after each `log_steps` training steps"),
     )
     parser.add_argument(
+        "--max_src_tokens",
+        type=int,
+        default=7000,
+        help=("Maximum number of src_tokens per batch, used to avoid GPU OOM and maximize the effective batch size"),
+    )
+    parser.add_argument(
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
@@ -187,7 +193,7 @@ def main() -> None:
             float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.train_dataset,
-        max_src_tokens_per_batch=7000)
+        max_src_tokens_per_batch=args.max_src_tokens)
     
     eval_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,

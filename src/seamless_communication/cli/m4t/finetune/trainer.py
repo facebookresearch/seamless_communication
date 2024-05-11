@@ -336,7 +336,7 @@ class UnitYFinetune:
         )
 
     @torch.no_grad()
-    def _eval_model(self, n_batches: int = 250) -> None:
+    def _eval_model(self, n_batches: int) -> None:
         """Calc avg loss on eval dataset and update evaluation stats"""
         if self.eval_data_loader is None:
             return
@@ -370,7 +370,7 @@ class UnitYFinetune:
                 f"last lr={self.lr_scheduler.get_last_lr()[0]:.2E}"
             )
 
-    def _train_forward(self, batch: List[dataloader.MultimodalSeqsBatch]) -> None:
+    def _train_step(self, batch: List[dataloader.MultimodalSeqsBatch]) -> None:
         """Run one train step"""
         self.model.train()
         self.optimizer.zero_grad()
@@ -415,7 +415,7 @@ class UnitYFinetune:
         while self.epoch_idx < self.params.max_epochs and self.patience_left:
             for train_batch in tqdm(train_dataloader, desc="Training Steps"):
                 # Run batch through train step
-                self._train_forward(train_batch)
+                self._train_step(train_batch)
                 
                 # Perform eval if its time to eval
                 if not self.update_idx or self.update_idx % self.params.eval_steps != 0:

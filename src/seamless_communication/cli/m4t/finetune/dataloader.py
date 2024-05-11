@@ -210,7 +210,7 @@ class UnitYDataLoader:
             samples_with_fbanks, key=lambda sb: -sb[1].shape[0]
         )
         bwd = samples_with_fbanks[0][1].shape[0]
-        max_samples_for_batch = min(1, self.max_src_tokens_per_batch // bwd)
+        max_samples_for_batch = max(1, self.max_src_tokens_per_batch // bwd)
         if max_samples_for_batch < len(samples_with_fbanks):
             samples_with_fbanks = samples_with_fbanks[:max_samples_for_batch]
         return samples_with_fbanks
