@@ -59,7 +59,7 @@ class SileroVADSegmenter:  # type: ignore
             segments.append(current_segment) 
 
         return segments
-    
+   
     def get_speech_timestamps(
         self,
         audio: torch.Tensor,
@@ -117,15 +117,39 @@ class SileroVADSegmenter:  # type: ignore
                         sgm_a.duration > min_segment_length
                         and sgm_b.duration > min_segment_length
                     ):
-                        self.recursive_split(sgm_a)
-                        self.recursive_split(sgm_b)
+                        self.recursive_split(
+                          sgm_a,
+                          segments,
+                          max_segment_length,
+                          min_segment_length,
+                          window_size_samples,
+                          threshold)
+                        self.recursive_split(
+                          sgm_b,
+                          segments,
+                          max_segment_length,
+                          min_segment_length,
+                          window_size_samples,
+                          threshold)
                         break
                     j += 1
                 else:
                     if sgm_a.duration > min_segment_length:
-                        self.recursive_split(sgm_a)
+                        self.recursive_split(
+                          sgm_a,
+                          segments,
+                          max_segment_length,
+                          min_segment_length,
+                          window_size_samples,
+                          threshold)
                     if sgm_b.duration > min_segment_length:
-                        self.recursive_split(sgm_b)
+                        self.recursive_split(
+                          sgm_b,
+                          segments,
+                          max_segment_length,
+                          min_segment_length,
+                          window_size_samples,
+                          threshold)
 
     def pdac(
             self,
