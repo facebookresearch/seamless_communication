@@ -341,6 +341,8 @@ class Transcriber(nn.Module):
                     "format": -1,
                 }
 
+            decoded_audio = self.convert_to_fbank(decoded_audio)["fbank"]
+
             length_seconds = (
                 decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
             )
@@ -361,9 +363,12 @@ class Transcriber(nn.Module):
             transcriptions = []
             for start, end in src_segments:
                 segment = waveform_2d[start:end, :]
+                src_segment = self.convert_to_fbank(
+                    {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
+                     "format": decoded_audio.get("format")})["fbank"]
                 length_seconds_segment = segment.size(0) / sample_rate
                 transcription_segment = self.run_inference(
-                    segment,
+                    src_segment,
                     src_lang,
                     length_seconds_segment,
                     filter_width,
