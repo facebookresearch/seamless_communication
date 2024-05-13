@@ -237,9 +237,10 @@ def main() -> None:
     for _, module in model.named_modules():
         for param in module.parameters():
             param.requires_grad = False
-
+    
+    
     # TODO: Find embed dim from model
-    head = ClassificationHead(1024, args.num_layers, args.num_languages)
+    head = ClassificationHead(model.model_dim, args.num_layers, args.num_languages)
     head.train()
 
     assert model.target_vocab_info == text_tokenizer.vocab_info
