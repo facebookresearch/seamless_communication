@@ -32,13 +32,13 @@ from seamless_communication.cli.m4t.predict import (
     add_inference_arguments,
     set_generation_opts,
 )
+from seamless_communication.models.unity import UnitYModel
 from seamless_communication.inference import (
     BatchedSpeechOutput,
     Modality,
     SequenceGeneratorOptions,
     Translator,
 )
-from seamless_communication.models.unity import load_unity_text_tokenizer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -247,14 +247,14 @@ def adjust_output_for_corrupted_inputs(
 
 def run_eval(
     translator: Translator,
-    text_tokenizer: TextTokenizer,
     ctx: EvalContext,
     whisper_model_name: str,
+    n_samples = None
 ) -> None:
-    pipeline = build_data_pipeline(ctx, text_tokenizer)
+    pipeline = build_data_pipeline(ctx, translator.text_tokenizer)
 
     total_steps = count_lines(ctx.data_file) - 1
-    progress_bar = tqdm(total=total_steps)
+    progress_bar = tqdm(total=n_samples or total_steps)
 
     output_path = ctx.output_path / ctx.data_file.stem
     output_path.mkdir(parents=True, exist_ok=True)
@@ -294,15 +294,21 @@ def run_eval(
 
             # Skip performing inference when the input is entirely corrupted.
             if src["seqs"].numel() > 0:
-                (text_output, speech_output,) = translator.predict(
-                    src,
-                    ctx.task,
-                    ctx.target_lang,
-                    src_lang=ctx.source_lang,
-                    text_generation_opts=ctx.text_generation_opts,
-                    unit_generation_opts=ctx.unit_generation_opts,
-                    unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
-                )
+                # HACK:: Fix this bad handling
+                # RuntimeError: The sequence generator returned no hypothesis at index 2. Please file a bug report.
+                try:
+                    (text_output, speech_output,) = translator.predict(
+                        src,
+                        ctx.task,
+                        ctx.target_lang,
+                        src_lang=ctx.source_lang,
+                        text_generation_opts=ctx.text_generation_opts,
+                        unit_generation_opts=ctx.unit_generation_opts,
+                        unit_generation_ngram_filtering=ctx.unit_generation_ngram_filtering,
+                    )
+                except RuntimeError as e:
+                    logger.exception(f"Caught RuntimeError: {e}")
+                    continue
             else:
                 text_output = []
                 if ctx.output_modality == Modality.SPEECH:
@@ -338,6 +344,10 @@ def run_eval(
 
                 sample_id += 1
                 progress_bar.update(1)
+                if n_samples and progress_bar.n == n_samples:
+                    break
+            if n_samples and progress_bar.n == n_samples:
+                break
 
     progress_bar.close()
     logger.info(f"Processed {sample_id} samples")
@@ -352,6 +362,26 @@ def run_eval(
     )
 
 
+def load_checkpoint(model: UnitYModel, path: str, device = torch.device("cpu")) -> None:
+    saved_model = torch.load(path, map_location=device)["model"]
+    saved_model = { k.replace("model.", ""): v for k, v in saved_model.items() }
+
+    def _select_keys(state_dict: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+        return {key.replace(prefix, ""): value for key, value in state_dict.items() if key.startswith(prefix)}
+
+    model.speech_encoder_frontend.load_state_dict(_select_keys(saved_model, "model.speech_encoder_frontend."))
+    model.speech_encoder.load_state_dict(_select_keys(saved_model, "model.speech_encoder."))
+
+    assert model.text_decoder_frontend is not None
+    model.text_decoder_frontend.load_state_dict(_select_keys(saved_model, "model.text_decoder_frontend."))
+
+    assert model.text_decoder is not None
+    model.text_decoder.load_state_dict(_select_keys(saved_model, "model.text_decoder."))
+
+    assert model.final_proj is not None
+    model.final_proj.load_state_dict(_select_keys(saved_model, "model.final_proj."))
+
+
 def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     parser = argparse.ArgumentParser(
         description="M4T evaluation for tasks supported by Translator."
@@ -362,8 +392,20 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         help="Data file to be evaluated, either TSV file or manifest JSON file."
         "Format of the manifest JSON file should be that as produced by `m4t_prepare_dataset`"
     )
+    parser.add_argument(
+        "--load_checkpoint", 
+        type=str,
+        help="Load a local Checkpoint",
+        default=None
+    )
 
     parser = add_inference_arguments(parser)
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Device",
+        default="cuda" if torch.cuda.is_available() else "cpu",
+    )
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -388,7 +430,13 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         help="Whisper model to be used for ASR-BLEU scoring",
         default="large",
     )
-    args, unknown = parser.parse_known_args()
+    parser.add_argument(
+        "--n_samples",
+        type=int,
+        help="Number of Samples to run eval on. All if None.",
+        default=None,
+    )
+    args, _ = parser.parse_known_args()
     default_args = vars(args)
     default_args.update(optional_args) if optional_args else default_args
     args = Namespace(**default_args)
@@ -412,15 +460,9 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         raise ValueError(
             f"Invalid audio_root_dir: {args.audio_root_dir} for speech input."
         )
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        dtype = torch.float16
-    else:
-        device = torch.device("cpu")
-        dtype = torch.float32
-
-    text_tokenizer = load_unity_text_tokenizer(args.model_name)
+    
+    device = torch.device(args.device)
+    dtype = torch.float16 if device.type == "cuda" else torch.float32
 
     # TODO: Avoid loading the T2U model, vocoder when the output
     # modality is text.
@@ -428,11 +470,13 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
         args.model_name,
         args.vocoder_name,
         device,
-        text_tokenizer=text_tokenizer,
         dtype=dtype,
         input_modality=input_modality,
         output_modality=output_modality,
     )
+    
+    if args.load_checkpoint:
+        load_checkpoint(translator.model, path=args.load_checkpoint, device=device)
 
     text_generation_opts, unit_generation_opts = set_generation_opts(args)
 
@@ -465,7 +509,7 @@ def main(optional_args: Optional[Dict[str, Any]] = None) -> None:
     # fmt: on
     logger.info(f"Running inference on {device=} with {dtype=}, {ctx.batch_size=}.")
 
-    run_eval(translator, text_tokenizer, ctx, args.whisper_model_name)
+    run_eval(translator, ctx, args.whisper_model_name, n_samples=args.n_samples)
 
 
 if __name__ == "__main__":
