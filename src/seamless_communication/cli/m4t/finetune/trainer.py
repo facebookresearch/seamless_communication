@@ -427,11 +427,12 @@ class UnitYFinetune:
                     self._eval_model(n_batches=100)
                 except torch.cuda.OutOfMemoryError:
                     logger.info("[OOM] CUDA out of memory. Waiting 10 seconds and trying again...")
-                    time.sleep(10)    
+                    time.sleep(10)
                     try:
                         self._eval_model(n_batches=100)
                     except torch.cuda.OutOfMemoryError:
-                        continue
+                        logger.error("[OOM] CUDA out of memory. Adjust training parameters.")
+                        raise torch.cuda.OutOfMemoryError()
                     
                 # Save the current model if its the best we've ever had
                 if self.is_best_state:
