@@ -12,8 +12,10 @@ class ClassificationHead(nn.Module):
             [ nn.Linear(embed_dim, n_classes) ])
 
     def forward(self, x):
+        # (Batch, Seq, Embed)
         x, _ = self.attn(x, x, x)
+        x = x[:, 0]
         for layer in self.layers:
             x = nn.functional.relu(layer(x))
-        return nn.functional.softmax(x[:, 0]).float()
+        return nn.functional.softmax(x).float()
     

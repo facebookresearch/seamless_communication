@@ -138,15 +138,18 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def plot_losslog(losslog: list, save_to: str = None):
+def plot_losslog(losslog: list, save_to: Path = None, yscale = 'log'):
     # TODO: Make this look good
     plt.plot(losslog)
+    plt.yscale(yscale)
     plt.title('Training Loss')
     plt.xlabel('Batch')
     plt.ylabel('Loss')
     if save_to:
         plt.savefig(save_to)
         plt.clf()
+        with open(save_to.parent / "losslog.log", "wb") as f:
+            f.write(losslog)
     else:
         plt.show()
 
@@ -191,7 +194,7 @@ def train(head: torch.nn.Module,
                 
                 probs = head(vector)
                 
-                loss = torch.nn.functional.cross_entropy(labels, probs, weight=label_weights)
+                loss = torch.nn.functional.cross_entropy(labels, probs)
                 if loss.isnan().any().item():
                     error = RuntimeError("Train loss is NaN! Something is wrong in the model!")
                     logger.error(seqs)
