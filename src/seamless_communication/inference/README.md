@@ -16,11 +16,12 @@ Key Features:
 ### Installation
 
 Manually install demucs: 
+
 pip install git+https://github.com/facebookresearch/demucs#egg=demucs
 
 ### Usage
 
-To utilize Demucs for denoising audio, instantiate the Transcriber class and optionally the DenoisingConfig class with desired configuration. 
+To utilize Demucs for denoising audio, instantiate the Transcriber class and optionally the DenoisingConfig class with desired configuration. 'denoise' parameter is False by default, and needs to be set to True to use denoising.
 
 ```
 import torch
@@ -48,7 +49,7 @@ The 'SileroVADSegmenter' class offers functionality for segmenting long audio re
 Key Features:
 
 - Segmenting long audio recordings into chunks based on speech presence.
-- Automatic segmentaing of all audio longer than the chunk size. 
+- Automatic segmenting of all audio longer than the chunk size. 
 - Configurable parameters for chunk size and pause length.
 - Resampling audio to match the model's sample rate.
 - Efficient speech probability computation using sliding windows.
@@ -56,7 +57,7 @@ Key Features:
 ### Usage
 
 To utilize Silero VAD for segmenting audio, instantiate the Transcriber class. When using the transcribe method, audio will be segmented automatically if it is longer than chunk_size_sec, which has a default value of 20. Use a smaller value for better quality transcription.
-Pause_length_sec determines the duration of silence between segments and has a default value of 1 second. This parameter can be customized.
+pause_length_sec determines the duration of silence between segments and has a default value of 1 second. This parameter can be customized.
 
 ```
 import torch
