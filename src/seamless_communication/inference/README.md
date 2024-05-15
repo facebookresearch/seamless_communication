@@ -9,7 +9,7 @@ The 'Demucs' class provides functionality for denoising audio in the transcripti
 Key Features:
 
 - Denoising audio using the Demucs model.
-- Configurable parameters for optimizing denoising outcomes.
+- Configurable parameters for denoising.
 - Support for both Tensor input and audio file input.
 - Automatic cleanup of temporary files generated during denoising.
 
