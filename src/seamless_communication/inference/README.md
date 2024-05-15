@@ -43,7 +43,7 @@ txt = transcriber.transcribe(audio="example.wav", src_lang="eng", denoise=True, 
 
 ## Silero VAD Segmenter: Audio Segmentation Tool
 
-The 'SileroVADSegmenter' class offers functionality for segmenting long audio recordings into chunks. This tool segments based on speech timestamps. 
+The 'SileroVADSegmenter' class offers functionality for segmenting long audio recordings into chunks in the transcription pipeline. This tool segments based on speech timestamps. 
 
 Key Features:
 
