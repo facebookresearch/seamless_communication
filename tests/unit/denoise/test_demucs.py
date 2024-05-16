@@ -18,7 +18,6 @@ class TestDemucs(unittest.TestCase):
         self.assertEqual(demucs.denoise_config.sample_rate, 16000)
 
     @patch("seamless_communication.denoise.demucs.torchaudio.load")
-    @patch("seamless_communication.denoise.demucs.torchaudio.save")
     @patch("seamless_communication.denoise.demucs.Path")
     @patch("seamless_communication.denoise.demucs.sp.run")
     def test_denoise(self, mock_run, mock_path, mock_load):

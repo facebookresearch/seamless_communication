@@ -19,6 +19,7 @@ from fairseq2.typing import DataType, Device
 
 import numpy as np
 from scipy.signal import medfilt2d
+from argparse import Namespace
 
 import torch
 import torch.nn as nn
@@ -30,6 +31,7 @@ from seamless_communication.models.unity import (
     load_unity_text_tokenizer,
 )
 from seamless_communication.denoise.demucs import Demucs, DenoisingConfig
+from seamless_communication.segment.silero_vad import SileroVADSegmenter
 
 
 class EncDecAttentionsCollect(AttentionWeightHook):
@@ -293,6 +295,8 @@ class Transcriber(nn.Module):
         sample_rate: int = 16000,
         denoise: bool = False,
         denoise_config: Optional[DenoisingConfig] = None,
+        chunk_size_sec: int = 20,
+        pause_length_sec: float = 1,
         **sequence_generator_options: Dict,
     ) -> Transcription:
         """
@@ -306,6 +310,12 @@ class Transcriber(nn.Module):
             Sample rate of the audio Tensor.
         :param filter_width:
             Window size to pad weights tensor.
+        :param chunk_size_sec:
+            Length of audio chunks in seconds.
+            For segmenting audio.
+        :param pause_length_sec:
+            Length of pause between audio chunks in seconds.
+            For segmenting audio.
         :params **sequence_generator_options:
             See BeamSearchSeq2SeqGenerator.
         :params denoise:
@@ -321,9 +331,9 @@ class Transcriber(nn.Module):
             decoded_audio = self.denoise_audio(audio, denoise_config)
         else:            
             if isinstance(audio, str):
-                with Path(audio).open("rb") as fb:
-                    block = MemoryBlock(fb.read())
-                decoded_audio = self.decode_audio(block)
+                    with Path(audio).open("rb") as fb:
+                        block = MemoryBlock(fb.read())
+                    decoded_audio = self.decode_audio(block)
             else:
                 decoded_audio = {
                     "waveform": audio,
@@ -331,16 +341,37 @@ class Transcriber(nn.Module):
                     "format": -1,
                 }
 
-        src = self.convert_to_fbank(decoded_audio)["fbank"]
+            length_seconds = (
+                decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
+            )
 
-        length_seconds = (
-            decoded_audio["waveform"].size(0) / decoded_audio["sample_rate"]
-        )
+            waveform_2d = decoded_audio.get("waveform")
+            waveform_1d = decoded_audio.get("waveform").view(-1)
+            segmenter = SileroVADSegmenter(
+                sample_rate=sample_rate,
+                chunk_size_sec=chunk_size_sec,
+                pause_length=pause_length_sec,
+            )
 
-        return self.run_inference(
-            src,
-            src_lang,
-            length_seconds,
-            filter_width,
-            sequence_generator_options,
-        )
+            if length_seconds > chunk_size_sec:
+                src_segments = segmenter.segment_long_input(waveform_1d)
+            else:
+                src_segments = [(0, waveform_1d.size(0))]
+
+            transcriptions = []
+            for start, end in src_segments:
+                segment = waveform_2d[start:end, :]
+                src_segment = self.convert_to_fbank(
+                    {"waveform": segment, "sample_rate": decoded_audio.get("sample_rate"), 
+                     "format": decoded_audio.get("format")})["fbank"]
+                length_seconds_segment = segment.size(0) / sample_rate
+                transcription_segment = self.run_inference(
+                    src_segment,
+                    src_lang,
+                    length_seconds_segment,
+                    filter_width,
+                    sequence_generator_options,
+                )
+                transcriptions.append(str(transcription_segment))
+
+            return " ".join(transcriptions)

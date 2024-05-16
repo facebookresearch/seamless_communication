@@ -10,12 +10,9 @@ import os
 from pathlib import Path
 
 import torch
-from fairseq2.models.nllb.tokenizer import NllbTokenizer
 
 from seamless_communication.cli.m4t.finetune import dataloader, dist_utils, trainer
 from seamless_communication.models.unity import (
-    UnitTokenizer,
-    UnitYModel,
     load_unity_model,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
@@ -109,6 +106,12 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Log inner loss after each `log_steps` training steps"),
     )
     parser.add_argument(
+        "--max_src_tokens",
+        type=int,
+        default=7000,
+        help=("Maximum number of src_tokens per batch, used to avoid GPU OOM and maximize the effective batch size"),
+    )
+    parser.add_argument(
         "--mode",
         type=trainer.FinetuneMode,
         choices=list(trainer.FinetuneMode),
@@ -118,6 +121,14 @@ def init_parser() -> argparse.ArgumentParser:
             "* `TEXT_TO_SPEECH` -- finetune only T2U; "
             "* `SPEECH_TO_TEXT` -- finetune only S2T"
         ),
+    )
+    parser.add_argument(
+        "--freeze_layers",
+        nargs="*",
+        required=False,
+        default=None,
+        # TODO: better description
+        help=("A list of modules to freeze in the model. If empty, everything will be trained."),
     )
     parser.add_argument(
         "--device",
@@ -130,14 +141,19 @@ def init_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = init_parser().parse_args()
+    
     dist_utils.init_distributed([logger, trainer.logger])
-    text_tokenizer: NllbTokenizer = load_unity_text_tokenizer(args.model_name)
-    unit_tokenizer: UnitTokenizer = load_unity_unit_tokenizer(args.model_name)
+    float_dtype = torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16
+    
+    text_tokenizer = load_unity_text_tokenizer(args.model_name)
+    unit_tokenizer = load_unity_unit_tokenizer(args.model_name)
+    
     finetune_params = trainer.FinetuneParams(
+        model_name=args.model_name,
         finetune_mode=args.mode,
         save_model_path=args.save_model_to,
         device=torch.device(args.device),
-        float_dtype=torch.float16 if torch.device(args.device).type != "cpu" else torch.bfloat16,
+        float_dtype=float_dtype,
         train_batch_size=args.batch_size,
         eval_batch_size=args.batch_size,
         patience=args.patience,
@@ -147,22 +163,25 @@ def main() -> None:
         eval_steps=args.eval_steps,
         log_steps=args.log_steps,
     )
-    logger.info(f"Finetune params: {finetune_params}")
-    model: UnitYModel = load_unity_model(
-        args.model_name, device=torch.device("cpu"), dtype=torch.float32
-    )
+    
+    logger.info(f"Finetune Params: {finetune_params}")
+    
+    model = load_unity_model(args.model_name, device=torch.device("cpu"), dtype=torch.float32)
     assert model.target_vocab_info == text_tokenizer.vocab_info
-    # (optional) delete unused params to reduce GPU memory consumption
+    
     if (
         finetune_params.finetune_mode == trainer.FinetuneMode.SPEECH_TO_TEXT
         and model.t2u_model is not None
     ):
         model.t2u_model = None
+    
     if model.text_encoder is not None:
         model.text_encoder = None
+    
+    # Put model on selected device
     model = model.to(finetune_params.device)
-    logger.info(f"<{args.model_name}> {model}")
 
+    # TODO: delete unused params to reduce GPU memory consumption
     train_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
@@ -174,7 +193,8 @@ def main() -> None:
             float_dtype=finetune_params.float_dtype,
         ),
         dataset_manifest_path=args.train_dataset,
-    )
+        max_src_tokens_per_batch=args.max_src_tokens)
+    
     eval_dataloader = dataloader.UnitYDataLoader(
         text_tokenizer=text_tokenizer,
         unit_tokenizer=unit_tokenizer,
@@ -182,17 +202,18 @@ def main() -> None:
             batch_size=finetune_params.eval_batch_size,
             rank=dist_utils.get_rank(),
             world_size=dist_utils.get_world_size(),
-            max_audio_length_sec=100.0,
+            max_audio_length_sec=75.0,
             float_dtype=finetune_params.float_dtype,
         ),
-        dataset_manifest_path=args.eval_dataset,
-    )
+        dataset_manifest_path=args.eval_dataset)
+    
     finetune = trainer.UnitYFinetune(
         model=model,
         params=finetune_params,
         train_data_loader=train_dataloader,
         eval_data_loader=eval_dataloader,
-    )
+        freeze_modules=args.freeze_layers)
+    
     finetune.run()
 
 

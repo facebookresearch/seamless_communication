@@ -115,6 +115,7 @@ expressivity_predict <path_to_input_audio> --tgt_lang <tgt_lang> --model_name se
 
 [Streaming Evaluation README](src/seamless_communication/cli/streaming) has detailed instructions for running evaluations for the SeamlessStreaming and Seamless models. The CLI has an `--no-scoring` option that can be used to skip the scoring part and just run inference.
 
+Please check the inference [README](src/seamless_communication/inference) for more details.
 
 ## Running SeamlessStreaming Demo
 You can duplicate the [SeamlessStreaming HF space](https://huggingface.co/spaces/facebook/seamless-streaming?duplicate=true) to run the streaming demo.
