@@ -12,6 +12,7 @@ from typing import List
 from tqdm import tqdm
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+import pickle
 
 import torch
 
@@ -138,7 +139,7 @@ def init_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def plot_losslog(losslog: list, save_to: Path = None, yscale = 'log'):
+def plot_losslog(losslog: list, save_to: Path = None, yscale='log'):
     # TODO: Make this look good
     plt.plot(losslog)
     plt.yscale(yscale)
@@ -148,8 +149,8 @@ def plot_losslog(losslog: list, save_to: Path = None, yscale = 'log'):
     if save_to:
         plt.savefig(save_to)
         plt.clf()
-        with open(save_to.parent / "losslog.log", "wb") as f:
-            f.write(losslog)
+        with open(save_to.parent / "losslog.pkl", "wb") as f:
+            pickle.dump(losslog, f)
     else:
         plt.show()
 
