@@ -244,6 +244,7 @@ def main() -> None:
     
     # Freeze everything in the model, only train classification head
     model = load_unity_model(args.model_name, device=torch.device("cpu"), dtype=torch.float32)
+    model.train()
     for _, module in model.named_modules():
         for param in module.parameters():
             param.requires_grad = False
