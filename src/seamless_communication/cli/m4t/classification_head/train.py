@@ -118,6 +118,12 @@ def init_parser() -> argparse.ArgumentParser:
         help=("Finetuning learning rate"),
     )
     parser.add_argument(
+        "--label_smoothing",
+        type=float,
+        default=0.1,
+        help=("Label smoothing"),
+    )
+    parser.add_argument(
         "--warmup_steps",
         type=int,
         default=100,
@@ -158,6 +164,7 @@ def train(head: torch.nn.Module,
           frozen_model: UnitYModel,
           dataloader: dataloader.UnitYLanguageIDDataLoader,
           params: ClassificationHeadTrainParams,
+          label_smoothing: float = 0.1,
           label_weights: torch.Tensor = None):
     
     logger.info("Start Training Language Head")
@@ -191,10 +198,9 @@ def train(head: torch.nn.Module,
                 with torch.autocast(device_type=params.device.type, dtype=params.float_dtype):
                     mask = PaddingMask(seqs.src_lengths, seqs.src_tokens.size(1)).to(params.device)
                     vector, _ = frozen_model.encode(seqs.src_tokens, padding_mask=mask)
+                    probs = head(vector)
                 
-                probs = head(vector)
-                
-                loss = torch.nn.functional.cross_entropy(labels, probs)
+                loss = torch.nn.functional.cross_entropy(probs, labels, label_smoothing=label_smoothing)
                 if loss.isnan().any().item():
                     error = RuntimeError("Train loss is NaN! Something is wrong in the model!")
                     logger.error(seqs)
@@ -270,6 +276,7 @@ def main() -> None:
         head=head,
         frozen_model=model,
         dataloader=train_dataloader,
+        label_smoothing=args.label_smoothing,
         params=ClassificationHeadTrainParams(
             save_model_path=Path(args.save_model_path),
             float_dtype=float_dtype,
