@@ -203,10 +203,13 @@ def train(head: torch.nn.Module,
                 
                 loss = torch.nn.functional.cross_entropy(probs, labels, label_smoothing=label_smoothing)
                 if loss.isnan().any().item():
-                    error = RuntimeError("Train loss is NaN! Something is wrong in the model!")
-                    logger.error(seqs)
-                    logger.error(error)
-                    raise error
+                    logger.error(seqs); logger.error(labels)
+                    raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
+                
+                grad_scaler.scale(loss).backward()
+                grad_scaler.step(optimizer)
+                grad_scaler.update()
+                lr_scheduler.step()
                 
                 losslog.append(loss.cpu().item())
                 if len(losslog) % 5 == 0:
@@ -214,17 +217,12 @@ def train(head: torch.nn.Module,
                     plot_losslog(losslog, save_to=params.save_model_path.parent / ".checkpoints/losslog.png")
                     
                     if len(losslog) % 2 == 0:
-                        torch.save(head.state_dict(),
-                            params.save_model_path.parent / f".checkpoints/checkpoint-{len(losslog)//10}.pt")
-                
-                grad_scaler.scale(loss).backward()
-                grad_scaler.step(optimizer)
-                grad_scaler.update()
-                lr_scheduler.step()
+                        torch.save(head.state_dict(), params.save_model_path.parent / f".checkpoints/__head-checkpoint_e{epoch}.pt")
+    
     # Catch SIGINT (^C) keyboard interrupt, and save model before terminating
     except KeyboardInterrupt:
         logger.info("[SIGINT] Saving optimizer state. Exiting cleanly...")
-        torch.save(optimizer.state_dict(), params.save_model_path / "optimizer_state.pth")
+        torch.save(optimizer.state_dict(), params.save_model_path.parent / "optimizer_state.pth")
 
     # Log average loss over last 5 batches, this is more stable
     logger.info(f"Final Loss: {sum(losslog[-5:]) / 5}")
@@ -249,8 +247,6 @@ def main() -> None:
         for param in module.parameters():
             param.requires_grad = False
     
-    
-    # TODO: Find embed dim from model
     head = ClassificationHead(model.model_dim, args.num_layers, args.num_languages)
     head.train()
 
