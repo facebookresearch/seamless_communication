@@ -201,7 +201,7 @@ def train(head: torch.nn.Module,
                     vector, _ = frozen_model.encode(seqs.src_tokens, padding_mask=mask)
                     probs = head(vector)
                 
-                loss = torch.nn.functional.binary_cross_entropy(probs, labels, label_smoothing=label_smoothing)
+                loss = torch.nn.functional.binary_cross_entropy(probs, labels)
                 if loss.isnan().any().item():
                     logger.error(seqs); logger.error(labels)
                     raise RuntimeError("Train loss is NaN! Something is wrong in the model!")
