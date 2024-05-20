@@ -408,7 +408,7 @@ class UnitYFinetune:
     def run(self) -> None:
         logger.info("Start Finetuning")
         self._reset_stats()
-        self._eval_model()
+        self._eval_model(n_batches=100)
         
         train_dataloader = self.train_data_loader.get_dataloader()
         
