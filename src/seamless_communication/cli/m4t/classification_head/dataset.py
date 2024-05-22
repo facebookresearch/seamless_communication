@@ -12,12 +12,15 @@ import os
 from pathlib import Path
 
 import torch
+import torchaudio
 
 from datasets import load_dataset
 from seamless_communication.datasets.huggingface import (
     SpeechTokenizer,
 )
 from seamless_communication.models.unit_extractor import UnitExtractor
+
+from seamless_communication.datasets.datatypes import LangPairSample, MultimodalSample
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,8 +81,9 @@ UNITY_TO_COMMON_VOICE_LANG_MAPPING = {
     "uzn": "uz",
     "vie": "vi",
     "yor": "yo",
-    "zul": "zu"
+    "zul": "zu",
 }
+
 
 def _check_lang_code_mapping(lang: str) -> None:
     if lang not in UNITY_TO_COMMON_VOICE_LANG_MAPPING:
@@ -109,17 +113,51 @@ class UnitSpeechTokenizer(SpeechTokenizer):
             sample_rate=sample_rate,
         )
 
-def download_common_voice(lang: str, split: str, save_directory: str):
+
+def download_common_voice(
+    lang: str, split: str, save_directory: str, max_samples: int
+) -> None:
     _check_lang_code_mapping(lang)
-    dataset = load_dataset('mozilla-foundation/common_voice_17_0', lang, split=split)
-    manifest_path: str = os.path.join(save_directory, f"{split}_manifest.json")
+    mozilla_lang = UNITY_TO_COMMON_VOICE_LANG_MAPPING[lang]
+    dataset = load_dataset(
+        "mozilla-foundation/common_voice_17_0",
+        mozilla_lang,
+        split=split,
+        token=os.environ.get("HF_TOKEN"),
+        streaming=True,
+    )
+    audio_dir = os.path.join(save_directory, "audio")
+    if not os.path.exists(audio_dir):
+        os.makedirs(audio_dir)
+    manifest_path: str = os.path.join(save_directory, f"{split}_{lang}_manifest.json")
     with open(manifest_path, "w") as fp_out:
         for idx, sample in enumerate(dataset, start=1):
-            sample['lang'] = lang
-            sample['waveform'] = None  # already extracted units
+            wav = torch.from_numpy(sample["audio"]["array"]).unsqueeze(0)
+            logger.info(f"WAV SHAPE {wav.shape}")
+            sampling_rate = sample["audio"]["sampling_rate"]
+            audio_path = (
+                split
+                + "_"
+                + os.path.basename(sample["audio"]["path"]).split(".")[0]
+                + ".wav"
+            )
+            audio_path = os.path.join(audio_dir, audio_path)
+            target_sr = 16000
+            wav = torchaudio.functional.resample(
+                wav, orig_freq=sampling_rate, new_freq=target_sr
+            )
+            torchaudio.save(audio_path, wav, target_sr)
+            sample = MultimodalSample(
+                id=idx, lang=lang, text=sample["sentence"], audio_local_path=audio_path
+            )
+            sample = LangPairSample(sample, sample)
             fp_out.write(json.dumps(dataclasses.asdict(sample)) + "\n")
+            fp_out.flush()
+            if idx == max_samples:
+                break
     logger.info(f"Saved {idx} samples for split={split} to {manifest_path}")
     logger.info(f"Manifest saved to: {manifest_path}")
+
 
 def init_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -147,11 +185,24 @@ def init_parser() -> argparse.ArgumentParser:
         required=True,
         help="Directory where the datasets will be stored with HuggingFace datasets cache files",
     )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=1000,
+        help="Max samples to fetch",
+    )
     return parser
+
 
 def main() -> None:
     args = init_parser().parse_args()
-    download_common_voice(args.lang, args.split, args.save_dir)
+    download_common_voice(
+        lang=args.lang,
+        split=args.split,
+        save_directory=args.save_dir,
+        max_samples=args.max_samples,
+    )
+
 
 if __name__ == "__main__":
     main()
