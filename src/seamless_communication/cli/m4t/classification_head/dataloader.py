@@ -8,7 +8,7 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -40,10 +40,7 @@ class SeqsBatch:
     def __del__(self) -> None:
         """Explicitly delete tensors
         to force GPU memory cleanup"""
-        for tensor in [
-            self.src_tokens,
-            self.src_lengths
-        ]:
+        for tensor in [self.src_tokens, self.src_lengths]:
             if tensor is not None:
                 del tensor
 
@@ -70,6 +67,9 @@ class BatchingConfig:
 
     float_dtype: torch.dtype = torch.float16
     """Select between fp16/fp32 for float tensors """
+
+    langs: Tuple[str] = ("eng", "fra", "deu", "rus", "spa")
+    """Class labels"""
 
 
 def worker_init_fn(worker_id: int) -> None:
@@ -119,7 +119,7 @@ class UnitYLanguageIDDataLoader:
         )
         return data_loader
 
-    def __iter__(self) -> Iterable:
+    def __iter__(self) -> Iterable[Any]:
         return self.get_dataloader().__iter__()
 
     def _get_source_fbank(self, sample: LangPairSample) -> Tensor:
@@ -155,43 +155,41 @@ class UnitYLanguageIDDataLoader:
             wav, sample_rate = torchaudio.load(sample.source.audio_local_path)
             length_s: float = max(wav.shape) / sample_rate
             return length_s > self.batching_config.max_audio_length_sec
-        except:
-            logger.exception(f"Failed to load sample path: {sample.source.audio_local_path}")
+        except Exception:
+            logger.exception(
+                f"Failed to load sample path: {sample.source.audio_local_path}"
+            )
             return True
 
-    def _collate(self, raw_samples: List[Dict[str, Any]]):
-        samples = [ LangPairSample.from_json(sample) for sample in raw_samples ]
-        
-        ## Input Speech
-        
+    def _collate(self, raw_samples: List[Dict[str, Any]]) -> Tuple[SeqsBatch, torch.Tensor]:
+        samples = [LangPairSample.from_json(sample) for sample in raw_samples]
+
+        # Input Speech
+
         # 1 - filter long audio samples
-        filtered_samples = [ sample for sample in samples if not self._is_long_src_audio(sample) ]
-        samples = filtered_samples if filtered_samples else [samples[0]]  # keep at least one sample
-        src_tokens_list = [ self._get_source_fbank(sample) for sample in samples ]
-        
+        filtered_samples = [
+            sample for sample in samples if not self._is_long_src_audio(sample)
+        ]
+        samples = (
+            filtered_samples if filtered_samples else [samples[0]]
+        )  # keep at least one sample
+        src_tokens_list = [self._get_source_fbank(sample) for sample in samples]
+
         # 2 - filter NaNs in fbanks´´
-        with_nans = [ fbank.isnan().any().item() for fbank in src_tokens_list ]
-        samples = [ sample for sample, skip in zip(samples, with_nans) if not skip ]
+        with_nans = [fbank.isnan().any().item() for fbank in src_tokens_list]
+        samples = [sample for sample, skip in zip(samples, with_nans) if not skip]
         assert len(samples) > 0
-        src_tokens_list = [ tok for tok, skip in zip(src_tokens_list, with_nans) if not skip ]
+        src_tokens_list = [
+            tok for tok, skip in zip(src_tokens_list, with_nans) if not skip
+        ]
         src_tokens = self._batch_tensors(
             src_tokens_list, pad_value=self.batching_config.fbank_feats_pad_idx
         ).to(self.batching_config.float_dtype)
-        src_lengths = torch.LongTensor([ tok.shape[0] for tok in src_tokens_list ])
-        
-        ## Output Label
-        le = LabelEncoder()
-        source_langs = [ sample.source.lang for sample in samples ]
-        onehot_labels = torch.nn.functional.one_hot(
-            torch.tensor(le.fit_transform(source_langs)),
-            num_classes=self.num_languages).float()
-        
-        while src_tokens.size(0) < self.batching_config.batch_size:
-            src_tokens = torch.cat((src_tokens, src_tokens[-1].unsqueeze(0)), dim=0)
-            src_lengths = torch.cat((src_lengths, src_lengths[-1].unsqueeze(0)), dim=0)
-            onehot_labels = torch.cat((onehot_labels, onehot_labels[-1].unsqueeze(0)), dim=0)
-            
-        return SeqsBatch(src_tokens=src_tokens, src_lengths=src_lengths), onehot_labels
+        src_lengths = torch.LongTensor([tok.shape[0] for tok in src_tokens_list])
+        source_lang_ids = torch.LongTensor([self.batching_config.langs.index(sample.source.lang) for sample in samples])
+        # logger.info(f"Batch size {source_lang_ids.shape}, lengths: {src_lengths}, labels: {source_lang_ids}")
+
+        return SeqsBatch(src_tokens=src_tokens, src_lengths=src_lengths), source_lang_ids
 
     def _load_manifest(self, dataset_manifest_path: str) -> Dataset:
         with open(dataset_manifest_path) as fp_in:
