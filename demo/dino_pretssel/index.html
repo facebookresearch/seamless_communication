@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Textless Acoustic Model with Self-Supervised Distillation for Noise-Robust Expressive Speech-to-Speech Translation</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="jquery-3.5.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div id="text1">Textless Acoustic Model with Self-Supervised Distillation for Noise-Robust Expressive Speech-to-Speech Translation</div>
+        <div id="intro">
+            <br>
+            <p>
+                Min-Jae Hwang, Ilia Kulikov, Benjamin Peloquin, Hongyu Gong, Peng-Jen Chen, and Ann Lee
+            </p>
+            <!-- <p>
+                [<a href="https://arxiv.org/abs/2204.02967">paper</a>]
+            </p> -->
+        </div>
+    </div>
+    <div class="content-container">
+        <div class="content-title">
+            <font size="+5">Abstract</font>
+        </div>
+        <p>
+            In this paper, we propose a textless acoustic model with a self-supervised distillation strategy for noise-robust expressive speech-to-speech translation (S2ST).
+            Recently proposed expressive S2ST systems have achieved impressive expressivity preservation performances by cascading unit-to-speech (U2S) generator to the speech-to-unit translation model. 
+            However, these systems are vulnerable to the presence of noise in input speech, which is an assumption in real-world translation scenarios. 
+            To address this limitation, we propose a U2S generator that incorporates a DINO self-supervised training strategy into it's pretraining process.
+            Because the proposed method captures noise-agnostic expressivity representation, it can generate qualified speech even in noisy environment.
+            Objective and subjective evaluation results verified that the proposed method significantly improved the performance of the expressive S2ST system in noisy environments while maintaining competitive performance in clean environments.
+        </p>
+        <ul>
+            <li><strong>S2ST using Benchmarking Dataset</strong></li>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="#eng-spa-mexpresso">mExpresso English-to-Spanish [1]</a></li>
+            </ul>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="#spa-eng-mdral">mDRAL Spanish-to-English [1]</a></li>
+            </ul>
+            <br>
+            <li><strong>S2ST using Authors' Speech</strong></li>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="#eng-spa-author">English-to-Spanish</a></li>
+            </ul>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="#spa-eng-author">Spanish-to-English</a></li>
+            </ul>
+        </ul>
+    </div>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <div id="Systems" class="content-container">
+        <div class="content-title">
+            <font size="+5">Systems</font>
+        </div>
+        <p> We provide source speech as well as audio samples from four systems: <br>
+            <!-- (1) <strong>S2TT + TTS</strong>: We combined a SeamlessM4T V2's S2TT module and Coqui-XTTS V2 model.
+            For the expressivity transfer, the source speech of SeamlessM4T V2 was conditioned to Coqui-XTTS V2. -->
+            (1) <strong>PRETSSEL</strong>: We combined a Prosody UnitY2 and PRETSSEL model [1].
+            <br>
+            (2) <strong>PRETSSEL + Denoiser</strong>: We combined a Prosody UnitY2 and PRETSSEL with high-quality speech enhancement model.
+            Specifically, we applied MetricGAN+ denoiser [3] to the input of PRETSSEL for removing noise components.
+            <br>
+            (3) <strong>DINO-PRETSSEL (proposed)</strong>: We combined a Prosody UnitY2 and proposed DINO-PRETSSEL.
+        </p>
+    </div>
+    <div id="benchmark_data" class="content-container">
+        <script src="wavesurfer.js"></script>
+        <div class="content-title">
+            <font size="+5">S2ST using Benchmarking Dataset</font>
+        </div>
+        <hr>
+        <div id="eng-spa-mexpresso" class="content-subtitle">mExpresso English-to-Spanish [1]
+        </div>
+        <table border="0" class="inlineTable">
+            <tr>
+                <th></th>
+                <th>Source</th>
+                <th style="color:blue">PRETSSEL (conventional)</th>
+                <th>PRETSSEL + Denoiser</th>
+                <th style="color:red">DINO-PRETSSEL (proposed)</th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 1</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="mexp_clean_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_src_waveform2_1 = WaveSurfer.create({ container: '#mexp_clean_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_src_waveform2_1.load('./audios/mexpresso_eng_spa/clean/ref/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_pretssel_waveform2_1 = WaveSurfer.create({ container: '#mexp_clean_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_pretssel_waveform2_1.load('./audios/mexpresso_eng_spa/clean/pretssel/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#mexp_clean_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_pretssel_denoiser_waveform2_1.load('./audios/mexpresso_eng_spa/clean/pretssel+denoiser/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#mexp_clean_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_dinopretssel_waveform2_1.load('./audios/mexpresso_eng_spa/clean/dinopretssel/s07_default_00066.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="mexp_noisy_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_src_waveform2_1 = WaveSurfer.create({ container: '#mexp_noisy_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_src_waveform2_1.load('./audios/mexpresso_eng_spa/noisy/ref/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_pretssel_waveform2_1 = WaveSurfer.create({ container: '#mexp_noisy_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_pretssel_waveform2_1.load('./audios/mexpresso_eng_spa/noisy/pretssel/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#mexp_noisy_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_pretssel_denoiser_waveform2_1.load('./audios/mexpresso_eng_spa/noisy/pretssel+denoiser/s07_default_00066.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#mexp_noisy_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_dinopretssel_waveform2_1.load('./audios/mexpresso_eng_spa/noisy/dinopretssel/s07_default_00066.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 2</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="mexp_clean_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_src_waveform2_3 = WaveSurfer.create({ container: '#mexp_clean_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_src_waveform2_3.load('./audios/mexpresso_eng_spa/clean/ref/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_pretssel_waveform2_3 = WaveSurfer.create({ container: '#mexp_clean_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_pretssel_waveform2_3.load('./audios/mexpresso_eng_spa/clean/pretssel/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#mexp_clean_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_pretssel_denoiser_waveform2_3.load('./audios/mexpresso_eng_spa/clean/pretssel+denoiser/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_clean_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_clean_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_clean_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#mexp_clean_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_clean_dinopretssel_waveform2_3.load('./audios/mexpresso_eng_spa/clean/dinopretssel/s08_default_00020.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="mexp_noisy_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_src_waveform2_3 = WaveSurfer.create({ container: '#mexp_noisy_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_src_waveform2_3.load('./audios/mexpresso_eng_spa/noisy/ref/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_pretssel_waveform2_3 = WaveSurfer.create({ container: '#mexp_noisy_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_pretssel_waveform2_3.load('./audios/mexpresso_eng_spa/noisy/pretssel/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#mexp_noisy_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_pretssel_denoiser_waveform2_3.load('./audios/mexpresso_eng_spa/noisy/pretssel+denoiser/s08_default_00020.wav'); </script>
+                </th>
+                <th>
+                    <div id="mexp_noisy_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mexp_noisy_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mexp_noisy_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#mexp_noisy_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mexp_noisy_dinopretssel_waveform2_3.load('./audios/mexpresso_eng_spa/noisy/dinopretssel/s08_default_00020.wav'); </script>
+                </th>
+            </tr>
+        </table>
+        <br><hr>
+        <div id="spa-eng-mdral" class="content-subtitle">mDRAL Spanish-to-English [1]
+        </div>
+        <table border="0" class="inlineTable">
+            <tr>
+                <th></th>
+                <th>Source</th>
+                <th style="color:blue">PRETSSEL (conventional)</th>
+                <th>PRETSSEL + Denoiser</th>
+                <th style="color:red">DINO-PRETSSEL (proposed)</th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 1</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="mdral_clean_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_src_waveform2_1 = WaveSurfer.create({ container: '#mdral_clean_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_src_waveform2_1.load('./audios/mdral_spa_eng/clean/ref/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_pretssel_waveform2_1 = WaveSurfer.create({ container: '#mdral_clean_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_pretssel_waveform2_1.load('./audios/mdral_spa_eng/clean/pretssel/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#mdral_clean_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_pretssel_denoiser_waveform2_1.load('./audios/mdral_spa_eng/clean/pretssel+denoiser/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#mdral_clean_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_dinopretssel_waveform2_1.load('./audios/mdral_spa_eng/clean/dinopretssel/005_%234.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="mdral_noisy_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_src_waveform2_1 = WaveSurfer.create({ container: '#mdral_noisy_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_src_waveform2_1.load('./audios/mdral_spa_eng/noisy/ref/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_pretssel_waveform2_1 = WaveSurfer.create({ container: '#mdral_noisy_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_pretssel_waveform2_1.load('./audios/mdral_spa_eng/noisy/pretssel/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#mdral_noisy_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_pretssel_denoiser_waveform2_1.load('./audios/mdral_spa_eng/noisy/pretssel+denoiser/005_%234.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#mdral_noisy_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_dinopretssel_waveform2_1.load('./audios/mdral_spa_eng/noisy/dinopretssel/005_%234.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 2</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="mdral_clean_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_src_waveform2_3 = WaveSurfer.create({ container: '#mdral_clean_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_src_waveform2_3.load('./audios/mdral_spa_eng/clean/ref/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_pretssel_waveform2_3 = WaveSurfer.create({ container: '#mdral_clean_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_pretssel_waveform2_3.load('./audios/mdral_spa_eng/clean/pretssel/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#mdral_clean_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_pretssel_denoiser_waveform2_3.load('./audios/mdral_spa_eng/clean/pretssel+denoiser/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_clean_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_clean_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_clean_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#mdral_clean_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_clean_dinopretssel_waveform2_3.load('./audios/mdral_spa_eng/clean/dinopretssel/022_%2341.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="mdral_noisy_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_src_waveform2_3 = WaveSurfer.create({ container: '#mdral_noisy_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_src_waveform2_3.load('./audios/mdral_spa_eng/noisy/ref/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_pretssel_waveform2_3 = WaveSurfer.create({ container: '#mdral_noisy_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_pretssel_waveform2_3.load('./audios/mdral_spa_eng/noisy/pretssel/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#mdral_noisy_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_pretssel_denoiser_waveform2_3.load('./audios/mdral_spa_eng/noisy/pretssel+denoiser/022_%2341.wav'); </script>
+                </th>
+                <th>
+                    <div id="mdral_noisy_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="mdral_noisy_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var mdral_noisy_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#mdral_noisy_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        mdral_noisy_dinopretssel_waveform2_3.load('./audios/mdral_spa_eng/noisy/dinopretssel/022_%2341.wav'); </script>
+                </th>
+            </tr>
+        </table>
+        <br>
+    </div>
+    <div id="authors_data" class="content-container">
+        <script src="wavesurfer.js"></script>
+        <div class="content-title">
+            <font size="+5">S2ST using Authors' Speech</font>
+        </div>
+        <hr>
+        <div id="eng-spa-author" class="content-subtitle">English-to-Spanish
+        </div>
+        <table border="0" class="inlineTable">
+            <tr>
+                <th></th>
+                <th>Source</th>
+                <th style="color:blue">PRETSSEL (conventional)</th>
+                <th>PRETSSEL + Denoiser</th>
+                <th style="color:red">DINO-PRETSSEL (proposed)</th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 1</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="clean_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_src_waveform2_1 = WaveSurfer.create({ container: '#clean_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_src_waveform2_1.load('./audios/employee_eng_spa/ref/clean_spk1_default_00240.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_waveform2_1 = WaveSurfer.create({ container: '#clean_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_waveform2_1.load('./audios/employee_eng_spa/pretssel/clean_spk1_default_00240_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#clean_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_denoiser_waveform2_1.load('./audios/employee_eng_spa/pretssel+denoiser/clean_spk1_default_00240_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#clean_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_dinopretssel_waveform2_1.load('./audios/employee_eng_spa/dinopretssel/clean_spk1_default_00240_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="noisy_src_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_src_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_src_waveform2_1 = WaveSurfer.create({ container: '#noisy_src_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_src_waveform2_1.load('./audios/employee_eng_spa/ref/noisy_spk1_default_00240.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_waveform2_1 = WaveSurfer.create({ container: '#noisy_pretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_waveform2_1.load('./audios/employee_eng_spa/pretssel/noisy_spk1_default_00240_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_denoiser_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_denoiser_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_denoiser_waveform2_1 = WaveSurfer.create({ container: '#noisy_pretssel_denoiser_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_denoiser_waveform2_1.load('./audios/employee_eng_spa/pretssel+denoiser/noisy_spk1_default_00240_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_dinopretssel_waveform2_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_dinopretssel_waveform2_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_dinopretssel_waveform2_1 = WaveSurfer.create({ container: '#noisy_dinopretssel_waveform2_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_dinopretssel_waveform2_1.load('./audios/employee_eng_spa/dinopretssel/noisy_spk1_default_00240_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 2</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="clean_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_src_waveform2_3 = WaveSurfer.create({ container: '#clean_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        clean_src_waveform2_3.load('./audios/employee_eng_spa/ref/clean_spk2_default_00026.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_waveform2_3 = WaveSurfer.create({ container: '#clean_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_waveform2_3.load('./audios/employee_eng_spa/pretssel/clean_spk2_default_00026_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#clean_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_denoiser_waveform2_3.load('./audios/employee_eng_spa/pretssel+denoiser/clean_spk2_default_00026_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#clean_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        clean_dinopretssel_waveform2_3.load('./audios/employee_eng_spa/dinopretssel/clean_spk2_default_00026_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="noisy_src_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_src_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_src_waveform2_3 = WaveSurfer.create({ container: '#noisy_src_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_src_waveform2_3.load('./audios/employee_eng_spa/ref/noisy_spk2_default_00026.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_waveform2_3 = WaveSurfer.create({ container: '#noisy_pretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_waveform2_3.load('./audios/employee_eng_spa/pretssel/noisy_spk2_default_00026_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_denoiser_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_denoiser_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_denoiser_waveform2_3 = WaveSurfer.create({ container: '#noisy_pretssel_denoiser_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_denoiser_waveform2_3.load('./audios/employee_eng_spa/pretssel+denoiser/noisy_spk2_default_00026_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_dinopretssel_waveform2_3"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_dinopretssel_waveform2_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_dinopretssel_waveform2_3 = WaveSurfer.create({ container: '#noisy_dinopretssel_waveform2_3', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_dinopretssel_waveform2_3.load('./audios/employee_eng_spa/dinopretssel/noisy_spk2_default_00026_pred.wav'); </script>
+                </th>
+            </tr>
+        </table>
+        <br><hr>
+        <div id="spa-eng-author" class="content-subtitle">Spanish-to-English
+        </div>
+        <table border="0" class="inlineTable">
+            <tr>
+                <th></th>
+                <th>Source</th>
+                <th style="color:blue">PRETSSEL (conventional)</th>
+                <th>PRETSSEL + Denoiser</th>
+                <th style="color:red">DINO-PRETSSEL (proposed)</th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 1</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="clean_src_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_src_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_src_waveform_1 = WaveSurfer.create({ container: '#clean_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_src_waveform_1.load('./audios/employee_spa_eng/ref/clean_spk3_00032.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_waveform_1 = WaveSurfer.create({ container: '#clean_pretssel_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_waveform_1.load('./audios/employee_spa_eng/pretssel/clean_spk3_00032_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_denoiser_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_denoiser_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_denoiser_waveform_1 = WaveSurfer.create({ container: '#clean_pretssel_denoiser_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_denoiser_waveform_1.load('./audios/employee_spa_eng/pretssel+denoiser/clean_spk3_00032_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_dinopretssel_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_dinopretssel_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_dinopretssel_waveform_1 = WaveSurfer.create({ container: '#clean_dinopretssel_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        clean_dinopretssel_waveform_1.load('./audios/employee_spa_eng/dinopretssel/clean_spk3_00032_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="noisy_src_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_src_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_src_waveform_1 = WaveSurfer.create({ container: '#noisy_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_src_waveform_1.load('./audios/employee_spa_eng/ref/noisy_spk3_00032.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_waveform_1 = WaveSurfer.create({ container: '#noisy_pretssel_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_waveform_1.load('./audios/employee_spa_eng/pretssel/noisy_spk3_00032_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_denoiser_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_denoiser_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_denoiser_waveform_1 = WaveSurfer.create({ container: '#noisy_pretssel_denoiser_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_denoiser_waveform_1.load('./audios/employee_spa_eng/pretssel+denoiser/noisy_spk3_00032_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_dinopretssel_waveform_1"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_dinopretssel_waveform_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_dinopretssel_waveform_1 = WaveSurfer.create({ container: '#noisy_dinopretssel_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_dinopretssel_waveform_1.load('./audios/employee_spa_eng/dinopretssel/noisy_spk3_00032_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th colspan="5" style="text-align:left">Sample 2</th>
+            </tr>
+            <tr>
+                <th>Clean environment</th>
+                <th>
+                    <div id="clean_src_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_src_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_src_waveform_2 = WaveSurfer.create({ container: '#clean_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        clean_src_waveform_2.load('./audios/employee_spa_eng/ref/clean_spk4_00003.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_waveform_2 = WaveSurfer.create({ container: '#clean_pretssel_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_waveform_2.load('./audios/employee_spa_eng/pretssel/clean_spk4_00003_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_pretssel_denoiser_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_pretssel_denoiser_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_pretssel_denoiser_waveform_2 = WaveSurfer.create({ container: '#clean_pretssel_denoiser_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        clean_pretssel_denoiser_waveform_2.load('./audios/employee_spa_eng/pretssel+denoiser/clean_spk4_00003_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="clean_dinopretssel_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="clean_dinopretssel_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var clean_dinopretssel_waveform_2 = WaveSurfer.create({ container: '#clean_dinopretssel_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        clean_dinopretssel_waveform_2.load('./audios/employee_spa_eng/dinopretssel/clean_spk4_00003_pred.wav'); </script>
+                </th>
+            </tr>
+            <tr>
+                <th>Noisy environment</th>
+                <th>
+                    <div id="noisy_src_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_src_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_src_waveform_2 = WaveSurfer.create({ container: '#noisy_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_src_waveform_2.load('./audios/employee_spa_eng/ref/noisy_spk4_00003.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_waveform_2 = WaveSurfer.create({ container: '#noisy_pretssel_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_waveform_2.load('./audios/employee_spa_eng/pretssel/noisy_spk4_00003_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_pretssel_denoiser_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_pretssel_denoiser_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_pretssel_denoiser_waveform_2 = WaveSurfer.create({ container: '#noisy_pretssel_denoiser_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_pretssel_denoiser_waveform_2.load('./audios/employee_spa_eng/pretssel+denoiser/noisy_spk4_00003_pred.wav'); </script>
+                </th>
+                <th>
+                    <div id="noisy_dinopretssel_waveform_2"></div>
+                    <button id="written_source__header" class="play-button-demo btn btn-primary"
+                        onclick="noisy_dinopretssel_waveform_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause
+                    </button>
+                    <script> var noisy_dinopretssel_waveform_2 = WaveSurfer.create({ container: '#noisy_dinopretssel_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                        noisy_dinopretssel_waveform_2.load('./audios/employee_spa_eng/dinopretssel/noisy_spk4_00003_pred.wav'); </script>
+                </th>
+            </tr>
+        </table>
+    </div>
+    <div class="content-container">
+        Template based on <a style="color:rgb(22, 38, 67)" href="https://speechbot.github.io/"> Textless NLP</a> and <a
+            style="color:rgb(22, 38, 67)" href="https://daps.cs.princeton.edu/projects/HiFi-GAN/index.php"> HiFi-GAN</a>
+        pages.
+    </div>
+    <div class="content-container">
+        <th>References</th>
+        <br>
+        <th>[1] Seamless Communication, “Seamless: Multilingual Expressive and Streaming Speech Translation,” arXiv, 2023.</th>
+        <br>
+        <th>[2] Jörgen Valk and Tanel Alumäe, “VoxLingua107: a dataset for spoken language recognition,” In Proc. IEEE SLT Workshop, 2021.</th>
+        <br>
+        <th>[3] Szu-Wei Fu et al., "MetricGAN+: An Improved Version of MetricGAN for Speech Enhancement," arXiv, 2021.</th>
+    </div>
+</body>
+
+</html>
