@@ -1,0 +1,24 @@
+
+EPST
+1507    otro aspecto más institucional es el equilibrio de fuerzas entre el parlamento y el consejo /large_experiments/ust/annl/datasets/st/europarl-st/es/en/test/flac_16k/en.20120328.21.3-210-000_4.flac
+1700    además su capacidad de regeneración es muy limitada   /large_experiments/ust/annl/datasets/st/europarl-st/es/en/test/flac_16k/en.20120911.4.2-035-000_2.flac
+1313    señor presidente señorías nos encontramos ante un tema extremadamente sensible /large_experiments/ust/annl/datasets/st/europarl-st/es/en/test/flac_16k/en.20111114.20.1-233-000_0.flac
+289     desde un punto de vista presupuestario no parece adecuada la propuesta de financiación procedente de la comisión de desarrollo ya que este dinero no existe al  /large_experiments/ust/annl/datasets/st/europarl-st/es/en/test/flac_16k/en.20090218.24.3-251_2.flac
+
+
+
+MTEDX
+581 pero por qué te pusiste en esta situación /large_experiments/ust/annl/datasets/st/mtedx/es-en/test/flac_16k/a0G1K1A269Y_0024.flac 
+591 en dos mil dieciseis hubo tres mil quinientos sesenta y nueve suicidios en españa según el instituto nacional de estadística /large_experiments/ust/annl/datasets/st/mtedx/es-en/test/flac_16k/a0G1K1A269Y_0034.flac
+100 empezó en asia y de allí pasó a venecia el puerto más cosmopolita de su tiempo /large_experiments/ust/annl/datasets/st/mtedx/es-en/test/flac_16k/9VA26uZPqYA_0008.flac
+592 cuando casi diez personas al día una cada dos horas y media /large_experiments/ust/annl/datasets/st/mtedx/es-en/test/flac_16k/a0G1K1A269Y_0035.flac
+
+
+CV  
+11375 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19717026.flac autobuses adicionales normalmente proporcionados por go south coast van desde bristol al festival
+12411 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19607691.flac así el principito decidió abandonar su planeta y explorar el resto del universo
+2692 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19980264.flac encontró un país con dos gobiernos en la capital maximiliano era el emperador
+9756 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19599961.flac cada uno de ellos es un derecho exclusivo sujeto a ciertas limitaciones y excepciones
+12478 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19970262.flac esta experiencia representa un paso trascendental en la historia espacial del país 
+4109 /large_experiments/ust/annl/datasets/st/covost2/es/flac_16k/common_voice_es_19969961.flac desde la perspectiva del balance físico químico y biológico está en una posición clave
+

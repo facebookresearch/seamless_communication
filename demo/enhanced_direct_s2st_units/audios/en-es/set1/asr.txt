@@ -1,0 +1,47 @@
+LND 
+1149_epst   esto también debería ser una parte importante de nuestro enfoque al presupuesto dos mil doce   
+476_epst    su familia que son mis electores está convencida de su inocencia
+651_epst    de la directiva a todos los impuestos incluidas las contribuciones a la seguridad social el intercambio automático de información y la mejor cooperación entre los estados miembros en las cuestiones de impuestos
+890_epst    la información fomenta el interés de los ciudadanos en asuntos públicos y su participación
+37_epst queremos ver la pobreza energética como parte de este deate
+923_epst    en mi opinión uno de los elementos más importantes es el seguimiento de las peticiones de la iniciativa legislativa por parte del pagamento
+970_epst    debemos encontrar un procedimiento abierto y constructivo sobre el próximo marco financiero
+45_epst estoy de acuerdo en que debemos actuar y reaccionar pero no debemos hacerlo porque necesitamos un enfoque equilibrado
+632_mustc   y al parecer era muy popular
+519_mustc   podemos hacer lo mismo con mucha menos energía
+1015_mustc  a través de mi trabajo trato de articular que los humanos no somos separados de la naturaleza y que todo está interconectado
+
+
+
+MT 
+1149_epst   también debería ser una parte importante de nuestro enfoque al presupuesto dos mil doce
+476_epst    su familia que son mí circunscripciones están convencidas de estos inocentes
+651_epst    de la directiva a todos los impuestos impluyendo las contribuciones de seguridad social el intercambio automático de la información y mejorar la cooperación entre los estados miembros y las cuestiones de impuestos
+890_epst    la información y el interés de los ciudadanos alientan los intereses de las cuestiones públicas y su participación
+632_mustc   y un líder era bastante popular
+519_mustc   podemos hacer lo mismo que mucha menos energía
+
+
+
+
+
+
+S2T_TTS
+1149_epst   esto también debería ser una parte importante de nuestro enfoque al presupuesto de dos mildos mil dos mil doce
+476_epst    su familia que son mis electores están convencidos de su inocencia
+651_epst    de la directiva para todos los impuestos incluidos las contribuciones de seguridad social el intercambio automático de información y la mejor cooperación entre los estados miembros en la cuestión de la fiscalidad
+890_epst    la información alienta el interés de los ciudadanos en asuntos públicos y en su participación
+632_mustc   y aparentemente era bastante popular
+519_mustc   en realidad podemos hacerlo mismo con menos energía
+
+
+
+
+LND 
+
+
+
+
+
+
+

@@ -1,0 +1,17 @@
+TARGET
+EPST 
+1149 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20110324.5.4-041-000_8.flac this should also be an important part of our approach to the twenty twelve budget
+476 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20090914.23.1-076_1.flac his family who are my constituents are convinced of his innocence
+651 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20100210.25.3-177_3.flac of the directive on all taxes including social security contributions the automatic exchange of information and improved cooperation between the member states in matters of taxation
+890 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20100907.33.2-567_1.flac information encourages citizens interest in public matters and their participation
+37 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20080924.32.3-289_4.flac we want to see energy poverty as a part of this debate
+923 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20101018.14.1-115_4.flac in my view one of the most important elements is the follow up of legislative initiative requests from parliament
+970 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20101123.37.2-432_15.flac    we must find an open and constructive procedure on the next financial framework
+45 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20080924.33.3-319_2.flac   i agree that we should act and react but we should not overdo it because we need a balanced approach
+651 /large_experiments/ust/annl/datasets/st/europarl-st/en/es/test/flac_16k/en.20100210.25.3-177_3.flac of the directive on all taxes including social security contributions the automatic exchange of information and improved cooperation between the member states in matters of taxation
+
+
+MUSTC 
+632 /large_experiments/ust/annl/datasets/st/must-c/must-c/en-es/tst-COMMON/flac_16k/ted_1144_39.flac and apparently it was quite popular
+519 /large_experiments/ust/annl/datasets/st/must-c/must-c/en-es/tst-COMMON/flac_16k/ted_1137_56.flac we can actually do the same thing with much less energy
+1015 /large_experiments/ust/annl/datasets/st/must-c/must-c/en-es/tst-COMMON/flac_16k/ted_1171_1.flac    through my work im trying to articulate that humans are not separate from nature and that everything is interconnected

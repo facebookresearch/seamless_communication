@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Textless Speech-to-Speech Translation on Real Data</title>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+        <script src="jquery-3.5.js"></script>
+    </head>
+    <body>
+<div class="container">
+    <div id="text1">Textless Speech-to-Speech Translation on Real Data</div>
+    <div id="intro">
+        <br>
+        <p>
+            Ann Lee, Hongyu Gong, Paul-Ambroise Duquenne, Holger Schwenk, Peng-Jen Chen, <br> Changhan Wang, Sravya Popuri, Yossi Adi, Juan Pino, Jiatao Gu, Wei-Ning Hsu
+      </p>
+       <p>
+            [<a href="https://arxiv.org/abs/2112.08352">paper</a>]
+        </p>
+    </div>
+</div>
+<div class="content-container">
+    <p>
+        We present a textless speech-to-speech translation (S2ST) system that can translate speech from one language into another language and can be built without the need of any text data.
+        Different from existing work in the literature, we tackle the challenge in modeling multi-speaker target speech and train the systems with real-world S2ST data.
+        The key to our approach is a self-supervised unit-based speech normalization technique, which finetunes a pre-trained speech encoder with paired audios from multiple speakers and a single reference speaker to reduce the variations due to accents, while preserving the lexical content.
+        With only 10 minutes of paired data for speech normalization, we obtain on average 3.2 BLEU gain when training the S2ST model on the VoxPopuli S2ST dataset, compared to a baseline trained on un-normalized speech target.
+        We also incorporate automatically mined S2ST data and show an additional 2.0 BLEU gain.
+        To our knowledge, we are the first to establish a textless S2ST technique
+        that can be trained with real-world data and works for multiple language pairs.
+    </p>
+</div>
+<div class="content-container">
+    <p>
+        Below we provide audio samples from four systems: <br>
+        (1) <strong>S2T+T2U</strong>: a cascaded system with a speech-to-text translation model trained with ASR decoded text of the S2ST data, followed by a text-to-unit speech synthesizer, <br>
+        (2) <strong>S2UT (orig_unit)</strong>: a direct speech-to-unit translation (S2UT) model trained with un-normalized target units, <br>
+        (3) <strong>S2UT (tgt_spk)</strong>: a direct S2UT model trained with un-normalized target units and target speaker embedding, <br>
+        (4) <strong>S2UT (sp_norm)</strong>: a direct S2UT model trained with target units normalized with a speech normalizer trained with 1-hr of data. <br><br>
+        For each source audio, we provide text transcription in the source language and the reference text translation in the target language.
+        For each audio from the four systems, we provide ASR decoded text.
+    </p>
+    <ul>
+        <li><a style="color:blue" href="#es_en_setup">Spanish-English</a></li>
+        <li><a style="color:blue" href="#fr_en_setup">French-English</a></li>
+        <li><a style="color:blue" href="#en_es_setup">English-Spanish</a></li>
+        <li><a style="color:blue" href="#en_fr_setup">English-French</a></li>
+    </ul>
+</div>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+
+
+<div id="es_en_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">Spanish (Es)-English (En)</div>
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th>Source (Spanish)</th>
+            <th colspan="4">Predictions</th>
+        </tr>
+        <tr>
+            <th colspan="2"></th>
+            <th>S2T+T2U</th>
+            <th>S2UT (orig_unit)</th>
+            <th>S2UT (tgt_spk)</th>
+            <th>S2UT (sp_norm)</th>
+        </tr>
+        <tr>
+            <th>1.</th>
+            <th>
+                <div id="es_en_src_waveform_1"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_1 = WaveSurfer.create({ container: '#es_en_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_1.load('./audio/es_en/source/380_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_1"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_1 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_1.load('./audio/es_en/s2ttts/380_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_1"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_1 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_1.load('./audio/es_en/origunit/380_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_1"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_1 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_1.load('./audio/es_en/tgtspk/380_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_1"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_1 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_1.load('./audio/es_en/spnorm1hr/380_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Es) La plena financiación comunitaria es fundamental para nosotros. <br> (En) full community funding is fundamental for us </td>
+            <td> full funding is vital for us </td>
+            <td> foll community funding is fundamental for us </td>
+            <td> full community funding is vital to us </td>
+            <td> full community funding is fundamental for us </td>
+        </tr>
+        <tr>
+            <th>2. </th>
+            <th>
+                <div id="es_en_src_waveform_2"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_2 = WaveSurfer.create({ container: '#es_en_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_2.load('./audio/es_en/source/1311_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_2"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_2 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_2.load('./audio/es_en/s2ttts/1311_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_2"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_2 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_2.load('./audio/es_en/origunit/1311_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_2"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_2 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_2.load('./audio/es_en/tgtspk/1311_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_2"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_2 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_2.load('./audio/es_en/spnorm1hr/1311_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th>  </th>
+            <td> (Es) Señorías, Europa debe situar a los profesionales y a los consumidores en el corazón del Mercado Único. <br> (En) ladies and gentlemen europe must put professionals and consumers at the heart of the single market </td>
+            <td> ladies and gentlemen europe has to place consumers at the heart of the single market </td>
+            <td> ladies and gentlemen you must place professionals and consumers at the hot of the single knotted </td>
+            <td> upe has to situate professionals and consumers in the heart of the single marted </td>
+            <td> ladies and gentlemen europe needs to place professionals and consumers at the heart of the single market </td>
+        </tr>
+        <tr>
+            <th>3. </th>
+            <th>
+                <div id="es_en_src_waveform_3"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_3 = WaveSurfer.create({ container: '#es_en_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_3.load('./audio/es_en/source/1420_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_3"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_3 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_3.load('./audio/es_en/s2ttts/1420_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_3"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_3 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_3.load('./audio/es_en/origunit/1420_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_3"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_3 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_3.load('./audio/es_en/tgtspk/1420_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_3"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_3 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_3.load('./audio/es_en/spnorm1hr/1420_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th>  </th>
+            <td> (Es) Señora Presidenta, Comisario, estimados colegas, sabemos que sin jóvenes no hay futuro y también tenemos la certeza de que, con las altas tasas de desempleo juvenil, Europa puede ser insostenible. <br> (En) madam president commissioner ladies and gentlemen we know that without young people there is no future and we are also sure that with high rates of youth unemployment europe may become unsustainable </td>
+            <td> commissioner colligues we know that without young people there's no future and we're certain that with the high youth unemployment rates europe can be unsustainable </td>
+            <td> president cme colleagues we know that without young people there is no future we also have the certainty that with the lack of youth unemployment rates up can be unsustainable </td>
+            <td> oisiner we know that without young people without the future and we also have the certainty that with the lack of youth unemployment europe can be unsustainable </td>
+            <td> commissioner colleagues we know that without young people there is no future and we also feel that with the lack of youth unemployment rates europe cannot be sustainable </td>
+        </tr> 
+        <tr>
+            <th>4.</th>
+            <th>
+                <div id="es_en_src_waveform_4"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_4 = WaveSurfer.create({ container: '#es_en_src_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_4.load('./audio/es_en/source/4171_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_4"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_4 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_4.load('./audio/es_en/s2ttts/4171_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_4"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_4 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_4.load('./audio/es_en/origunit/4171_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_4"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_4 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_4.load('./audio/es_en/tgtspk/4171_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_4"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_4 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_4.load('./audio/es_en/spnorm1hr/4171_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th>  </th>
+            <td> (Es) Cuando estaba con su padre, se encontraba siempre en lugares rodeado de diferentes instrumentos. <br> (En) when he was with his father he was always in places surrounded by different instruments </td>
+            <td> when he was with his father he was always surrounded by various instruments </td>
+            <td> when he was with his father he always surrounded by different instruments </td>
+            <td> when he was with his father when he was always surrounded by different instruments </td>
+            <td> when he was with his father he was always in places surrounded by different instruments </td>
+        </tr>
+        <tr>
+            <th>5. </th>
+            <th>
+                <div id="es_en_src_waveform_5"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_5 = WaveSurfer.create({ container: '#es_en_src_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_5.load('./audio/es_en/source/9467_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_5"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_5 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_5.load('./audio/es_en/s2ttts/9467_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_5"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_5 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_5.load('./audio/es_en/origunit/9467_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_5"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_5 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_5.load('./audio/es_en/tgtspk/9467_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_5"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_5 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_5.load('./audio/es_en/spnorm1hr/9467_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Es) Sin embargo, en la práctica el lugar está aún habitado. <br> (En) however in practice the place is still inhabited </td>
+            <td> however in practice the place is still inhabited </td>
+            <td> nevertheless the place is still inhabited </td>
+            <td> nevertheless the place is still inhabited </td>
+            <td> but in practice the place is still inhabited </td>
+        </tr>
+        <tr>
+            <th>6.</th>
+            <th>
+                <div id="es_en_src_waveform_6"></div>
+                <button id="es_en__source__header" class="play-button-demo btn btn-primary" onclick="es_en_src_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_src_6 = WaveSurfer.create({ container: '#es_en_src_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_src_6.load('./audio/es_en/source/2245_src.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ttts_waveform_6"></div>
+            <button id="es_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="es_en_cas_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_cas_6 = WaveSurfer.create({ container: '#es_en_s2ttts_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                es_en_cas_6.load('./audio/es_en/s2ttts/2245_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="es_en_s2ut_orig_waveform_6"></div>
+                <button id="es_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_orig_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_orig_6 = WaveSurfer.create({ container: '#es_en_s2ut_orig_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_orig_6.load('./audio/es_en/origunit/2245_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="es_en_s2ut_tgtspk_waveform_6"></div>
+                <button id="es_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_tgtspk_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var es_en_s2ut_tgtspk_6 = WaveSurfer.create({ container: '#es_en_s2ut_tgtspk_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    es_en_s2ut_tgtspk_6.load('./audio/es_en/tgtspk/2245_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="es_en_s2ut_norm_waveform_6"></div>
+            <button id="es_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="es_en_s2ut_norm_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var es_en_s2ut_norm_6 = WaveSurfer.create({ container: '#es_en_s2ut_norm_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                es_en_s2ut_norm_6.load('./audio/es_en/spnorm1hr/2245_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Es) Estas montañas limitan la expansión de la ciudad, hacia el norte. <br> (En) those mountains limit the expansion of the city to the north </td>
+            <td> these mountains limit the expansion of the city to the northward </td>
+            <td> these mountains confine the exportion of the northward to the north </td>
+            <td> these mountains confined the expansion of the city to the north </td>
+            <td> these mountains limit the expansion of the city to the north </td>
+        </tr>               
+    </table>
+</div>
+<div id="fr_en_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">French (Fr)-English (En)</div>
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th>Source (French)</th>
+            <th colspan="4">Predictions</th>
+        </tr>
+        <tr>
+            <th colspan="2"></th>
+            <th>S2T+T2U</th>
+            <th>S2UT (orig_unit)</th>
+            <th>S2UT (tgt_spk)</th>
+            <th>S2UT (sp_norm)</th>
+        </tr>
+        <tr>
+            <th>1.</th>
+            <th>
+                <div id="fr_en_src_waveform_1"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_1 = WaveSurfer.create({ container: '#fr_en_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_1.load('./audio/fr_en/source/1728_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_1"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_1 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_1.load('./audio/fr_en/s2ttts/1728_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_1"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_1 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_1.load('./audio/fr_en/origunit/1728_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_1"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_1 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_1.load('./audio/fr_en/tgtspk/1728_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_1"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_1 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_1.load('./audio/fr_en/spnorm1hr/1728_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Je vous remercie, Monsieur le Commissaire, mais en démocratie, il est aussi un autre principe. <br> (En) thank you commissioner but in democracy there is also another principle </td>
+            <td> president commissioner but in democracy its also are principal </td>
+            <td> commissioner but in democracy is also our principle </td>
+            <td> commisiner but in democracy it is also our principle </td>
+            <td> commissioner but in democracy there is also our principle </td>
+        </tr>
+        <tr>
+            <th>2.</th>
+            <th>
+                <div id="fr_en_src_waveform_2"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_2 = WaveSurfer.create({ container: '#fr_en_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_2.load('./audio/fr_en/source/1380_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_2"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_2 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_2.load('./audio/fr_en/s2ttts/1380_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_2"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_2 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_2.load('./audio/fr_en/origunit/1380_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_2"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_2 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_2.load('./audio/fr_en/tgtspk/1380_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_2"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_2 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_2.load('./audio/fr_en/spnorm1hr/1380_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Les petits États insulaires ont par exemple des capacités très limitées. <br> (En) small island states have very limited capabilities for example </td>
+            <td> small island states have very limited capacities </td>
+            <td> small states have limited capacities </td>
+            <td> small states have limited capacities </td>
+            <td> small island states have very limited capacities for example </td>
+        </tr>
+        <tr>
+            <th>3.</th>
+            <th>
+                <div id="fr_en_src_waveform_3"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_3 = WaveSurfer.create({ container: '#fr_en_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_3.load('./audio/fr_en/source/564_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_3"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_3 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_3.load('./audio/fr_en/s2ttts/564_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_3"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_3 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_3.load('./audio/fr_en/origunit/564_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_3"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_3 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_3.load('./audio/fr_en/tgtspk/564_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_3"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_3 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_3.load('./audio/fr_en/spnorm1hr/564_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Face à ces catastrophes, l ’ Union européenne doit montrer sa réactivité et exprimer sa solidarité. <br> (En) in the face of these disasters the european union must demonstrate its responsiveness and express its solidarity </td>
+            <td> faced with these catastrophes the european union has to show its reactivity expressing its solidarity </td>
+            <td> facing these catastrophes the e u has to show its reactivity expressing its solidality </td>
+            <td> faced with its disasters the eu must when a show its reactivity express its solidarity </td>
+            <td> in the face of these disasters the european union needs to show its reactiviity to express its solidarity </td>
+        </tr>
+        <tr>
+            <th>4.</th>
+            <th>
+                <div id="fr_en_src_waveform_4"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_4 = WaveSurfer.create({ container: '#fr_en_src_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_4.load('./audio/fr_en/source/9868_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_4"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_4 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_4.load('./audio/fr_en/s2ttts/9868_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_4"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_4 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_4.load('./audio/fr_en/origunit/9868_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_4"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_4 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_4.load('./audio/fr_en/tgtspk/9868_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_4"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_4 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_4.load('./audio/fr_en/spnorm1hr/9868_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Mais plusieurs interruptions furent provoqués à cause des conflits internes dans le pays. <br> (En) but several interruptions were caused because of internal conflicts in the country </td>
+            <td> but several indiruptions were caused by internal conflicts in the country </td>
+            <td> but many interruptions were provoked because of the internal conflicts in the country </td>
+            <td> but several indiructions were provoked because of the internal conflicts in the country </td>
+            <td> but several interruptions were provoked because of internal conflicts in the country </td>
+        </tr>
+        <tr>
+            <th>5.</th>
+            <th>
+                <div id="fr_en_src_waveform_5"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_5 = WaveSurfer.create({ container: '#fr_en_src_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_5.load('./audio/fr_en/source/13424_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_5"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_5 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_5.load('./audio/fr_en/s2ttts/13424_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_5"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_5 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_5.load('./audio/fr_en/origunit/13424_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_5"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_5 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_5.load('./audio/fr_en/tgtspk/13424_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_5"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_5 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_5.load('./audio/fr_en/spnorm1hr/13424_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Une extension du réseau n'est pas envisageable dans ces conditions. <br> (En) an extension of the network is not possible under these conditions </td>
+            <td> an extension of the network is not envisaged under these conditions </td>
+            <td> an extension of the network is not faced under those conditions </td>
+            <td> an extension of the network was not faced under these conditions </td>
+            <td> an extension of the network is not considered under these conditions </td>
+        </tr>
+        <tr>
+            <th>6.</th>
+            <th>
+                <div id="fr_en_src_waveform_6"></div>
+                <button id="fr_en__source__header" class="play-button-demo btn btn-primary" onclick="fr_en_src_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_src_6 = WaveSurfer.create({ container: '#fr_en_src_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_src_6.load('./audio/fr_en/source/8585_src.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ttts_waveform_6"></div>
+            <button id="fr_en_cascaded_header" class="play-button-demo btn btn-primary" onclick="fr_en_cas_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_cas_6 = WaveSurfer.create({ container: '#fr_en_s2ttts_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_cas_6.load('./audio/fr_en/s2ttts/8585_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="fr_en_s2ut_orig_waveform_6"></div>
+                <button id="fr_en_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_orig_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_orig_6 = WaveSurfer.create({ container: '#fr_en_s2ut_orig_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_orig_6.load('./audio/fr_en/origunit/8585_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="fr_en_s2ut_tgtspk_waveform_6"></div>
+                <button id="fr_en_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_tgtspk_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var fr_en_s2ut_tgtspk_6 = WaveSurfer.create({ container: '#fr_en_s2ut_tgtspk_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    fr_en_s2ut_tgtspk_6.load('./audio/fr_en/tgtspk/8585_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="fr_en_s2ut_norm_waveform_6"></div>
+            <button id="fr_en_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="fr_en_s2ut_norm_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var fr_en_s2ut_norm_6 = WaveSurfer.create({ container: '#fr_en_s2ut_norm_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                fr_en_s2ut_norm_6.load('./audio/fr_en/spnorm1hr/8585_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (Fr) Le compositeur Louis Varney, qui a étudié la musique avec lui, était son fils. <br> (En) composer louis varney who studied music with him was his son </td>
+            <td> louise vanished who had studied music with him was his son </td>
+            <td> louis came who studied the music with him was his son </td>
+            <td> the composer louis vaney who studied music with him was his son </td>
+            <td> the composer louis varney who studied music with him was his sign </td>
+        </tr>               
+    </table>
+</div>
+<div id="en_es_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">English (En)-Spanish (Es)</div>
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th>Source (English)</th>
+            <th colspan="4">Predictions</th>
+        </tr>
+        <tr>
+            <th colspan="2"></th>
+            <th>S2T+T2U</th>
+            <th>S2UT (orig_unit)</th>
+            <th>S2UT (tgt_spk)</th>
+            <th>S2UT (sp_norm)</th>
+        </tr>
+        <tr>
+            <th>1. </th>
+            <th>
+                <div id="en_es_src_waveform_1"></div>
+                <button id="en_es__source__header" class="play-button-demo btn btn-primary" onclick="en_es_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_src_1 = WaveSurfer.create({ container: '#en_es_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_src_1.load('./audio/en_es/source/547_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ttts_waveform_1"></div>
+            <button id="en_es_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_es_cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_cas_1 = WaveSurfer.create({ container: '#en_es_s2ttts_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                en_es_cas_1.load('./audio/en_es/s2ttts/547_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_es_s2ut_orig_waveform_1"></div>
+                <button id="en_es_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_orig_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_orig_1 = WaveSurfer.create({ container: '#en_es_s2ut_orig_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_orig_1.load('./audio/en_es/origunit/547_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_es_s2ut_tgtspk_waveform_1"></div>
+                <button id="en_es_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_tgtspk_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_tgtspk_1 = WaveSurfer.create({ container: '#en_es_s2ut_tgtspk_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_tgtspk_1.load('./audio/en_es/tgtspk/547_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ut_norm_waveform_1"></div>
+            <button id="en_es_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_norm_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_s2ut_norm_1 = WaveSurfer.create({ container: '#en_es_s2ut_norm_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                en_es_s2ut_norm_1.load('./audio/en_es/spnorm1hr/547_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) We must use this occasion – it is the first year of a five-year Parliament – to look ahead. <br> (Es) debemos aprovechar esta ocasión es el primer año de un parlamento de cinco años de duración para mirar hacia delante  </td>
+            <td STYLE="text-transform:lowercase"> TENEMOS QUE UTILIZAR ESTA OCASIÓN ES EL PRIMER AÑO DE UN PARLAMENTO CINCO AÑOS PARA MIRAR HACIA ADELANTE </td>
+            <td STYLE="text-transform:lowercase"> TENEMOS QUE UTIZAR ESTA OCASIÓN ES EL PRIMER AÑO DE UN PAGAMENTO PARA MIRAR HACIA DELANTE </td>
+            <td STYLE="text-transform:lowercase"> TENEMOS QUE OTIZAR ESTA OCASIÓN ES EL PRIMER AÑO DEL PARGAMENTO CINCO AÑOS PARA MIRAR HACIA ADELANTE </td>
+            <td STYLE="text-transform:lowercase"> TENEMOS QUE UTILIZAR ESTA OCASIÓN ES EL PRIMER AÑO DE UN PARLAMENTO DE CINCO AÑOS PARA MIRAR DELANTE </td>
+        </tr>
+        <tr>
+            <th>2.</th>
+            <th>
+                <div id="en_es_src_waveform_2"></div>
+                <button id="en_es__source__header" class="play-button-demo btn btn-primary" onclick="en_es_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_src_2 = WaveSurfer.create({ container: '#en_es_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_src_2.load('./audio/en_es/source/854_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ttts_waveform_2"></div>
+            <button id="en_es_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_es_cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_cas_2 = WaveSurfer.create({ container: '#en_es_s2ttts_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                en_es_cas_2.load('./audio/en_es/s2ttts/854_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_es_s2ut_orig_waveform_2"></div>
+                <button id="en_es_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_orig_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_orig_2 = WaveSurfer.create({ container: '#en_es_s2ut_orig_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_orig_2.load('./audio/en_es/origunit/854_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_es_s2ut_tgtspk_waveform_2"></div>
+                <button id="en_es_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_tgtspk_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_tgtspk_2 = WaveSurfer.create({ container: '#en_es_s2ut_tgtspk_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_tgtspk_2.load('./audio/en_es/tgtspk/854_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ut_norm_waveform_2"></div>
+            <button id="en_es_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_norm_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_s2ut_norm_2 = WaveSurfer.create({ container: '#en_es_s2ut_norm_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                en_es_s2ut_norm_2.load('./audio/en_es/spnorm1hr/854_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) More than 100 000 flights have been cancelled and around 12 million passengers have not been able to travel as planned. <br> (Es) se han cancelado más de cien mil vuelos y unos doce millones de pasajeros no han podido viajar como tenían previsto </td>
+            <td STYLE="text-transform:lowercase"> CIEN MIL VUELOS HAN SIDO CANCELADOS EN LOS DOCE MILLONES DE PASAJEROS QUE NO HAN PODIDO VIAJAR COMO PLANTA </td>
+            <td STYLE="text-transform:lowercase"> E MÁS DE CIEN MIL VOLUNTADES HAN SIDO ALCANSADOS EN UNOS DOCE MILLONES DE PASAJEROS NO HAN PODIDO VIAJAR COMO PLANIFICADO </td>
+            <td STYLE="text-transform:lowercase"> E MÁS DE CIEN MIL VUELOS SE HAN ENCONTRADO EN DOCE MILLONES DE PASAJEROS NO HAN PODIDO VIAJAR EN SU PLANIFICACIÓN </td>
+            <td STYLE="text-transform:lowercase"> MÁS DE CIEN MIL VUELOS HAN SIDO ENCANZADOS EN DOCE MILLONES DE PASAJEROS NO HAN PODIDO VIAJAR ESTE PLAN </td>
+        </tr>
+        <tr>
+            <th>3.</th>
+            <th>
+                <div id="en_es_src_waveform_3"></div>
+                <button id="en_es__source__header" class="play-button-demo btn btn-primary" onclick="en_es_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_src_3 = WaveSurfer.create({ container: '#en_es_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_src_3.load('./audio/en_es/source/819_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ttts_waveform_3"></div>
+            <button id="en_es_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_es_cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_cas_3 = WaveSurfer.create({ container: '#en_es_s2ttts_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                en_es_cas_3.load('./audio/en_es/s2ttts/819_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_es_s2ut_orig_waveform_3"></div>
+                <button id="en_es_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_orig_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_orig_3 = WaveSurfer.create({ container: '#en_es_s2ut_orig_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_orig_3.load('./audio/en_es/origunit/819_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_es_s2ut_tgtspk_waveform_3"></div>
+                <button id="en_es_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_tgtspk_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_es_s2ut_tgtspk_3 = WaveSurfer.create({ container: '#en_es_s2ut_tgtspk_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_es_s2ut_tgtspk_3.load('./audio/en_es/tgtspk/819_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_es_s2ut_norm_waveform_3"></div>
+            <button id="en_es_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_es_s2ut_norm_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_es_s2ut_norm_3 = WaveSurfer.create({ container: '#en_es_s2ut_norm_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                en_es_s2ut_norm_3.load('./audio/en_es/spnorm1hr/819_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) But how can we work more proactively towards the ultimate goal of improving global aviation safety? <br> (Es) pero cómo podemos trabajar de manera más proactiva hacia el objetivo final de mejorar la seguridad de la aviación internacional </td>
+            <td STYLE="text-transform:lowercase"> PERO COMO PODEMOS TRABAJAR MÁS PROACTIVAMENTE PARA MEJORAR LA SEGURIDAD DE LA AVIACIÓN MUNDIAL </td>
+            <td STYLE="text-transform:lowercase"> COMO PODEMOS TRABAJAR MÁS PARA MEJORAR LA SEGURIDAD DE LA AVIACIÓN AVIACIÓN </td>
+            <td STYLE="text-transform:lowercase"> PERO COMO PODEMOS TRABAJAR MÁS PRODUCTIVAMENTE PARA PODER CONSEGUIR EL OBJETIVO ÚLTIMO SÍ MEJORAMOS LA SEGURIDAD DE LA AVIACIÓN </td>
+            <td STYLE="text-transform:lowercase"> PERO COMO PODEMOS TRABAJAR DE MANERA MÁS ACTIVA HACIA EL OBJETIVO ÚLTIMO DE MEJORAR LA SEGURIDAD DE LA AVIACIÓN </td>
+        </tr>      
+    </table>
+</div>
+<div id="en_fr_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">English (En)-French (Fr)</div>
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th>Source (English)</th>
+            <th colspan="4">Predictions</th>
+        </tr>
+        <tr>
+            <th colspan="2"></th>
+            <th>S2T+T2U</th>
+            <th>S2UT (orig_unit)</th>
+            <th>S2UT (tgt_spk)</th>
+            <th>S2UT (sp_norm)</th>
+        </tr>
+        <tr>
+            <th>1. </th>
+            <th>
+                <div id="en_fr_src_waveform_1"></div>
+                <button id="en_fr__source__header" class="play-button-demo btn btn-primary" onclick="en_fr_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_src_1 = WaveSurfer.create({ container: '#en_fr_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_src_1.load('./audio/en_fr/source/596_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ttts_waveform_1"></div>
+            <button id="en_fr_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_fr_cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_cas_1 = WaveSurfer.create({ container: '#en_fr_s2ttts_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_cas_1.load('./audio/en_fr/s2ttts/596_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_fr_s2ut_orig_waveform_1"></div>
+                <button id="en_fr_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_orig_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_orig_1 = WaveSurfer.create({ container: '#en_fr_s2ut_orig_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_orig_1.load('./audio/en_fr/origunit/596_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_fr_s2ut_tgtspk_waveform_1"></div>
+                <button id="en_fr_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_tgtspk_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_tgtspk_1 = WaveSurfer.create({ container: '#en_fr_s2ut_tgtspk_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_tgtspk_1.load('./audio/en_fr/tgtspk/596_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ut_norm_waveform_1"></div>
+            <button id="en_fr_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_norm_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_s2ut_norm_1 = WaveSurfer.create({ container: '#en_fr_s2ut_norm_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_s2ut_norm_1.load('./audio/en_fr/spnorm1hr/596_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) I trust your good judgment in solving this procedural problem, and I am looking forward to hearing the opinion of the representatives of the Council and the Commission. <br> (Fr) je m'en remets à votre bon jugement pour résoudre ce problème procédural et je me réjouis d'entendre l'opinion des représentants du conseil et de la commission </td>
+            <td STYLE="text-transform:lowercase"> JE SUIS PERSUADÉ QUE VOUS ÊTES UN BON JUGEMENT POUR RÉSOUDRE CE PROBLÈME ET JATTENDS AVEC IMPATIENCE LA VIE DES REPRÉSENTANTS DU CONSEIL ET DE LA COMMISSION </td>
+            <td STYLE="text-transform:lowercase"> JE PENSE QUE VOTRE BONNE JUGEMENT RÉSOUDRE CE PROBLÈME PROCÉDURE ET JE ME RÉJOUIS DENTENDRE LAVIS DES REPRÉSENTANTS DU CONSEIL ET DE LA COMMISSION </td>
+            <td STYLE="text-transform:lowercase"> JE PENSE QUE VOTRE BON JUGEMENT POUR RÉSOUDRE CE PROBLÈME PROCÉDURE ET JATTENDS AVEC IMPATIENCE LAVIS DES REPRÉSENTANTS DU CONSEIL ET DE LA COMMISSION </td>
+            <td STYLE="text-transform:lowercase"> JE CONFIANCE À VOTRE BON JUGEMENT POUR RÉSOUDRE CE PROBLÈME DE PROCÉDURE ET JE ME RÉJOUIS DENTENDRE LAVIS DES REPRÉSENTANTS DU CONSEIL ET DE LA COMMISSION </td>
+        </tr>
+        <tr>
+            <th>2.</th>
+            <th>
+                <div id="en_fr_src_waveform_2"></div>
+                <button id="en_fr__source__header" class="play-button-demo btn btn-primary" onclick="en_fr_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_src_2 = WaveSurfer.create({ container: '#en_fr_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_src_2.load('./audio/en_fr/source/115_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ttts_waveform_2"></div>
+            <button id="en_fr_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_fr_cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_cas_2 = WaveSurfer.create({ container: '#en_fr_s2ttts_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_cas_2.load('./audio/en_fr/s2ttts/115_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_fr_s2ut_orig_waveform_2"></div>
+                <button id="en_fr_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_orig_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_orig_2 = WaveSurfer.create({ container: '#en_fr_s2ut_orig_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_orig_2.load('./audio/en_fr/origunit/115_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_fr_s2ut_tgtspk_waveform_2"></div>
+                <button id="en_fr_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_tgtspk_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_tgtspk_2 = WaveSurfer.create({ container: '#en_fr_s2ut_tgtspk_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_tgtspk_2.load('./audio/en_fr/tgtspk/115_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ut_norm_waveform_2"></div>
+            <button id="en_fr_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_norm_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_s2ut_norm_2 = WaveSurfer.create({ container: '#en_fr_s2ut_norm_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_s2ut_norm_2.load('./audio/en_fr/spnorm1hr/115_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) It is high time to support a tougher approach tackling the misuse of EU funds. <br> (Fr) il est grand temps de soutenir une approche plus stricte pour s'attaquer aux détournements des fonds communautaires </td>
+            <td STYLE="text-transform:lowercase"> IL EST GRAND TEMPS DE SOUTENIR UNE APPROCHE PLUS STRICTE POUR LUTTER CONTRE LE MAUVAIS USAGE DES FONDS EUROPÉENS </td>
+            <td STYLE="text-transform:lowercase"> IL EST GRAND TEMPS DE SOUTENIR UNE APPROCHE PLUS SUPPLÉMENTAIRE AVEC LA LUTTE CONTRE LE MAL USAGE DES FONDS </td>
+            <td STYLE="text-transform:lowercase"> IL EST GRAND TEMPS DE SOUTENIR UNE APPROCHE PLUS DIFFICILE POUR LUTTER CONTRE LE MAUVAIS USAGE DES FONDS </td>
+            <td STYLE="text-transform:lowercase"> IL EST GRAND TEMPS DE SOUTENIR UNE APPROCHE PLUS DIFFICILE POUR LUTTER CONTRE LE MAUVAIS USAGE DES FONDS EUROPÉENS </td>
+        </tr>
+        <tr>
+            <th>3.</th>
+            <th>
+                <div id="en_fr_src_waveform_3"></div>
+                <button id="en_fr__source__header" class="play-button-demo btn btn-primary" onclick="en_fr_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_src_3 = WaveSurfer.create({ container: '#en_fr_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_src_3.load('./audio/en_fr/source/37_src.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ttts_waveform_3"></div>
+            <button id="en_fr_cascaded_header" class="play-button-demo btn btn-primary" onclick="en_fr_cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_cas_3 = WaveSurfer.create({ container: '#en_fr_s2ttts_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_cas_3.load('./audio/en_fr/s2ttts/37_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="en_fr_s2ut_orig_waveform_3"></div>
+                <button id="en_fr_s2ut_orig__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_orig_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_orig_3 = WaveSurfer.create({ container: '#en_fr_s2ut_orig_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_orig_3.load('./audio/en_fr/origunit/37_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="en_fr_s2ut_tgtspk_waveform_3"></div>
+                <button id="en_fr_s2ut_tgtspk_header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_tgtspk_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var en_fr_s2ut_tgtspk_3 = WaveSurfer.create({ container: '#en_fr_s2ut_tgtspk_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    en_fr_s2ut_tgtspk_3.load('./audio/en_fr/tgtspk/37_pred.wav'); </script>
+           </th>
+           <th>
+            <div id="en_fr_s2ut_norm_waveform_3"></div>
+            <button id="en_fr_s2ut_norm__header" class="play-button-demo btn btn-primary" onclick="en_fr_s2ut_norm_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+            <script> var en_fr_s2ut_norm_3 = WaveSurfer.create({ container: '#en_fr_s2ut_norm_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                en_fr_s2ut_norm_3.load('./audio/en_fr/spnorm1hr/37_pred.wav'); </script>
+            </th>
+        </tr>
+        <tr>
+            <th> </th>
+            <td> (En) We want to see energy poverty as a part of this debate. <br> (Fr) nous voulons que la pauvreté énergétique fasse partie intégrante de ce débat </td>
+            <td STYLE="text-transform:lowercase"> NOUS VOULONS QUE LA PAUVRETÉ ÉNERGÉTIQUE FASSE PARTIE DE CE DÉBAT </td>
+            <td STYLE="text-transform:lowercase"> NOUS SOUHAITONS QUE LA POLITIQUE ÉNERGÉTIQUE FASSE PARTIE DE CE DRAM </td>
+            <td STYLE="text-transform:lowercase"> NOUS SOUHAITONS QUE LA POLITIQUE ÉNERGÉTIQUE DANS LE CADRE DE CE DÉBATNUS </td>
+            <td STYLE="text-transform:lowercase"> NOUS VOULONS QUE LA PAUVRETÉ ÉNERGÉTIQUE SOIT DANS LE CADRE DE CE DÉBAT </td>
+        </tr>      
+    </table>
+</div>
+<div class="content-container">
+    Template based on <a style="color:rgb(22, 38, 67)"  href="https://speechbot.github.io/"> Textless NLP</a> and <a style="color:rgb(22, 38, 67)"  href="https://daps.cs.princeton.edu/projects/HiFi-GAN/index.php"> HiFi-GAN</a> pages.  
+</div>
+</body>
+</html>

@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Direct speech-to-speech translation with discrete units</title>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+        <script src="jquery-3.5.js"></script>
+    </head>
+    <body>
+<div class="container">
+    <div id="text1">Direct Speech-to-Speech Translation With Discrete Units</div>
+    <div id="intro">
+        <br>
+        <p>
+            Ann Lee, Peng-Jen Chen, Changhan Wang, Jiatao Gu, Sravya Popuri, Xutai Ma, <br> Adam Polyak, Yossi Adi, Qing He, Yun Tang, Juan Pino, Wei-Ning Hsu
+      </p>
+       <p>
+            [<a href="https://arxiv.org/abs/2107.05604">paper</a>]
+        </p>
+    </div>
+</div>
+<div class="content-container">
+    <p>
+    We present a direct speech-to-speech translation (S2ST) model that translates speech from one language to speech in another language without relying on intermediate text generation.
+    We tackle the problem by first applying a self-supervised discrete speech encoder on the target speech and then training a sequence-to-sequence speech-to-unit translation (S2UT) model to predict the discrete representations of the target speech.
+    When target text transcripts are available, we design a joint speech and text training framework that enables the model to generate dual modality output (speech and text) simultaneously in the same inference pass. Experiments on the Fisher Spanish-English dataset show that the proposed framework yields improvement of 6.7 BLEU compared with a baseline direct S2ST model that predicts spectrogram features.
+    When trained without any text transcripts, our model performance is comparable to models that predict spectrograms and are trained with text supervision, showing the potential of our system for translation between unwritten languages.
+    </p>
+    <ul>
+        <li><a style="color:blue" href="#written_setup">Written language setup</a></li>
+        <li><a style="color:blue" href="#unwritten_setup">Unwritten language setup</a></li>
+        <li><a style="color:blue" href="#w2unwritten_setup">Written (source) to unwritten (target) language setup</a></li>
+    </ul>
+</div>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+
+
+<div id="written_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">Written Language Setup</div>
+    <div class="content-subtitle">Compare systems that use both source and target text transcripts during training</div>
+
+    <p> We provide ground truth source and target audios with the corresponding reference text,
+        as well as audio samples from three systems and the corresponding ASR text: <br>
+        (1) <strong>S2UT+CTC</strong>: the proposed direct speeech-to-unit translation system with joint speech and text training, <br>
+        (2) <strong>Transformer Translatotron</strong>: a baseline direct speech-to-spectrogram translation model, <br>
+        (3) <strong>S2T+TTS:</strong> a baseline cascaded system with a speech-to-text translation model and a text-to-speech synthesis model. <br>
+        Both (1) and (2) are trained with source and target text as auxiliary task targets. For (1) and (3), we also provide the systems' text output.</p>
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th colspan="2">Ground truth</th>
+            <th colspan="3">Predictions</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>Source (Spanish)</th>
+            <th>Target (English)</th>
+            <th>S2UT+CTC</th>
+            <th>Transformer Translatotron</th>
+            <th>S2T+TTS</th>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 1: S2UT+CTC performs the best</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_1"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_1 = WaveSurfer.create({ container: '#src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    src_1.load('./audio/written/source_test/3481_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_1"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_1 = WaveSurfer.create({ container: '#target_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_1.load('./audio/written/target_test/test_3481.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_1"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_1 = WaveSurfer.create({ container: '#s2ut_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_1.load('./audio/written/reduced_beam10_test/3481_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_1"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_1 = WaveSurfer.create({ container: '#translatotron_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    tl_1.load('./audio/written/translatotron_letter_test/3481_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_1"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_1 = WaveSurfer.create({ container: '#s2ttts_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    cas_1.load('./audio/written/s2t_tts_test/3481_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> y, y le voy a preguntar si me toca reemplazarlo. </td>
+            <td> and, and I am going to ask if it will be on me to replace it. </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> and i'm going to ask if i have to replace it </td>
+            <td> and alaskan and i have to relac im </td>
+            <td> and i'm going to ask you and i have to replace it </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> and i'm going to ask if i have to replace it </td>
+            <td>  </td>
+            <td> and i'm going to ask you and i have to replace it </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 2: ASR errors for S2UT+CTC and Transformer Translatotron</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_2"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_2 = WaveSurfer.create({ container: '#src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    src_2.load('./audio/written/source_test/1807_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_2"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_2 = WaveSurfer.create({ container: '#target_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_2.load('./audio/written/target_test/test_1807.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_2"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_2 = WaveSurfer.create({ container: '#s2ut_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_2.load('./audio/written/reduced_beam10_test/1807_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_2"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_2 = WaveSurfer.create({ container: '#translatotron_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    tl_2.load('./audio/written/translatotron_letter_test/1807_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_2"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_2 = WaveSurfer.create({ container: '#s2ttts_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    cas_2.load('./audio/written/s2t_tts_test/1807_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> sin embargo te digo, no sé, de repente aquí. ¿Tu estás en, en Pennsylvania, me dijistes? </td>
+            <td> anyways I tell you, I don't know, all of a sudden here. You were in Pennsylvania you say? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> however i tell you i don't know suddenly here you are in pennsylvania you told me </td>
+            <td> however i'm telling you i don't know somley here in pennsylvania </td>
+            <td> nevertheless i tell you i don't know suddenly here you are in in pennsylvania and you </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> however i tell you i don't know suddenly here you are in in pennsylvania you told me </td>
+            <td>  </td>
+            <td> nevertheless i tell you i don't know suddenly here you are in in pennsylvania and you </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 3: S2UT+CTC performs the best</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_3"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_3 = WaveSurfer.create({ container: '#src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    src_3.load('./audio/written/source_test/1328_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_3"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_3 = WaveSurfer.create({ container: '#target_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_3.load('./audio/written/target_test/test_1328.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_3"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_3 = WaveSurfer.create({ container: '#s2ut_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_3.load('./audio/written/reduced_beam10_test/1328_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_3"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_3 = WaveSurfer.create({ container: '#translatotron_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    tl_3.load('./audio/written/translatotron_letter_test/1328_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_3"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_3 = WaveSurfer.create({ container: '#s2ttts_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    cas_3.load('./audio/written/s2t_tts_test/1328_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> mucha energía así es </td>
+            <td> lots of energy, indeed </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> a lot of energy that's right </td>
+            <td> a lot of energy this is </td>
+            <td> a lot of energy so </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> a lot of energy that's right </td>
+            <td>  </td>
+            <td> a lot of energy so </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 4: ASR errors vs. correct text output from S2UT+CTC and S2T+TTS</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_4"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_4 = WaveSurfer.create({ container: '#src_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    src_4.load('./audio/written/source_test/322_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_4"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_4 = WaveSurfer.create({ container: '#target_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_4.load('./audio/written/target_test/test_322.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_4"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_4 = WaveSurfer.create({ container: '#s2ut_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_4.load('./audio/written/reduced_beam10_test/322_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_4"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_4 = WaveSurfer.create({ container: '#translatotron_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    tl_4.load('./audio/written/translatotron_letter_test/322_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_4"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_4 = WaveSurfer.create({ container: '#s2ttts_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    cas_4.load('./audio/written/s2t_tts_test/322_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> Puertoriqueña. ¿Pero creció en Estados Unidos? </td>
+            <td> Puerto Rican. But were you born in the United States? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> port orekin but i grew in the united states </td>
+            <td> porto rekin but he grew up in the united states </td>
+            <td> porto recan but i grew up in the united states </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> puerto rican but i grew in the united states </td>
+            <td>  </td>
+            <td> puerto rican but i grew up in the united states </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 5: S2UT+CTC and S2T+TTS perform similarly</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_5"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_5 = WaveSurfer.create({ container: '#src_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    src_5.load('./audio/written/source_test/2251_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_5"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_5 = WaveSurfer.create({ container: '#target_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_5.load('./audio/written/target_test/test_2251.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_5"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_5 = WaveSurfer.create({ container: '#s2ut_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_5.load('./audio/written/reduced_beam10_test/2251_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_5"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_5 = WaveSurfer.create({ container: '#translatotron_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    tl_5.load('./audio/written/translatotron_letter_test/2251_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_5"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_5 = WaveSurfer.create({ container: '#s2ttts_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    cas_5.load('./audio/written/s2t_tts_test/2251_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> no no hace tanto, hace poco. </td>
+            <td> not it hasn't been that long, it's been a short time </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> no not that long ago </td>
+            <td> no no i don't know that much yes </td>
+            <td> no not so long ago </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> no not that long ago </td>
+            <td>  </td>
+            <td> no not so long ago </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 6: S2UT+CTC and S2T+TTS perform similarly</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_6"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_6 = WaveSurfer.create({ container: '#src_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    src_6.load('./audio/written/source_test/1416_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_6"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_6 = WaveSurfer.create({ container: '#target_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_6.load('./audio/written/target_test/test_1416.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_6"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_6 = WaveSurfer.create({ container: '#s2ut_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_6.load('./audio/written/reduced_beam10_test/1416_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_6"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_6 = WaveSurfer.create({ container: '#translatotron_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    tl_6.load('./audio/written/translatotron_letter_test/1416_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_6"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_6 = WaveSurfer.create({ container: '#s2ttts_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    cas_6.load('./audio/written/s2t_tts_test/1416_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> No yo soy casada, yo tengo tres años de casada y la verdad yo sí tengo, un niño, tiene veinte meses </td>
+            <td> No, I'm married, I've been married for three years and i do have a kid, he's 20 months old </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> no i'm married i've been married for three years and honestly i do have only i have a child he's twenty months old </td>
+            <td> no i am married i have been married and really wing and the truth is i'd only have one is twenty months old </td>
+            <td> no i'm married i've been married for three years and the truth i do have only a child is twenty months old </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> no i'm married i've been married for three years and honestly i do have only i have a child he's twenty months old </td>
+            <td>  </td>
+            <td> no i'm married i've been married for three years and the truth i do have only a child is twenty months old </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 7: wrong translations for name</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="src_waveform_7"></div>
+                <button id="written_source__header" class="play-button-demo btn btn-primary" onclick="src_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var src_7 = WaveSurfer.create({ container: '#src_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    src_7.load('./audio/written/source_test/1381_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="target_waveform_7"></div>
+                <button id="written_target__header" class="play-button-demo btn btn-primary" onclick="tgt_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tgt_7 = WaveSurfer.create({ container: '#target_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    tgt_7.load('./audio/written/target_test/test_1381.wav'); </script>
+           </th>
+           <th>
+                <div id="s2ut_waveform_7"></div>
+                <button id="written_s2ut__header" class="play-button-demo btn btn-primary" onclick="s2ut_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var s2ut_7 = WaveSurfer.create({ container: '#s2ut_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    s2ut_7.load('./audio/written/reduced_beam10_test/1381_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="translatotron_waveform_7"></div>
+                <button id="written_translatotron_header" class="play-button-demo btn btn-primary" onclick="tl_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var tl_7 = WaveSurfer.create({ container: '#translatotron_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    tl_7.load('./audio/written/translatotron_letter_test/1381_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="s2ttts_waveform_7"></div>
+                <button id="written_cascaded_header" class="play-button-demo btn btn-primary" onclick="cas_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var cas_7 = WaveSurfer.create({ container: '#s2ttts_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    cas_7.load('./audio/written/s2t_tts_test/1381_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> Bueno mi nombre es Claudia Ivette ¿Con quién tengo el gusto? </td>
+            <td> Well, my name is Claudia Ivette. With whom do I have the pleasure of speaking? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> well my name is claudia but tracy with whom do i have the pleasure of speaking </td>
+            <td> well my name is claria and beatricia with whom have the pleasure to pleasure </td>
+            <td> well my name is claudia who am i talking to </td>
+        </tr>
+        <tr>
+            <th> Text output: </th>
+            <td> </td>
+            <td> </td>
+            <td> well my name is claudia buttraycy with whom do i have the pleasure of speaking </td>
+            <td>  </td>
+            <td> well my name is claudia who am i talking to </td>
+        </tr>                      
+    </table>
+</div>
+<div id="unwritten_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">Unwritten Language Setup</div>
+    <div class="content-subtitle">Compare systems that do NOT use any text transcripts during training</div>
+
+    <p> We provide ground truth source and target audios with the corresponding reference text,
+        as well as audio samples from two systems and the corresponding ASR text: <br>
+        (1) <strong>S2UT w/ source unit task</strong>: the proposed direct speeech-to-unit translation system trained with source discrete units as the auxiliary task target, <br>
+        (2) <strong>S2UT w/o auxiliary task</strong>: the proposed direct speeech-to-unit translation system trained without multitask learning. </p>
+
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th colspan="2">Ground truth</th>
+            <th colspan="2">Predictions</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>Source (Spanish)</th>
+            <th>Target (English)</th>
+            <th>S2UT w/ source unit task</th>
+            <th>S2UT w/o auxiliary task</th>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 1: S2UT w/ source unit task performs better</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_1"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_1 = WaveSurfer.create({ container: '#unw_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_1.load('./audio/unwritten/source_test/3117_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_1"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_1 = WaveSurfer.create({ container: '#unw_target_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_1.load('./audio/unwritten/target_test/test_3117.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_1"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_1 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_1.load('./audio/unwritten/s2ut_w_mt_beam10_test/3117_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_1"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_1 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_1.load('./audio/unwritten/s2ut_no_mt_beam10_test/3117_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> Hola Fernanda, ¿cómo estás? mi nombre es Claudia. </td>
+            <td> Hi Fernanda, how are you?, my name is Claudia </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> hello fernanda how are you my name is claudia </td>
+            <td> hello how are you how are you my name is gloria </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 2: S2UT w/ source unit task performs better</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_2"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_2 = WaveSurfer.create({ container: '#unw_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_2.load('./audio/unwritten/source_test/2948_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_2"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_2 = WaveSurfer.create({ container: '#unw_target_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_2.load('./audio/unwritten/target_test/test_2948.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_2"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_2 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_2.load('./audio/unwritten/s2ut_w_mt_beam10_test/2948_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_2"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_2 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_2.load('./audio/unwritten/s2ut_no_mt_beam10_test/2948_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> No dijo que no para la familia no más, porque ya le van a comprar algo mejor para el niño, y. </td>
+            <td> No, she said that family only, because they will buy something better for the kid, so </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> no yes not that for the family because they are going to buy something better for the kid end </td>
+            <td> no yes i don't know for me that they call the contrary for the kids for the kids </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 3: S2UT w/o auxiliary task failed to translate </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_3"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_3 = WaveSurfer.create({ container: '#unw_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_3.load('./audio/unwritten/source_test/3452_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_3"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_3 = WaveSurfer.create({ container: '#unw_target_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_3.load('./audio/unwritten/target_test/test_3452.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_3"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_3 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_3.load('./audio/unwritten/s2ut_w_mt_beam10_test/3452_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_3"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_3 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_3.load('./audio/unwritten/s2ut_no_mt_beam10_test/3452_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> El computador es lo más avanzado de la civilización ahora. </td>
+            <td> The computer is the most advanced of civilization now. </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> the computer is the most advanced of the civilization now </td>
+            <td> that they were talking about the religion and all that </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 4: ASR errors </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_4"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_4 = WaveSurfer.create({ container: '#unw_src_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_4.load('./audio/unwritten/source_test/3359_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_4"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_4 = WaveSurfer.create({ container: '#unw_target_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_4.load('./audio/unwritten/target_test/test_3359.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_4"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_4 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_4.load('./audio/unwritten/s2ut_w_mt_beam10_test/3359_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_4"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_4 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_4.load('./audio/unwritten/s2ut_no_mt_beam10_test/3359_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> ajá, ¿y tu tienes, prácticas alguna religión en particulas? </td>
+            <td> aha, and do you practice any religion in particular? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> wright and you have do you practise some religion in particular </td>
+            <td> right and you have to participate religion </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 5: S2UT w/ source unit task performs better</th>        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_5"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_5 = WaveSurfer.create({ container: '#unw_src_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_5.load('./audio/unwritten/source_test/3578_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_5"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_5 = WaveSurfer.create({ container: '#unw_target_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_5.load('./audio/unwritten/target_test/test_3578.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_5"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_5 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_5.load('./audio/unwritten/s2ut_w_mt_beam10_test/3578_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_5"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_5 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_5.load('./audio/unwritten/s2ut_no_mt_beam10_test/3578_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> entonces los servicios son más baratos, porque venden a más personas </td>
+            <td> then services are cheaper, because they sell to more people </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> and then the services are cheaper because they sell more people </td>
+            <td> and then they say that they say because they give you more person </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 6: S2UT w/ source unit task performs better</th>        </tr>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_6"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_6 = WaveSurfer.create({ container: '#unw_src_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_6.load('./audio/unwritten/source_test/377_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_6"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_6 = WaveSurfer.create({ container: '#unw_target_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_6.load('./audio/unwritten/target_test/test_377.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_6"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_6 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_6.load('./audio/unwritten/s2ut_w_mt_beam10_test/377_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_6"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_6 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_6.load('./audio/unwritten/s2ut_no_mt_beam10_test/377_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> Ah, yo hallé, tengo una amiga que se llama Norma, yo creo que ella vive en Georgia también. </td>
+            <td> Ah, I, have a friend whose name is Norma, I think she lives in Georgia also. </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> oh i have a friend that's called norma i think that she lives in georgia </td>
+            <td> of course i'm from my friends that called me but i think that they also taken to </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 7: S2UT w/o auxiliary task failed to translate </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="unw_src_waveform_7"></div>
+                <button id="unwritten_source__header" class="play-button-demo btn btn-primary" onclick="unw_src_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_src_7 = WaveSurfer.create({ container: '#unw_src_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    unw_src_7.load('./audio/unwritten/source_test/1182_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="unw_target_waveform_7"></div>
+                <button id="unwritten_target__header" class="play-button-demo btn btn-primary" onclick="unw_tgt_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_tgt_7 = WaveSurfer.create({ container: '#unw_target_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    unw_tgt_7.load('./audio/unwritten/target_test/test_1182.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_w_mt_waveform_7"></div>
+                <button id="unwritten_s2ut_w_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_w_mt_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_w_mt_7 = WaveSurfer.create({ container: '#unw_s2ut_w_mt_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_w_mt_7.load('./audio/unwritten/s2ut_w_mt_beam10_test/1182_pred.wav'); </script>
+           </th>
+           <th>
+                <div id="unw_s2ut_no_mt_waveform_7"></div>
+                <button id="unwritten_s2ut_no_mt__header" class="play-button-demo btn btn-primary" onclick="unw_s2ut_no_mt_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var unw_s2ut_no_mt_7 = WaveSurfer.create({ container: '#unw_s2ut_no_mt_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    unw_s2ut_no_mt_7.load('./audio/unwritten/s2ut_no_mt_beam10_test/1182_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> Tienen hasta clases que, que los niños pueden tomar o los estudiantes que pueden tomar en la computadora </td>
+            <td> They have classes for kids that can take and solve them on the computer </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> they have classes that the kids can take the students that they can take computers </td>
+            <td> you have to be careful that they can call the computers </td>
+        </tr>
+    </table>
+</div>
+<div id="w2unwritten_setup" class="content-container">
+    <script src="wavesurfer.js"></script>
+    <div class="content-title">Written (source) to Unwritten (target) Language Setup</div>
+    <div class="content-subtitle">Compare systems that use source text transcripts but NOT target text transcripts during training</div>
+
+    <p> We provide ground truth source and target audios with the corresponding reference text,
+        as well as audio samples from three systems and the corresponding ASR text: <br>
+        (1) <strong>S2UT</strong>: the proposed direct speeech-to-unit translation system trained with source text as the auxiliary task target, <br>
+        (2) <strong>ASR+T2UT</strong>: a cascaded system with a automatic speech recognition model and a text-to-unit translation model. </p>
+
+    <table border="0" class="inlineTable">
+        <tr>
+            <th></th>
+            <th colspan="2">Ground truth</th>
+            <th colspan="3">Predictions</th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>Source (Spanish)</th>
+            <th>Target (English)</th>
+            <th>S2UT</th>
+            <th>ASR+T2UT</th>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 1: both systems perform well </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_1"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_1 = WaveSurfer.create({ container: '#w2unw_src_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_1.load('./audio/written_unwritten/source_test/733_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_1"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_1 = WaveSurfer.create({ container: '#w2unw_target_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_1.load('./audio/written_unwritten/target_test/test_733.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_1"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_1 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_1.load('./audio/written_unwritten/reduced_beam10_test/733_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_1"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_1.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_1 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_1', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_1.load('./audio/written_unwritten/asr_t2ut_test/733_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> ¿Qué, qué estudias tu? </td>
+            <td> What are you studying? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> what do you study </td>
+            <td> what do you study </td>
+        </tr> 
+        <tr>
+            <th colspan="6" style="text-align:left">sample 2: both systems perform well </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_2"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_2 = WaveSurfer.create({ container: '#w2unw_src_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_2.load('./audio/written_unwritten/source_test/2245_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_2"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_2 = WaveSurfer.create({ container: '#w2unw_target_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_2.load('./audio/written_unwritten/target_test/test_2245.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_2"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_2 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_2.load('./audio/written_unwritten/reduced_beam10_test/2245_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_2"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_2.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_2 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_2', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_2.load('./audio/written_unwritten/asr_t2ut_test/2245_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> ¿Y hace cuánta ya que vive acá?  </td>
+            <td> And how long did you live there? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> and how long have you been living here </td>
+            <td> and how long have you been here </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 3: ASR error for S2UT </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_3"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_3 = WaveSurfer.create({ container: '#w2unw_src_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_3.load('./audio/written_unwritten/source_test/328_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_3"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_3 = WaveSurfer.create({ container: '#w2unw_target_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_3.load('./audio/written_unwritten/target_test/test_328.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_3"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_3 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_3.load('./audio/written_unwritten/reduced_beam10_test/328_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_3"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_3.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_3 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_3', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_3.load('./audio/written_unwritten/asr_t2ut_test/328_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> sí. Yo crecí, y me crié en Chile, y cuando terminé la secundaria de High School , vine a estudiar a la universidad, a </td>
+            <td> Yes. I was born and raised in Chile, and when I finished High School, I came to study at the University, </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> yes i was raised in shile when i finished the secondary of high school i came to study in the university </td>
+            <td> yes i grew up i was raised in chile when i finished high school i came to study to university ah </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 4: ASR+T2UT produces natural speech </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_4"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_4 = WaveSurfer.create({ container: '#w2unw_src_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_4.load('./audio/written_unwritten/source_test/1751_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_4"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_4 = WaveSurfer.create({ container: '#w2unw_target_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_4.load('./audio/written_unwritten/target_test/test_1751.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_4"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_4 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_4.load('./audio/written_unwritten/reduced_beam10_test/1751_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_4"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_4.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_4 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_4', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_4.load('./audio/written_unwritten/asr_t2ut_test/1751_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> bueno, realmente no sé, qué, qué tanto conocimiento tienes tu pero este, por ejemplo, al situación que estamos viviendo en Venezuela es una situación muy especial </td>
+            <td> well, I really don't know, how, how much knowledge you have but ehm, for example,  the situation that we are living in Venezuela is a very special situation </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> well i really don't know how much knowledge you have but for example the the situation that we are living in venezuela is a very special situation </td>
+            <td> well i really don't know how much knowledge you have but for example sure situation that we are living in venezuela it's a very special situation </td>
+        </tr>
+        <tr>
+            <th colspan="6" style="text-align:left">sample 5: repeating translation for S2UT </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_5"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_5 = WaveSurfer.create({ container: '#w2unw_src_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_5.load('./audio/written_unwritten/source_test/3584_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_5"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_5 = WaveSurfer.create({ container: '#w2unw_target_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_5.load('./audio/written_unwritten/target_test/test_3584.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_5"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_5 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_5.load('./audio/written_unwritten/reduced_beam10_test/3584_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_5"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_5.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_5 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_5', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_5.load('./audio/written_unwritten/asr_t2ut_test/3584_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> hoy en día pues comprar un computador por doscientos o trescientos dólares </td>
+            <td> now you can buy a computer for two hundred or three hundred dollars, </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> nowadays you can buy a computer for two hundred or three hundred or three hundred dollars </td>
+            <td> today you can buy a computer for two hundred or three hundred dollars </td>
+        </tr> 
+        <tr>
+            <th colspan="6" style="text-align:left">sample 6: S2UT performs better </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_6"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_6 = WaveSurfer.create({ container: '#w2unw_src_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_6.load('./audio/written_unwritten/source_test/1807_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_6"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_6 = WaveSurfer.create({ container: '#w2unw_target_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_6.load('./audio/written_unwritten/target_test/test_1807.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_6"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_6 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_6.load('./audio/written_unwritten/reduced_beam10_test/1807_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_6"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_6.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_6 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_6', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_6.load('./audio/written_unwritten/asr_t2ut_test/1807_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> sin embargo te digo, no sé, de repente aquí. ¿Tu estás en, en Pennsylvania, me dijistes? </td>
+            <td> anyways I tell you, I don't know, all of a sudden here. You were in Pennsylvania you say? </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> however i tell you i don't know suddenly here are you in pensylvania right you saw </td>
+            <td> however i tell you i don't know maybe you are here in pensylvania </td>
+        </tr> 
+        <tr>
+            <th colspan="6" style="text-align:left">sample 7: ASR+T2UT produces natural speech </th>
+        </tr>
+        <tr>
+            <th></th>
+            <th>
+                <div id="w2unw_src_waveform_7"></div>
+                <button id="w2unwritten_source__header" class="play-button-demo btn btn-primary" onclick="w2unw_src_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_src_7 = WaveSurfer.create({ container: '#w2unw_src_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_src_7.load('./audio/written_unwritten/source_test/1805_src.wav'); </script>
+           </th>            
+           <th>
+                <div id="w2unw_target_waveform_7"></div>
+                <button id="w2unwritten_target__header" class="play-button-demo btn btn-primary" onclick="w2unw_tgt_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_tgt_7 = WaveSurfer.create({ container: '#w2unw_target_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_tgt_7.load('./audio/written_unwritten/target_test/test_1805.wav'); </script>
+           </th>
+           <th>
+                <div id="w2unw_s2ut_waveform_7"></div>
+                <button id="w2unwritten_s2ut__header" class="play-button-demo btn btn-primary" onclick="w2unw_s2ut_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_s2ut_7 = WaveSurfer.create({ container: '#w2unw_s2ut_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_s2ut_7.load('./audio/written_unwritten/reduced_beam10_test/1805_pred.wav'); </script>
+           </th>
+            <th>
+                <div id="w2unw_asrt2ut_waveform_7"></div>
+                <button id="w2unwritten_cascaded_header" class="play-button-demo btn btn-primary" onclick="w2unw_cas_7.playPause()"> <i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+                <script> var w2unw_cas_7 = WaveSurfer.create({ container: '#w2unw_asrt2ut_waveform_7', waveColor: 'violet', progressColor: 'purple' });
+                    w2unw_cas_7.load('./audio/written_unwritten/asr_t2ut_test/1805_pred.wav'); </script>
+           </th>
+        </tr>
+        <tr>
+            <th> Reference: </th>
+            <td> no sé qué pasa, pero no tienen o sea, en, en general no tienen esa como esa necesidad de protestar ante ciertas cosas </td>
+            <td> I don't know what happens, but they don't have in general they don't have that necessity to protest under certain things </td>
+        </tr>
+        <tr>
+            <th> ASR: </th>
+            <td> </td>
+            <td> </td>
+            <td> i don't know what happens but they don't have i mean in general they don't have a need to protestant certain things </td>
+            <td> i don't know what happens but they don't have i mean in general they don't have that like that need to protest some some things </td>
+        </tr>                       
+    </table>
+</div>
+
+<div class="content-container">
+    Template based on <a style="color:rgb(22, 38, 67)"  href="https://speechbot.github.io/"> Textless NLP</a> and <a style="color:rgb(22, 38, 67)"  href="https://daps.cs.princeton.edu/projects/HiFi-GAN/index.php"> HiFi-GAN</a> pages.  
+</div>
+</body>
+</html>

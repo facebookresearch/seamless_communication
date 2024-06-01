@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>A Holistic Cascade System, Benchmark, and Human Evaluation Protocol for Expressive Speech-to-Speech Translation </title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="jquery-3.5.js"></script>
+    <script src="wavesurfer.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div id="text1"> A Holistic Cascade System, Benchmark, and Human Evaluation Protocol </br> for Expressive Speech-to-Speech Translation </div>
+        <div id="intro">
+            <br>
+            <p>
+                Wen-Chin Huang1<sup>&#8224;&#8225;</sup> , Benjamin Peloquin<sup>2&#8225;</sup>, Justine Kao<sup>2</sup>, Changhan Wang<sup>2</sup> </br>
+                Hongyu Gong<sup>2</sup>, Elizabeth Salesky<sup>3†</sup>, Yossi Adi<sup>2</sup>, Ann Lee<sup>2</sup>, Peng-Jen Chen<sup>2</sup> </br>
+            </p>
+            <p>
+                <sup>1</sup>Nagoya University, <sup>2</sup>Meta AI, <sup>3</sup>Johns Hopkins University </br>
+                <font size="-1">(&#8224; = Work done while interning at Meta AI. and &#8225; = Equal contribution.)</font>
+            </p>
+        </div>
+    </div>
+    <div class="content-container">
+        <p>
+            We propose a holistic cascade system for expressive S2ST, combining multiple prosody transfer techniques previously considered only in isolation.
+            We curate a benchmark expressivity test set in the TV series domain (Heroes) and explored a second dataset in the audiobook domain (Mined audiobook).
+            Finally, wepresent a human evaluation protocol to assess multiple expressive dimensions across speech pairs.
+            Experimental results indicate that bilingual annotators can assess the quality of expressive preservation in S2ST systems, and the holistic modeling approach outperforms single-aspect systems.
+        </p>
+        <p>
+            In this page, we demonstrate synthesized examples on both Heroes and Mined audiobook benchmark datasets with different expressive dimensions.
+        </p>
+        <h3> Demo </h3>
+        <ul>
+            <li><a style="color:rgb(90, 4, 83)" href="#mined_audiobook_benchmark">Mined audiobook benchmark</a></li>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="#mined_audiobook_benchmark">Synthesize speech-to-text output</a></li>
+            </ul>
+            <li><a style="color:rgb(90, 4, 83)" href="#heores_benchmark">Heroes benchmark</a></li>
+            <ul>
+                <li><a style="color:rgb(90, 4, 83)" href="heroes_s2t">Synthesize speech-to-text output</a></li>
+                <li><a style="color:rgb(90, 4, 83)" href="heroes_gt">Synthesize ground truth text</a></li>
+            </ul>
+        </ul>
+    </div>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css"><div id="mined_audiobook_benchmark" class="content-container">
+  <div  class="content-title">
+    <font size="+5">Results on the mined audiobook benchmark</font>
+  </div>
+  <table border="0" class="inlineTable">
+    <tr>
+      <th colspan="7">
+        <font size="+2">Synthesize speech-to-text output</font>
+      </th>
+    </tr>
+    <tr>
+      <th></th>
+      <th colspan="2">Ground Truth</th>
+      <th colspan="2">Predictions</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>Source (Spanish)</th>
+      <th>Target (English)</th>
+      <th>Vanilla TTS</th>
+      <th>Holistic Cascade (Global transfer + local transfer)</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src__waveform"></div>
+        <button id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src__button" class="play-button-demo btn btn-primary" onclick="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src = WaveSurfer.create({ container: '#miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src__waveform', waveColor: 'violet', progressColor: 'purple' }); miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_src.load('./audio/reference/mined_audiobook/es/miserables_25_hugo_64kb_416396_421764-goldenmilestone_01_boreham_64kb_673394_679384.wav'); </script>
+      </th>
+      <th>
+        <div id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt__waveform"></div>
+        <button id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt__button" class="play-button-demo btn btn-primary" onclick="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt = WaveSurfer.create({ container: '#miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt__waveform', waveColor: 'violet', progressColor: 'purple' }); miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_tgt.load('./audio/reference/mined_audiobook/en/miserables_25_hugo_64kb_416396_421764-goldenmilestone_01_boreham_64kb_673394_679384.wav'); </script>
+      </th>
+      <th>
+        <div id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf__waveform"></div>
+        <button id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf = WaveSurfer.create({ container: '#miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_gpdf.load('./audio/S2T_text/mined_audiobook/G_P_D_F/miserables_25_hugo_64kb_416396_421764-goldenmilestone_01_boreham_64kb_673394_679384.wav'); </script>
+      </th>
+      <th>
+        <div id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn__waveform"></div>
+        <button id="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn = WaveSurfer.create({ container: '#miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); miserables_25_hugo_64kb_416396_421764_goldenmilestone_01_boreham_64kb_673394_679384_mined_s2t_nnnn.load('./audio/S2T_text/mined_audiobook/N_N_N_N/miserables_25_hugo_64kb_416396_421764-goldenmilestone_01_boreham_64kb_673394_679384.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th>Input text:</th>
+      <th>próxima a cometer una mala acción contemplando el sueño de un justo</th>
+      <th>which is on the point of committing a bad action contemplating the sleep of a</th>
+      <th>He is about to commit a bad action, contemplating the dream of a just man.</th>
+      <th>He is about to commit a bad action, contemplating the dream of a just man.</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src__waveform"></div>
+        <button id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src__button" class="play-button-demo btn btn-primary" onclick="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src = WaveSurfer.create({ container: '#cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src__waveform', waveColor: 'violet', progressColor: 'purple' }); cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_src.load('./audio/reference/mined_audiobook/es/cuentosdehadas03_14_grimm_64kb_165350_168986-chanticleer_15_unknown_64kb_28958_32068.wav'); </script>
+      </th>
+      <th>
+        <div id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt__waveform"></div>
+        <button id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt__button" class="play-button-demo btn btn-primary" onclick="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt = WaveSurfer.create({ container: '#cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt__waveform', waveColor: 'violet', progressColor: 'purple' }); cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_tgt.load('./audio/reference/mined_audiobook/en/cuentosdehadas03_14_grimm_64kb_165350_168986-chanticleer_15_unknown_64kb_28958_32068.wav'); </script>
+      </th>
+      <th>
+        <div id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf__waveform"></div>
+        <button id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf = WaveSurfer.create({ container: '#cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_gpdf.load('./audio/S2T_text/mined_audiobook/G_P_D_F/cuentosdehadas03_14_grimm_64kb_165350_168986-chanticleer_15_unknown_64kb_28958_32068.wav'); </script>
+      </th>
+      <th>
+        <div id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn__waveform"></div>
+        <button id="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn = WaveSurfer.create({ container: '#cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); cuentosdehadas03_14_grimm_64kb_165350_168986_chanticleer_15_unknown_64kb_28958_32068_mined_s2t_nnnn.load('./audio/S2T_text/mined_audiobook/N_N_N_N/cuentosdehadas03_14_grimm_64kb_165350_168986-chanticleer_15_unknown_64kb_28958_32068.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th>Input text:</th>
+      <th>entonces el escribió una carta a su madre</th>
+      <th>and writes a letter to his mother</th>
+      <th>Then he wrote a letter to his mother.</th>
+      <th>Then he wrote a letter to his mother.</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src__waveform"></div>
+        <button id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src__button" class="play-button-demo btn btn-primary" onclick="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src = WaveSurfer.create({ container: '#losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src__waveform', waveColor: 'violet', progressColor: 'purple' }); losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_src.load('./audio/reference/mined_audiobook/es/losmiserables5_56_hugo_64kb_454551_458949-lesmiserables_vol5_36_hugo_64kb_476280_483550.wav'); </script>
+      </th>
+      <th>
+        <div id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt__waveform"></div>
+        <button id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt__button" class="play-button-demo btn btn-primary" onclick="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt = WaveSurfer.create({ container: '#losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt__waveform', waveColor: 'violet', progressColor: 'purple' }); losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_tgt.load('./audio/reference/mined_audiobook/en/losmiserables5_56_hugo_64kb_454551_458949-lesmiserables_vol5_36_hugo_64kb_476280_483550.wav'); </script>
+      </th>
+      <th>
+        <div id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf__waveform"></div>
+        <button id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf = WaveSurfer.create({ container: '#losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_gpdf.load('./audio/S2T_text/mined_audiobook/G_P_D_F/losmiserables5_56_hugo_64kb_454551_458949-lesmiserables_vol5_36_hugo_64kb_476280_483550.wav'); </script>
+      </th>
+      <th>
+        <div id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn__waveform"></div>
+        <button id="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn = WaveSurfer.create({ container: '#losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); losmiserables5_56_hugo_64kb_454551_458949_lesmiserables_vol5_36_hugo_64kb_476280_483550_mined_s2t_nnnn.load('./audio/S2T_text/mined_audiobook/N_N_N_N/losmiserables5_56_hugo_64kb_454551_458949-lesmiserables_vol5_36_hugo_64kb_476280_483550.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th>Input text:</th>
+      <th>le he destinado un sitio de honor habéis conquistado a mi abuelo</th>
+      <th>I have fixed upon a corner of Honor for that you have conquered my grandfather you suit him</th>
+      <th>I have assigned him a place of honor, you have conquered my grandfather.</th>
+      <th>I have assigned him a place of honor, you have conquered my grandfather.</th>
+    </tr>
+  </table>
+</div>
+<div id="heores_benchmark" class="content-container">
+  <div  class="content-title">
+    <font size="+5">Results on the Heroes benchmark</font>
+  </div>
+  <table border="0" class="inlineTable" id="heroes_s2t">
+    <tr>
+      <th colspan="5">
+        <font size="+2">Synthesize speech-to-text system output</font>
+      </th>
+    </tr>
+    <tr>
+      <th></th>
+      <th colspan="4">Predictions</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>Vanilla TTS</th>
+      <th>Holistic Cascade (Global transfer + local transfer)</th>
+      <th>Ablation (Global transfer only)</th>
+      <th>Ablation (Local transfer only)</th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (speech-to-text output): It's like a Greek tragedy or something.</div>
+      </th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="heroes_s3_6_0253_s2t_nnnn__waveform"></div>
+        <button id="heroes_s3_6_0253_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_6_0253_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_6_0253_s2t_nnnn = WaveSurfer.create({ container: '#heroes_s3_6_0253_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_6_0253_s2t_nnnn.load('./audio/S2T_text/heroes/N_N_N_N/heroes_s3_6_0253.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_6_0253_s2t_gpdf__waveform"></div>
+        <button id="heroes_s3_6_0253_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_6_0253_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_6_0253_s2t_gpdf = WaveSurfer.create({ container: '#heroes_s3_6_0253_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_6_0253_s2t_gpdf.load('./audio/S2T_text/heroes/G_P_D_F/heroes_s3_6_0253.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_6_0253_s2t_gnnn__waveform"></div>
+        <button id="heroes_s3_6_0253_s2t_gnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_6_0253_s2t_gnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_6_0253_s2t_gnnn = WaveSurfer.create({ container: '#heroes_s3_6_0253_s2t_gnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_6_0253_s2t_gnnn.load('./audio/S2T_text/heroes/G_N_N_N/heroes_s3_6_0253.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_6_0253_s2t_npdf__waveform"></div>
+        <button id="heroes_s3_6_0253_s2t_npdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_6_0253_s2t_npdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_6_0253_s2t_npdf = WaveSurfer.create({ container: '#heroes_s3_6_0253_s2t_npdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_6_0253_s2t_npdf.load('./audio/S2T_text/heroes/N_P_D_F/heroes_s3_6_0253.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (speech-to-text output): Abby Collins, “National Security.”</div>
+      </th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="heroes_s3_16_0124_s2t_nnnn__waveform"></div>
+        <button id="heroes_s3_16_0124_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_16_0124_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_16_0124_s2t_nnnn = WaveSurfer.create({ container: '#heroes_s3_16_0124_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_16_0124_s2t_nnnn.load('./audio/S2T_text/heroes/N_N_N_N/heroes_s3_16_0124.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_16_0124_s2t_gpdf__waveform"></div>
+        <button id="heroes_s3_16_0124_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_16_0124_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_16_0124_s2t_gpdf = WaveSurfer.create({ container: '#heroes_s3_16_0124_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_16_0124_s2t_gpdf.load('./audio/S2T_text/heroes/G_P_D_F/heroes_s3_16_0124.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_16_0124_s2t_gnnn__waveform"></div>
+        <button id="heroes_s3_16_0124_s2t_gnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_16_0124_s2t_gnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_16_0124_s2t_gnnn = WaveSurfer.create({ container: '#heroes_s3_16_0124_s2t_gnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_16_0124_s2t_gnnn.load('./audio/S2T_text/heroes/G_N_N_N/heroes_s3_16_0124.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_16_0124_s2t_npdf__waveform"></div>
+        <button id="heroes_s3_16_0124_s2t_npdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_16_0124_s2t_npdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_16_0124_s2t_npdf = WaveSurfer.create({ container: '#heroes_s3_16_0124_s2t_npdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_16_0124_s2t_npdf.load('./audio/S2T_text/heroes/N_P_D_F/heroes_s3_16_0124.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (speech-to-text output): You weren’t going to find out what the powers were.</div>
+      </th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>
+        <div id="heroes_s3_11_0045_s2t_nnnn__waveform"></div>
+        <button id="heroes_s3_11_0045_s2t_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_11_0045_s2t_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_11_0045_s2t_nnnn = WaveSurfer.create({ container: '#heroes_s3_11_0045_s2t_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_11_0045_s2t_nnnn.load('./audio/S2T_text/heroes/N_N_N_N/heroes_s3_11_0045.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_11_0045_s2t_gpdf__waveform"></div>
+        <button id="heroes_s3_11_0045_s2t_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_11_0045_s2t_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_11_0045_s2t_gpdf = WaveSurfer.create({ container: '#heroes_s3_11_0045_s2t_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_11_0045_s2t_gpdf.load('./audio/S2T_text/heroes/G_P_D_F/heroes_s3_11_0045.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_11_0045_s2t_gnnn__waveform"></div>
+        <button id="heroes_s3_11_0045_s2t_gnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_11_0045_s2t_gnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_11_0045_s2t_gnnn = WaveSurfer.create({ container: '#heroes_s3_11_0045_s2t_gnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_11_0045_s2t_gnnn.load('./audio/S2T_text/heroes/G_N_N_N/heroes_s3_11_0045.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_11_0045_s2t_npdf__waveform"></div>
+        <button id="heroes_s3_11_0045_s2t_npdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_11_0045_s2t_npdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_11_0045_s2t_npdf = WaveSurfer.create({ container: '#heroes_s3_11_0045_s2t_npdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_11_0045_s2t_npdf.load('./audio/S2T_text/heroes/N_P_D_F/heroes_s3_11_0045.wav'); </script>
+      </th>
+    </tr>
+  </table>
+  <table border="0" class="inlineTable" id="heroes_gt">
+    <tr>
+      <th colspan="7">
+        <font size="+2">Synthesize ground truth text</font>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="2">Predictions</th>
+    </tr>
+    <tr>
+      <th>Vanilla TTS</th>
+      <th>Holistic Cascade (Global transfer + local transfer)</th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (ground truth): It started with their father. Delusions of grandeur, paranoia.</div>
+      </th>
+    </tr>
+    <tr>
+      <th>
+        <div id="heroes_s2_8_0204_ref_nnnn__waveform"></div>
+        <button id="heroes_s2_8_0204_ref_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s2_8_0204_ref_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s2_8_0204_ref_nnnn = WaveSurfer.create({ container: '#heroes_s2_8_0204_ref_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s2_8_0204_ref_nnnn.load('./audio/GT_text/heroes/N_N_N_N/heroes_s2_8_0204.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s2_8_0204_ref_gpdf__waveform"></div>
+        <button id="heroes_s2_8_0204_ref_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s2_8_0204_ref_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s2_8_0204_ref_gpdf = WaveSurfer.create({ container: '#heroes_s2_8_0204_ref_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s2_8_0204_ref_gpdf.load('./audio/GT_text/heroes/G_P_D_F/heroes_s2_8_0204.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (ground truth): I have been thinking about you and wondering how you've been since...</div>
+      </th>
+    </tr>
+    <tr>
+      <th>
+        <div id="heroes_s3_8_0163_ref_nnnn__waveform"></div>
+        <button id="heroes_s3_8_0163_ref_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_8_0163_ref_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_8_0163_ref_nnnn = WaveSurfer.create({ container: '#heroes_s3_8_0163_ref_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_8_0163_ref_nnnn.load('./audio/GT_text/heroes/N_N_N_N/heroes_s3_8_0163.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s3_8_0163_ref_gpdf__waveform"></div>
+        <button id="heroes_s3_8_0163_ref_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s3_8_0163_ref_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s3_8_0163_ref_gpdf = WaveSurfer.create({ container: '#heroes_s3_8_0163_ref_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s3_8_0163_ref_gpdf.load('./audio/GT_text/heroes/G_P_D_F/heroes_s3_8_0163.wav'); </script>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="6" style="text-align:left">
+        <div size="+2">Input text (ground truth): Only someone with Peter's abilities could get where the virus is stored.</div>
+      </th>
+    </tr>
+    <tr>
+      <th>
+        <div id="heroes_s2_11_0095_ref_nnnn__waveform"></div>
+        <button id="heroes_s2_11_0095_ref_nnnn__button" class="play-button-demo btn btn-primary" onclick="heroes_s2_11_0095_ref_nnnn.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s2_11_0095_ref_nnnn = WaveSurfer.create({ container: '#heroes_s2_11_0095_ref_nnnn__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s2_11_0095_ref_nnnn.load('./audio/GT_text/heroes/N_N_N_N/heroes_s2_11_0095.wav'); </script>
+      </th>
+      <th>
+        <div id="heroes_s2_11_0095_ref_gpdf__waveform"></div>
+        <button id="heroes_s2_11_0095_ref_gpdf__button" class="play-button-demo btn btn-primary" onclick="heroes_s2_11_0095_ref_gpdf.playPause()"><i class="fa fa-play"></i> Play / <i class="fa fa-pause"></i> Pause </button>
+        <script> var heroes_s2_11_0095_ref_gpdf = WaveSurfer.create({ container: '#heroes_s2_11_0095_ref_gpdf__waveform', waveColor: 'violet', progressColor: 'purple' }); heroes_s2_11_0095_ref_gpdf.load('./audio/GT_text/heroes/G_P_D_F/heroes_s2_11_0095.wav'); </script>
+      </th>
+    </tr>
+  </table>
+</div>
+    <div class="content-container">
+        Template based on <a style="color:rgb(22, 38, 67)" href="https://speechbot.github.io/"> Textless NLP</a> and <a
+            style="color:rgb(22, 38, 67)" href="https://daps.cs.princeton.edu/projects/HiFi-GAN/index.php"> HiFi-GAN</a>
+        pages.
+    </div>
+</body>
+
+</html>
