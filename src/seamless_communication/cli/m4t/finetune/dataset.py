@@ -158,7 +158,7 @@ def download_fleurs(
 
 
 def download_gigaspeech(subset: str, huggingface_token: str, save_directory: str):
-    ds = load_dataset("speechcolab/gigaspeech", subset, cache_dir=f"gigaspeech/{subset}", token=huggingface_token)
+    ds = load_dataset("speechcolab/gigaspeech", subset, cache_dir=save_directory, token=huggingface_token)
     for split in ds:
         manifest_path = os.path.join(save_directory, f"{subset}_{split}_manifest.json")
         logger.info(f"Preparing {split} split...")
