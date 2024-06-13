@@ -29,7 +29,7 @@ from seamless_communication.models.unity import (
     load_gcmvn_stats,
     load_unity_unit_tokenizer,
 )
-from seamless_communication.cli.expressivity.predict.pretssel_generator import PretsselGenerator
+from seamless_communication.inference.pretssel_generator import PretsselGenerator
 
 from typing import Tuple
 from utils import LANGUAGE_CODE_TO_NAME
