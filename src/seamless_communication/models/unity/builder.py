@@ -224,7 +224,7 @@ def _expressivity_v2() -> UnitYConfig:
     )
 
 
-def _build_model_config(
+def _build_seamless_nano_model_config(
     model_embed_dim: int,
     ffn_emb_dim_mult: int,
     feature_stride: int,
@@ -334,7 +334,7 @@ def _build_model_config(
 
 @unity_arch("seamless_micro")
 def _seamless_micro() -> UnitYConfig:
-    return _build_model_config(
+    return _build_seamless_nano_model_config(
         model_embed_dim=512,
         ffn_emb_dim_mult=8,
         feature_stride=4,
@@ -346,7 +346,7 @@ def _seamless_micro() -> UnitYConfig:
 
 @unity_arch("seamless_nano")
 def _seamless_nano() -> UnitYConfig:
-    return _build_model_config(
+    return _build_seamless_nano_model_config(
         model_embed_dim=256,
         ffn_emb_dim_mult=8,
         feature_stride=4,
