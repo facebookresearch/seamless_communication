@@ -7,6 +7,7 @@
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from fairseq2.data.vocabulary_info import VocabularyInfo
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
 from fairseq2.models.nllb import NllbBuilder, NllbConfig, nllb_archs
 from fairseq2.models.utils.arch_registry import ArchitectureRegistry
@@ -26,6 +27,11 @@ from fairseq2.nn.transformer import (
 from fairseq2.typing import DataType, Device, override
 from torch.nn import GELU, ReLU
 
+from seamless_communication.models.conformer_shaw import (
+    ConformerShawEncoderBuilder,
+    ConformerShawEncoderConfig,
+    conformer_shaw_archs,
+)
 from seamless_communication.models.generator.ecapa_tdnn_builder import (
     EcapaTDNNBuilder,
     EcapaTDNNConfig,
@@ -42,11 +48,6 @@ from seamless_communication.models.unity.t2u_builder import (
     UnitYT2UBuilder,
     UnitYT2UConfig,
     unity_t2u_archs,
-)
-from seamless_communication.models.conformer_shaw import (
-    ConformerShawEncoderBuilder,
-    ConformerShawEncoderConfig,
-    conformer_shaw_archs,
 )
 
 
@@ -223,6 +224,138 @@ def _expressivity_v2() -> UnitYConfig:
     )
 
 
+def _build_model_config(
+    model_embed_dim: int,
+    ffn_emb_dim_mult: int,
+    feature_stride: int,
+    text_decoder_layers: int,
+    text_dict_size: int,
+    unit_dict_size: int,
+):
+    num_fbank_channels = 80
+    fbank_stride = feature_stride
+    nllb_ffn_inner_dim = model_embed_dim * ffn_emb_dim_mult
+    w2v2_ffn_inner_dim = model_embed_dim * 4
+    w2v2_encoder_layers_layernorm_features: bool = False
+    w2v2_pos_encoder_type = "relative"
+    w2v2_pos_encoder_depth: int = 0
+    w2v2_pos_conv_kernel_size: int = 0
+    w2v2_num_pos_conv_groups: int = 0
+    w2v2_encoder_layers: int = 6
+    w2v2_encoder_layers_use_conformer: bool = True
+    nllb_encoder_layers: int = 1
+    nllb_decoder_layers: int = text_decoder_layers
+    text_vocab_info = VocabularyInfo(
+        size=text_dict_size,
+        unk_idx=3,
+        bos_idx=0,
+        eos_idx=2,
+        pad_idx=1,
+    )
+    unit_vocab_info = VocabularyInfo(
+        size=unit_dict_size,
+        unk_idx=0,
+        bos_idx=0,
+        eos_idx=0,
+        pad_idx=0,  # not used
+    )
+
+    model_config = UnitYConfig(
+        use_gelu=False,
+        use_text_decoder=True,
+        prosody_encoder_config=None,
+        model_dim=model_embed_dim,
+        w2v2_encoder_config=Wav2Vec2EncoderConfig(
+            model_dim=model_embed_dim,
+            max_seq_len=4096,
+            feature_dim=num_fbank_channels * fbank_stride,
+            use_fbank=True,
+            first_pass_dropout_p=0.0,
+            layer_norm_features=w2v2_encoder_layers_layernorm_features,
+            feature_extractor_layer_descs=[],
+            feature_extractor_bias=False,
+            feature_extractor_layer_norm_convs=False,
+            feature_grad_scale=0,
+            num_fbank_channels=num_fbank_channels,
+            fbank_stride=fbank_stride,
+            sample_fbank_every_k=1,
+            pos_encoder_type=w2v2_pos_encoder_type,
+            pos_encoder_depth=w2v2_pos_encoder_depth,
+            pos_conv_kernel_size=w2v2_pos_conv_kernel_size,
+            num_pos_conv_groups=w2v2_num_pos_conv_groups,
+            use_conformer=w2v2_encoder_layers_use_conformer,
+            num_encoder_layers=w2v2_encoder_layers,
+            num_encoder_attn_heads=16,
+            ffn_inner_dim=w2v2_ffn_inner_dim,
+            dropout_p=0.0,
+            attn_dropout_p=0.0,
+            layer_drop_p=0.0,
+            norm_order=TransformerNormOrder.POST,
+            depthwise_conv_kernel_size=31,
+        ),
+        mt_model_config=NllbConfig(
+            model_dim=model_embed_dim,
+            max_seq_len=1024,
+            vocab_info=text_vocab_info,
+            num_encoder_layers=nllb_encoder_layers,
+            num_decoder_layers=nllb_decoder_layers,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=nllb_ffn_inner_dim,
+            dropout_p=0.1,
+        ),
+        t2u_config=UnitYT2UConfig(
+            use_gelu=False,
+            char_pad_idx=0,
+            use_prosody_proj=False,
+            prosody_encoder_dim=0,
+            nar_decoder_frontend_config=None,
+            nar_decoder_config=None,
+            model_dim=model_embed_dim,
+            unit_max_seq_len=2048,
+            target_vocab_info=unit_vocab_info,  # dummy
+            num_encoder_layers=1,
+            num_decoder_layers=1,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=model_embed_dim * 8,
+            dropout_p=0.1,
+        ),
+        use_text_encoder=True,
+        use_conformer_adaptor=False,
+        num_adaptor_layers=1,
+        adaptor_kernel_size=8,
+        adaptor_stride=8,
+        adaptor_layer_norm=True,
+        adaptor_dropout_p=0.1,
+    )
+    return model_config
+
+
+@unity_arch("seamless_micro")
+def _seamless_micro() -> UnitYConfig:
+    return _build_model_config(
+        model_embed_dim=512,
+        ffn_emb_dim_mult=8,
+        feature_stride=4,
+        text_decoder_layers=3,
+        text_dict_size=20010,
+        unit_dict_size=10082,
+    )
+
+
+@unity_arch("seamless_nano")
+def _seamless_nano() -> UnitYConfig:
+    return _build_model_config(
+        model_embed_dim=256,
+        ffn_emb_dim_mult=8,
+        feature_stride=4,
+        text_decoder_layers=3,
+        text_dict_size=20010,
+        unit_dict_size=10082,
+    )
+
+
 class UnitYBuilder:
     """Builds modules of a UnitY model.
 
@@ -265,17 +398,20 @@ class UnitYBuilder:
         """
         if w2v2_encoder_builder.config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `w2v2_encoder_builder.config` must be equal, but are {config.model_dim} and {w2v2_encoder_builder.config.model_dim} instead."
+                "`model_dim` and `model_dim` of `w2v2_encoder_builder.config` must be equal, "
+                f"but are {config.model_dim} and {w2v2_encoder_builder.config.model_dim} instead."
             )
 
         if mt_model_builder.config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `mt_model_builder.config` must be equal, but are {config.model_dim} and {mt_model_builder.config.model_dim} instead."
+                "`model_dim` and `model_dim` of `mt_model_builder.config` must be equal, "
+                f"but are {config.model_dim} and {mt_model_builder.config.model_dim} instead."
             )
 
         if t2u_builder is not None and t2u_builder.config.model_dim != config.model_dim:
             raise ValueError(
-                f"`model_dim` and `model_dim` of `t2u_builder.config` must be equal, but are {config.model_dim} and {t2u_builder.config.model_dim} instead."
+                "`model_dim` and `model_dim` of `t2u_builder.config` must be equal, "
+                f"but are {config.model_dim} and {t2u_builder.config.model_dim} instead."
             )
 
         self.config = config
