@@ -1,0 +1,37 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# MIT_LICENSE file in the root directory of this source tree.
+
+name: seamless_micro
+model_type: unity
+model_arch: seamless_micro
+tokenizer: "https://dl.fbaipublicfiles.com/seamless/tokenizers/seamless_nano.model"
+checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/seamless_micro.pt"
+tokenizer_type: plain_spm
+default_lang: eng
+langs:
+  - eng
+  - hin
+  - por
+  - rus
+  - spa
+  - unk
+
+---
+
+name: seamless_nano
+model_type: unity
+model_arch: seamless_nano
+tokenizer: "https://dl.fbaipublicfiles.com/seamless/tokenizers/seamless_nano.model"
+checkpoint: "https://dl.fbaipublicfiles.com/seamless/models/seamless_nano.pt"
+tokenizer_type: plain_spm
+default_lang: eng
+langs:
+  - eng
+  - hin
+  - por
+  - rus
+  - spa
+  - unk
