@@ -426,11 +426,3 @@ class Transcriber(nn.Module):
             transcriptions[0] = transcriptions[idx]
 
         return transcriptions[0]
-
-
-if __name__ == "__main__":
-    transcriber = Transcriber("seamless_nano")
-    print(transcriber.transcribe("/private/home/mavlyutov/input.wav", src_lang="eng"))
-
-    transcriber = Transcriber("seamless_micro")
-    print(transcriber.transcribe("/private/home/mavlyutov/input.wav", src_lang="eng"))
