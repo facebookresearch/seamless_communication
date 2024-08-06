@@ -13,12 +13,15 @@ That kind of dataset can be prepared using `dataset.py` script that downloads FL
 List of input arguments for `dataset.py`:
 
 ```bash
+  --name NAME           HuggingFace name of the dataset to prepare.
   --source_lang SOURCE_LANG
                         M4T langcode of the dataset SOURCE language
   --target_lang TARGET_LANG
                         M4T langcode of the dataset TARGET language
-  --split SPLIT         Dataset split/shard to download (`train`, `test`)
-  --save_dir SAVE_DIR   Directory where the datasets will be stored with HuggingFace datasets cache files
+  --split SPLIT         Dataset split/shard to download (`train`, `validation`, `test`)
+  --save_dir SAVE_DIR   Directory where the datastets will be stored with HuggingFace datasets cache files
+  --huggingface_token HUGGINGFACE_TOKEN
+                        Your HuggingFace token, this is necessary for some datasets like GigaSpeech.
 ```
 
 Language codes should follow the notation adopted by M4T models.
@@ -30,11 +33,13 @@ export DATASET_DIR=~/m4t_dataset
 mkdir -p $DATASET_DIR
 
 m4t_prepare_dataset \
+  --name google/fleurs \
   --source_lang eng \
   --target_lang kor \
   --split train \
   --save_dir $DATASET_DIR
 m4t_prepare_dataset \
+  --name google/fleurs \
   --source_lang eng \
   --target_lang kor \
   --split validation \
