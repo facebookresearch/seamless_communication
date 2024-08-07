@@ -1,0 +1,1 @@
+docker run --privileged --gpus all -it -v %cd%/checkpoints:/root/.cache/torch/hub seamlessm4t:latest m4t_predict "This is a very nice and simple test!" t2tt deu --src_lang eng

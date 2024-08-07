@@ -254,6 +254,21 @@ We’re introducing the first expressive speech alignment procedure. Starting wi
 ## Converting raw audio to units
 Please check out the [README here](src/seamless_communication/cli/m4t/audio_to_units). Note that SeamlessM4T v1 model uses reduced units and other models use non-reduced units.
 
+## Docker
+
+Here’s how you run Seamless Communication on Docker for Windows
+
+Build:
+```cmd
+.\build.bat
+```
+Running inference:
+```bash
+.\run.bat
+```
+
+Please refer to the [inference README](scripts/m4t/predict) for detailed instruction on how to run inference.
+
 # Libraries
 
 Seamless Communication depends on 4 libraries developed by Meta.
