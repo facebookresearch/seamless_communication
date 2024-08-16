@@ -42,7 +42,7 @@ In the console, enter "input_text tgt_lang" - input text and target langauge, se
 Converted ggml models could be downloaded from 
 |SeamlessM4T_large | SeamlessM4T_medium | NLLB_dense_1b | NLLB_distill_600m |
 |-------- | -------- | ------- | ------- |
-| [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  [model](dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_1b.ggml) | [model](dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_distill_600m.ggml)
+| [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_large.ggml) | [model](https://dl.fbaipublicfiles.com/seamless/models/seamlessM4T_medium.ggml) |  [model](https://dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_1b.ggml) | [model](https://dl.fbaipublicfiles.com/seamless/models/nllb-200_dense_distill_600m.ggml)
 
 For more details of NLLB models, please check https://github.com/facebookresearch/fairseq/tree/nllb.
 
