@@ -102,6 +102,7 @@ class UnitYGenerator:
         unit_tokenizer: Optional[UnitTokenizer] = None,
         text_opts: Optional[SequenceGeneratorOptions] = None,
         unit_opts: Optional[SequenceGeneratorOptions] = None,
+        s2t_model_list: Optional[list] = None
     ) -> None:
         """
         :param model:
@@ -131,21 +132,22 @@ class UnitYGenerator:
         assert model.text_decoder_frontend is not None
         assert model.final_proj is not None
 
-        s2t_model = UnitYX2TModel(
-            encoder_frontend=model.speech_encoder_frontend,
-            encoder=model.speech_encoder,
-            decoder_frontend=model.text_decoder_frontend,
-            decoder=model.text_decoder,
-            final_proj=model.final_proj,
-            target_vocab_info=model.target_vocab_info,
-        )
-
+        if len(s2t_model_list)==0:
+            s2t_model = UnitYX2TModel(
+                encoder_frontend=model.speech_encoder_frontend,
+                encoder=model.speech_encoder,
+                decoder_frontend=model.text_decoder_frontend,
+                decoder=model.text_decoder,
+                final_proj=model.final_proj,
+                target_vocab_info=model.target_vocab_info,
+            )
+            s2t_model_list.append(s2t_model)
         step_processors = []
         if text_opts.step_processor is not None:
             step_processors.append(text_opts.step_processor)
 
         generator = BeamSearchSeq2SeqGenerator(
-            s2t_model,
+            s2t_model_list[0],
             beam_size=text_opts.beam_size,
             max_gen_len=text_opts.soft_max_seq_len,
             max_seq_len=text_opts.hard_max_seq_len,
@@ -154,6 +156,7 @@ class UnitYGenerator:
             unk_penalty=text_opts.unk_penalty,
             len_penalty=text_opts.len_penalty,
         )
+
         self.s2t_converter = SequenceToTextConverter(
             generator, text_tokenizer, "translation", target_lang
         )
@@ -234,6 +237,8 @@ class UnitYGenerator:
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
+        compiled_text_decoder: Optional[list] = None,
+        s2t_model_list: Optional[list] = None
     ) -> Tuple[List[StringLike], Optional[Tensor]]:
         """
         :param source_seqs:
@@ -259,7 +264,7 @@ class UnitYGenerator:
 
         if input_modality == "speech":
             texts, text_gen_output = self.s2t_converter.batch_convert(
-                source_seqs, source_padding_mask
+                source_seqs, source_padding_mask, compiled_text_decoder=compiled_text_decoder, s2t_model_list=s2t_model_list
             )
         elif input_modality == "text":
             if self.t2t_converter is None:
@@ -342,6 +347,7 @@ class UnitYGenerator:
                 duration_factor=duration_factor,
                 film_cond_emb=prosody_encoder_out,
             )
+
             # (B, S_unit, V_unit)
             unit_seqs = t2u_model_output.logits.argmax(dim=2)
             # Apply the padding mask to the generated units.
