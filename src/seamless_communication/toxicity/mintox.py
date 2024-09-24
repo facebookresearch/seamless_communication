@@ -7,26 +7,19 @@
 import logging
 from typing import List, Optional, Tuple
 
-from torch import Tensor
 import torch
-from torch.nn import functional as F
-
-
-from seamless_communication.inference import SequenceGeneratorOptions
-from seamless_communication.toxicity.etox_bad_word_checker import (
-    ETOXBadWordChecker,
-)
-from fairseq2.generation import BannedSequenceProcessor
+from fairseq2.data import SequenceData
 from fairseq2.data.text.text_tokenizer import TextTokenizer
 from fairseq2.data.typing import StringLike
-from fairseq2.typing import Device
-from fairseq2.data import SequenceData
+from fairseq2.generation import BannedSequenceProcessor
 from fairseq2.nn.padding import get_seqs_and_padding_mask
-from seamless_communication.models.unity import (
-    UnitTokenizer,
-    UnitYModel,
-)
+from fairseq2.typing import Device
+from torch import Tensor
+from torch.nn import functional as F
 
+from seamless_communication.inference.generator import SequenceGeneratorOptions
+from seamless_communication.models.unity import UnitTokenizer, UnitYModel
+from seamless_communication.toxicity.etox_bad_word_checker import ETOXBadWordChecker
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +77,7 @@ def _replace_with_new_unit_output_in_batch(
         )
     else:
         # pad on the new units
-        new_units = F.pad(
-            new_units, pad=nb_pads, mode="constant", value=pad_idx
-        )
+        new_units = F.pad(new_units, pad=nb_pads, mode="constant", value=pad_idx)
     original_units[indices_with_toxicity_tensor] = new_units
 
 
