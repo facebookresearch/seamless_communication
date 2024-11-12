@@ -50,7 +50,7 @@ The columns are:
 
 ## Citation
 
-```bitex 
+```bibtex 
 @misc{bell2024,
       title={On the Role of Speech Data in Reducing Toxicity Detection Bias}
       author={Samuel J. Bell, Mariano Coria Meglioli, Megan Richards, Eduardo Sánchez, Christophe Ropers, Skyler Wang, Adina Williams, Levent Sagun, Marta R. Costa-jussà},
