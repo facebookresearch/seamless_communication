@@ -6,7 +6,7 @@ toxicity detection systems, 1954 samples have been annotated for mentions of dem
 Annotators also corrected automated transcripts and adjusted judgments of toxicity where appropriate. 
 
 These annotations form the basis of our paper comparing the performance and biases of speech- and text-based toxicity
-detection systems, available now on ArXiv. 
+detection systems, [available now on ArXiv](https://arxiv.org/abs/2411.08135). 
 
 ## License
 
@@ -55,7 +55,7 @@ The columns are:
       title={On the Role of Speech Data in Reducing Toxicity Detection Bias}
       author={Samuel J. Bell, Mariano Coria Meglioli, Megan Richards, Eduardo Sánchez, Christophe Ropers, Skyler Wang, Adina Williams, Levent Sagun, Marta R. Costa-jussà},
       year={2024},
-      eprint={},
+      eprint={2411.08135},
       archivePrefix={arXiv},
       primaryClass={cs.CL}
 }
