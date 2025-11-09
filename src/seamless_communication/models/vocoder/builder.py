@@ -4,8 +4,8 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 from fairseq2.runtime.config_registry import ConfigRegistrar
 # from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.device import Device
@@ -14,6 +14,10 @@ from fairseq2.data_type import DataType
 from seamless_communication.models.vocoder.codehifigan import CodeGenerator
 from seamless_communication.models.vocoder.vocoder import Vocoder
 
+@dataclass
+class LangSpkrIdxMap:
+    multilingual: Mapping[str, int] = field(default_factory=dict)
+    multispkr: Mapping[str, Sequence[int]] = field(default_factory=dict)
 
 @dataclass
 class VocoderConfig:
@@ -32,7 +36,7 @@ class VocoderConfig:
     num_langs: int
     spkr_embedding_dim: int
     num_spkrs: int
-    lang_spkr_idx_map: Dict[str, Any]
+    lang_spkr_idx_map: LangSpkrIdxMap = field(default_factory=LangSpkrIdxMap)
 
 
 # vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_code_hifigan")

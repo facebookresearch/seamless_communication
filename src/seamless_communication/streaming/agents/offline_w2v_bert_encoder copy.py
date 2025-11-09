@@ -153,7 +153,6 @@ class OfflineWav2VecBertEncoderAgent(NoUpdateTargetMixin, SpeechToSpeechAgent): 
         """
         assert isinstance(states, OfflineWav2VecBertEncoderStates)
         import time
-        print("Wav2Vec", time.time())
         if (
             self.min_starting_wait is not None
             and states.total_pending_frames < self.min_starting_wait

@@ -29,7 +29,7 @@ from seamless_communication.models.unity.length_regulator import (
     HardUpsampling,
     VarianceAdaptor,
 )
-
+from fairseq2.nn.batch_layout import BatchLayout
 SPACE = "▁"
 
 
@@ -140,7 +140,7 @@ class NARDecoderFrontend(Module):
         for b in range(N):
             subwords = []
             for i in range(seq_len):
-                subword = self.text_tokenizer.model.index_to_token(int(text_seqs[b, i]))
+                subword = self.text_tokenizer._model.index_to_token(int(text_seqs[b, i]))
                 subwords.append(str(subword))
             subwords_batch.append(subwords)
         return subwords_batch
@@ -315,25 +315,28 @@ class NARDecoderFrontend(Module):
         # text_seqs: (N, S_text)
         char_seqs, char_seq_lens, char_lens = self.text_to_char_seqs(text_seqs)
 
-        # char_seqs: (N, S_char)
-        encoder_padding_mask = PaddingMask(
-            char_seq_lens, batch_seq_len=char_seqs.size(1)
-        )
+        encoder_layout = BatchLayout.of(char_seqs, char_seq_lens)
+        # seqs = self.character_level_upsampling(encoder_output, encoder_layout, char_seqs, char_lens)
+
+        # # char_seqs: (N, S_char)
+        # encoder_padding_mask = PaddingMask(
+        #     char_seq_lens, batch_seq_len=char_seqs.size(1)
+        # )
 
         # (N, S_text, M) -> (N, S_char, M)
         seqs = self.character_level_upsampling(
-            encoder_output, encoder_padding_mask, char_seqs, char_lens
+            encoder_output, encoder_layout, char_seqs, char_lens
         )
 
         # (N, S_char, M) -> (N, S_unit, M)
-        seqs, padding_mask, durations = self.variance_adaptor(
+        seqs, pad, durations = self.variance_adaptor( # encoder_layout, durations 
             seqs,
-            encoder_padding_mask,
+            encoder_layout,
             duration_factor=duration_factor,
             min_duration=1,
             film_cond_emb=film_cond_emb,
         )
 
-        seqs = self.forward_unit_pos_embedding(seqs, padding_mask)
+        seqs = self.forward_unit_pos_embedding(seqs, BatchLayout.of(seqs))
 
-        return seqs, padding_mask, durations
+        return seqs, encoder_layout, durations

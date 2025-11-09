@@ -28,7 +28,7 @@ from fairseq2.composition import register_file_assets, register_model_family
 
 from seamless_communication.models.aligner.builder import UnitY2AlignmentConfig, create_unity2_alignment_model, load_arch_unity2_aligner
 from seamless_communication.models.aligner.model import UnitY2AlignmentModel
-from seamless_communication.models.generator.builder import load_arch_vocoder_pretssel, VocoderConfig, create_vocoder_model, PretsselVocoder
+from seamless_communication.models.generator.builder import load_arch_vocoder_pretssel, VocoderConfig as PretsselVocoderConfig, create_vocoder_model as create_pretssel_vocoder_model, PretsselVocoder
 from seamless_communication.models.monotonic_decoder.builder import (
     MonotonicDecoderConfig, MonotonicDecoderModel, create_monotonic_decoder_model, load_arch_monotonic
 )
@@ -46,6 +46,8 @@ from seamless_communication.models.unity.model import UnitYNART2UModel, UnitYT2U
 from seamless_communication.models.unity.t2u_builder import (
     create_unity_t2u_model, load_arch_unity_t2u, UnitYT2UConfig
 )
+from seamless_communication.models.vocoder.builder import VocoderConfig, create_vocoder_model, load_arch_vocoder_code_hifigan
+from seamless_communication.models.vocoder.vocoder import Vocoder
 from seamless_communication.toxicity.mutox.classifier import MutoxClassifier, MutoxConfig
 from seamless_communication.toxicity.mutox.builder import create_mutox_model, load_arch_mutox_classifier
 
@@ -64,6 +66,8 @@ def setup_seamless_extension(container: DependencyContainer) -> None:
         kls=MonotonicDecoderModel,              # classe de modèle
         config_kls=MonotonicDecoderConfig,      # classe de config
         factory=create_monotonic_decoder_model, # fabrique (poids aléatoires)
+        state_dict_converter=lambda ckpt, config: ckpt["model"],
+
     )
     # 3) les architectures (presets) via un registrar
     load_arch_monotonic(container)
@@ -112,11 +116,23 @@ def setup_seamless_extension(container: DependencyContainer) -> None:
         container,
         "vocoder_pretssel",                    # nom de la famille
         kls=PretsselVocoder,              # classe de modèle
-        config_kls=VocoderConfig,      # classe de config
-        factory=create_vocoder_model, # fabrique (poids aléatoires)
+        config_kls=PretsselVocoderConfig,      # classe de config
+        factory=create_pretssel_vocoder_model, # fabrique (poids aléatoires)
     )
 
     load_arch_vocoder_pretssel(container)
+
+    register_model_family(
+        container,
+        "vocoder_code_hifigan",                    # nom de la famille
+        kls=Vocoder,              # classe de modèle
+        config_kls=VocoderConfig,      # classe de config
+        factory=create_vocoder_model, # fabrique (poids aléatoires)
+        state_dict_converter=lambda ckpt, config: ckpt["model"],
+
+    )
+
+    load_arch_vocoder_code_hifigan(container)
 
     register_model_family(
         container,

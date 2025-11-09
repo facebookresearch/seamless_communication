@@ -6,7 +6,7 @@
 from typing import Literal, Optional, Tuple, Union
 
 from seamless_communication.layer_norm import create_standard_layer_norm
-from seamless_communication.padding import PaddingMask, apply_padding_mask
+from seamless_communication.padding import PaddingMask, apply_padding_mask, apply_layout_mask
 import torch
 import torch.nn.functional as F
 from fairseq2.nn.normalization import LayerNorm
@@ -125,12 +125,12 @@ class VariancePredictor(Module):
         dtype: Optional[DataType] = None,
     ):
         super().__init__()
-
+        # print(encoder_embed_dim, var_pred_hidden_dim, var_pred_kernel_size)
         self.conv1 = Sequential(
             Conv1d(
-                encoder_embed_dim,
-                var_pred_hidden_dim,
-                var_pred_kernel_size,
+                int(encoder_embed_dim),
+                int(var_pred_hidden_dim),
+                int(var_pred_kernel_size),
                 stride=1,
                 padding="same",
                 bias=bias,
@@ -148,9 +148,9 @@ class VariancePredictor(Module):
 
         self.conv2 = Sequential(
             Conv1d(
-                var_pred_hidden_dim,
-                var_pred_hidden_dim,
-                var_pred_kernel_size,
+                int(var_pred_hidden_dim),
+                int(var_pred_hidden_dim),
+                int(var_pred_kernel_size),
                 stride=1,
                 padding="same",
                 bias=bias,
@@ -163,7 +163,7 @@ class VariancePredictor(Module):
         self.ln2 = layer_norm_factory(var_pred_hidden_dim, device=device, dtype=dtype)
 
         self.proj = Linear(
-            var_pred_hidden_dim, 1, bias=True, device=device, dtype=dtype
+            int(var_pred_hidden_dim), 1, bias=True, device=device, dtype=dtype
         )
 
         if use_film:
@@ -180,7 +180,7 @@ class VariancePredictor(Module):
         film_cond_emb: Optional[Tensor] = None,
     ) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
-        seqs = apply_padding_mask(seqs, padding_mask)
+        seqs = apply_layout_mask(seqs, padding_mask)
 
         # (N, S, M) -> (N, M, S)
         seqs = seqs.transpose(1, 2)
@@ -195,7 +195,7 @@ class VariancePredictor(Module):
 
         seqs = self.dropout_module(seqs)
 
-        seqs = apply_padding_mask(seqs, padding_mask)
+        seqs = apply_layout_mask(seqs, padding_mask)
 
         # (N, S, H) -> (N, H, S)
         seqs = seqs.transpose(1, 2)
@@ -210,11 +210,11 @@ class VariancePredictor(Module):
 
         seqs = self.dropout_module(seqs)
 
-        seqs = apply_padding_mask(seqs, padding_mask)
+        seqs = apply_layout_mask(seqs, padding_mask)
 
         if self.film is not None and film_cond_emb is not None:
             seqs = self.film(seqs, film_cond_emb)
-            seqs = apply_padding_mask(seqs, padding_mask)
+            seqs = apply_layout_mask(seqs, padding_mask)
 
         # (N, S, H) -> (N, S, 1) -> (N, S)
         seqs = self.proj(seqs).squeeze(dim=2)
@@ -292,7 +292,7 @@ class VarianceAdaptor(Module):
                 min=min_duration,
             )
             # We need to apply the padding_mask again since we clamp by min_duration.
-            durations = apply_padding_mask(durations, padding_mask, pad_value=0)
+            durations = apply_layout_mask(durations, padding_mask, pad_value=0)
 
         assert durations is not None
 

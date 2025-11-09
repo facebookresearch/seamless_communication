@@ -118,6 +118,27 @@ def apply_padding_mask(
 
     return seqs.where(m, pad_value)
 
+def apply_layout_mask(
+    seqs: Tensor, seqs_layout, pad_value: Any = 0
+) -> Tensor:
+    """Masque les positions paddées selon `seqs_layout`.
+       suppose le temps en dim=1 (comme dans ton code)."""
+    if seqs_layout is None or not getattr(seqs_layout, "padded", False):
+        return seqs
+
+    S = seqs.size(1)
+    lengths = seqs_layout.lengths.to(device=seqs.device)
+    lengths = torch.clamp(lengths, max=S)
+
+    # valid=True sur les positions NON paddées (comme avant)
+    valid = torch.arange(S, device=seqs.device).unsqueeze(0) < lengths.unsqueeze(1)
+
+    # broadcast sur les dims restantes (N,S,*) -> (N,S,1,1,...)
+    while valid.ndim < seqs.ndim:
+        valid = valid.unsqueeze(-1)
+
+    return seqs.where(valid, pad_value)
+
 def pad_seqs(
     seqs: Sequence[Tensor], pad_value: int = 0, pad_to_multiple: int = 1
 ) -> Tuple[Tensor, Optional[PaddingMask]]:

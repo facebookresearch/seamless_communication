@@ -6,7 +6,7 @@
 
 from typing import Iterable, List, Optional, Tuple, final
 
-from seamless_communication.attention_mask import AttentionMaskFactory, CausalAttentionMaskFactory
+# from seamless_communication.attention_mask import AttentionMaskFactory, CausalAttentionMaskFactory
 import torch
 from fairseq2.nn.incremental_state import IncrementalStateBag
 from torch.nn import ModuleList
@@ -26,13 +26,17 @@ finaloverride = final
 from fairseq2.device import Device
 from fairseq2.data_type import DataType
 
+# from fairseq2.nn import BatchLayout
+# from fairseq2.nn.attention import create_default_sdpa, IdentityBias
+# from fairseq2.models.transformer.attention_bias import CausalAttentionBias
+import torch
 
 @final
 class MonotonicTransformerDecoder(Module):
     """Represents a Monotonic Transformer decoder."""
 
     model_dim: int
-    self_attn_mask_factory: AttentionMaskFactory
+    # self_attn_mask_factory: AttentionMaskFactory
     layers: ModuleList
     layer_norm: LayerNorm
 
@@ -56,7 +60,7 @@ class MonotonicTransformerDecoder(Module):
 
         self.model_dim = layer_list[0].model_dim
 
-        self.self_attn_mask_factory = CausalAttentionMaskFactory()
+        # self.self_attn_mask_factory = CausalAttentionMaskFactory()
 
         self.layers = layer_list
 
@@ -74,17 +78,22 @@ class MonotonicTransformerDecoder(Module):
         *,
         state_bag: Optional[IncrementalStateBag] = None,
     ):
-        self_attn_mask = self.self_attn_mask_factory(
-            seqs, keys=seqs, training=self.training, state_bag=state_bag
-        )
+        # self_attn_mask = self.self_attn_mask_factory(
+        #     seqs, keys=seqs, training=self.training, state_bag=state_bag
+        # )
+        # seqs_layout = ensure_layout(seqs, padding_mask)
+        # enc_layout  = None if encoder_output is None else ensure_layout(encoder_output, encoder_padding_mask)
+
 
         p_choose_list: List[Tensor] = []
 
-        for layer in self.layers.drop_iter():
+        for layer in self.layers:
             seqs, padding_mask, p_choose = layer(
                 seqs,
                 padding_mask,
-                self_attn_mask,
+                # self_attn_mask,
+                # self.self_attn_bias_cache,
+                # self.cross_attn_bias_cache,
                 encoder_output,
                 encoder_padding_mask,
                 state_bag=state_bag,

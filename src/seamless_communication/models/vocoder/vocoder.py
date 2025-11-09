@@ -36,10 +36,10 @@ class Vocoder(Module):
             lang_list = [lang_list] * units.size(0)
         if isinstance(spkr_list, int):
             spkr_list = [spkr_list] * units.size(0)
-        lang_idx_list = [self.lang_spkr_idx_map["multilingual"][l] for l in lang_list]
+        lang_idx_list = [self.lang_spkr_idx_map.multilingual[l] for l in lang_list]
         if not spkr_list:
             spkr_list = [-1 for _ in range(len(lang_list))]
-        spkr_list = [self.lang_spkr_idx_map["multispkr"][lang_list[i]][0] if spkr_list[i] == -1 else spkr_list[i] for i in range(len(spkr_list))]
+        spkr_list = [self.lang_spkr_idx_map.multispkr[lang_list[i]][0] if spkr_list[i] == -1 else spkr_list[i] for i in range(len(spkr_list))]
         x = {
             "code": units.view(units.size(0), -1),
             "spkr": torch.tensor([spkr_list], device=units.device).t(),

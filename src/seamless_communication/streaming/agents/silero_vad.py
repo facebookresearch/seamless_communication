@@ -308,7 +308,6 @@ class SileroVADAgent(SpeechToSpeechAgent):  # type: ignore
 
     def policy(self, states: SileroVADStates) -> Action:
         import time
-        print("SileroVAD", time.time())
         states.debug_log(
             f"queue size: {states.input_queue.qsize()}, input_chunk size: {len(states.input_chunk)}"
         )

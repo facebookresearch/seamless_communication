@@ -15,6 +15,7 @@ from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 from seamless_communication.streaming.agents.online_text_decoder import (
     UnitYTextDecoderOutput,
 )
+from fairseq2.nn.batch_layout import BatchLayout
 from seamless_communication.streaming.agents.common import AgentStates
 from simuleval.agents import GenericAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
@@ -94,7 +95,6 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
     @torch.inference_mode()
     def policy(self, states: NARUnitDecoderAgentStates) -> Action:
-        print("NARUnitYUnitDecoderAgent", time.time())
         if states.target_finished:
             return WriteAction("", finished=True)
 
@@ -106,7 +106,7 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
         model_output, _, durations = self.model(
             text_decoder_output=states.source,
-            text_decoder_padding_mask=None,
+            text_decoder_padding_mask=BatchLayout.of(states.source),
             text_seqs=states.source_indices,
             duration_factor=self.d_factor,
         )

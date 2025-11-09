@@ -53,6 +53,8 @@ class MonotonicTransformerDecoderLayer(Module):
     def __init__(
         self,
         self_attn: MultiheadAttention,
+        self_bias,
+        cross_bias,
         encoder_decoder_attn: MultiheadAttention,
         p_choose_layer: PChooseLayer,
         ffn: FeedForwardNetwork,
@@ -60,6 +62,7 @@ class MonotonicTransformerDecoderLayer(Module):
         dropout_p: float = 0.1,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
+        model_dim = None
     ) -> None:
         """
         :param self_attn:
@@ -74,15 +77,21 @@ class MonotonicTransformerDecoderLayer(Module):
         """
         super().__init__()
 
-        self.model_dim = self_attn.model_dim
+        self.model_dim = model_dim
 
         self_attn_layer_norm = StandardLayerNorm(
             self.model_dim, bias=True, device=device, dtype=dtype
-        )
+        )  
+
+        self.device=device
+        self.dtype=dtype
 
         self.self_attn_layer_norm = self_attn_layer_norm
 
         self.self_attn = self_attn
+        self.self_bias = self_bias
+        self.cross_bias = cross_bias
+
 
         if dropout_p > 0.0:
             self.self_attn_dropout = Dropout(dropout_p)
@@ -122,16 +131,28 @@ class MonotonicTransformerDecoderLayer(Module):
         self,
         seqs: Tensor,
         padding_mask,
-        self_attn_mask: Optional[AttentionMask] = None,
+        # self_attn_mask: Optional[AttentionMask] = None,
+        # self_attn_bias_cache,
+        # cross_attn_bias_cache,
         encoder_output: Optional[Tensor] = None,
         encoder_padding_mask = None,
         *,
         state_bag: Optional[IncrementalStateBag] = None,
     ):
-        seqs = self._forward_self_attn(seqs, padding_mask, self_attn_mask, state_bag)
+        # self.max_len = getattr(self, "max_len", 4096)
+        seqs_layout = padding_mask
+        q_len = int(seqs_layout.lengths.max().item()) if seqs_layout.padded else seqs.size(1)
+        self_attn_bias_cache = self.self_bias.create_bias_tensor(
+            q_len=q_len, k_len=q_len, device=self.device, dtype=self.dtype
+        )
+
+        cross_attn_bias_cache = self.cross_bias.create_bias_tensor(
+            q_len=q_len, k_len=q_len, device=self.device, dtype=self.dtype
+        )
+        seqs = self._forward_self_attn(seqs, padding_mask, self_attn_bias_cache, state_bag)
 
         seqs, p_choose = self._forward_encoder_decoder_attn(
-            seqs, padding_mask, encoder_output, encoder_padding_mask
+            seqs, padding_mask, cross_attn_bias_cache, encoder_output, encoder_padding_mask
         )
 
         seqs = self._forward_ffn(seqs)
@@ -142,20 +163,28 @@ class MonotonicTransformerDecoderLayer(Module):
         self,
         seqs: Tensor,
         padding_mask,
-        self_attn_mask: Optional[AttentionMask],
+        # self_attn_mask: Optional[AttentionMask],
+        self_attn_bias_cache,
         state_bag: Optional[IncrementalStateBag],
     ) -> Tensor:
         residual = seqs
 
         seqs = self.self_attn_layer_norm(seqs)
 
+        # seqs = self.self_attn(
+        #     seqs,
+        #     padding_mask,
+        #     keys=seqs,
+        #     keys_layout=padding_mask,
+        #     values=seqs,
+        #     attn_mask=self_attn_mask,
+        #     state_bag=state_bag,
+        # )
         seqs = self.self_attn(
-            seqs,
-            padding_mask,
-            keys=seqs,
-            key_padding_mask=padding_mask,
+            seqs, padding_mask,
+            keys=seqs, keys_layout=padding_mask,
             values=seqs,
-            attn_mask=self_attn_mask,
+            bias_cache=self_attn_bias_cache,   # <<< remplace attn_mask
             state_bag=state_bag,
         )
 
@@ -170,6 +199,7 @@ class MonotonicTransformerDecoderLayer(Module):
         self,
         seqs: Tensor,
         padding_mask,
+        cross_attn_bias_cache,
         encoder_output: Optional[Tensor],
         encoder_padding_mask,
     ) -> Tuple[Tensor, Tensor]:
@@ -184,12 +214,18 @@ class MonotonicTransformerDecoderLayer(Module):
 
         p_choose = self.p_choose_layer(seqs, encoder_output)
 
+        # seqs = self.encoder_decoder_attn(
+        #     seqs,
+        #     padding_mask,
+        #     encoder_output,
+        #     encoder_padding_mask,
+        #     encoder_output,
+        # )
         seqs = self.encoder_decoder_attn(
-            seqs,
-            padding_mask,
-            encoder_output,
-            encoder_padding_mask,
-            encoder_output,
+            seqs, padding_mask,
+            keys=encoder_output, keys_layout=encoder_padding_mask,
+            values=encoder_output,
+            bias_cache=cross_attn_bias_cache,  # identité
         )
 
         if self.encoder_decoder_attn_dropout is not None:

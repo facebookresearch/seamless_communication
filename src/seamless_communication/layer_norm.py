@@ -28,4 +28,4 @@ def create_standard_layer_norm(
     model_dim: int, *, device: Optional[Device] = None, dtype: Optional[DataType] = None
 ) -> LayerNorm:
     """Constructs an instance of :class:`StandardLayerNorm`."""
-    return StandardLayerNorm(model_dim, bias=True, device=device, dtype=dtype)
+    return StandardLayerNorm(int(model_dim), bias=True, device=device, dtype=dtype)

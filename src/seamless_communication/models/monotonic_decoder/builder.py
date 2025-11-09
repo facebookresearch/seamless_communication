@@ -11,6 +11,7 @@ from fairseq2.data.tokenizers import VocabularyInfo
 from fairseq2.models.transformer import (
     TransformerEmbeddingFrontend,
     TransformerFrontend,
+    IdentityBias
 )
 from fairseq2.runtime.dependency import DependencyContainer
 from fairseq2.runtime.config_registry import ConfigRegistrar
@@ -28,6 +29,7 @@ from fairseq2.models.transformer import (
     StandardMultiheadAttention,
     TransformerNormOrder,
     create_default_sdpa,
+    IdentityBias
 )
 from fairseq2.data_type import DataType
 from fairseq2.device import Device
@@ -40,7 +42,8 @@ from seamless_communication.models.monotonic_decoder.monotonic_decoder_layer imp
     MonotonicTransformerDecoderLayer,
 )
 from seamless_communication.models.monotonic_decoder.p_choose import PChooseLayer
-
+# from fairseq2.models.attention import create_default_sdpa, IdentityBias
+from fairseq2.models.transformer.attention_bias import CausalAttentionBias
 
 @dataclass
 class MonotonicDecoderConfig:
@@ -81,33 +84,6 @@ class MonotonicDecoderConfig:
     pre_decision_ratio: int
     """The kernel size and stride of the average pooling
     in the PChooseLayer."""
-
-
-# monotonic_decoder_archs = ArchitectureRegistry[MonotonicDecoderConfig](
-#     "monotonic_decoder"
-# )
-
-# monotonic_decoder_arch = monotonic_decoder_archs.decorator
-
-
-# @monotonic_decoder_arch("dense_1b")
-# def _dense_1b() -> MonotonicDecoderConfig:
-#     return MonotonicDecoderConfig(
-#         model_dim=1024,
-#         max_seq_len=4096,
-#         vocab_info=VocabularyInfo(
-#             size=256102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=0
-#         ),
-#         num_decoder_layers=24,
-#         num_decoder_attn_heads=16,
-#         ffn_inner_dim=1024 * 8,
-#         dropout_p=0.1,
-#         energy_bias_value=-0.5,
-#         monotonic_temperature=0.2,
-#         num_monotonic_energy_layers=4,
-#         pre_decision_ratio=2,
-#     )
-
 
 class MonotonicDecoderBuilder:
     """Builds modules of a Monotonic Decoder.
@@ -158,7 +134,7 @@ class MonotonicDecoderBuilder:
         """Build an embedding table."""
         return StandardEmbedding(
             num_embeddings=self.config.vocab_info.size,
-            embedding_dim=self.config.model_dim,
+            embed_dim=self.config.model_dim,
             pad_idx=self.config.vocab_info.pad_idx,
             init_fn=init_scaled_embedding,
             device=self.device,
@@ -175,6 +151,7 @@ class MonotonicDecoderBuilder:
         )
 
         return TransformerEmbeddingFrontend(
+            self.config.model_dim,
             embed,
             pos_encoder,
             dropout_p=self.config.dropout_p,
@@ -196,9 +173,13 @@ class MonotonicDecoderBuilder:
 
     def build_decoder_layer(self) -> MonotonicTransformerDecoderLayer:
         """Build a Transformer decoder layer."""
-        self_attn = self.build_attention(self.config.num_decoder_attn_heads)
+        attn_window_len = getattr(self, "attn_window_len", None)  # ou depuis ta config
+        self_bias = CausalAttentionBias(attn_window_len=attn_window_len)
+   
+        self_attn = self.build_attention(self.config.num_decoder_attn_heads, bias=self_bias)
 
-        encoder_decoder_attn = self.build_attention(self.config.num_decoder_attn_heads)
+        cross_bias=IdentityBias()
+        encoder_decoder_attn = self.build_attention(self.config.num_decoder_attn_heads, bias=cross_bias)
 
         p_choose_layer = self.build_p_choose_layer(self.config.num_decoder_attn_heads)
 
@@ -206,18 +187,22 @@ class MonotonicDecoderBuilder:
 
         return MonotonicTransformerDecoderLayer(
             self_attn,
+            self_bias,
+            cross_bias,
             encoder_decoder_attn,
             p_choose_layer,
             ffn,
             dropout_p=self.config.dropout_p,
             device=self.device,
             dtype=self.dtype,
+            model_dim=self.config.model_dim
         )
 
-    def build_attention(self, num_heads: int) -> MultiheadAttention:
+    def build_attention(self, num_heads: int, bias = None) -> MultiheadAttention:
         """Build a Transformer multi-head attention layer."""
-        sdpa = create_default_sdpa(attn_dropout_p=self.config.dropout_p)
 
+        sdpa = create_default_sdpa(bias, dropout_p=self.config.dropout_p)
+        
         return StandardMultiheadAttention(
             self.config.model_dim,
             num_heads,
@@ -245,7 +230,7 @@ class MonotonicDecoderBuilder:
             self.config.model_dim,
             self.config.ffn_inner_dim,
             bias=True,
-            norm_order=TransformerNormOrder.PRE,
+            # norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
         )

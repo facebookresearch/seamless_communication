@@ -448,6 +448,7 @@ class UnitYBuilder:
     def build_model(self) -> UnitYModel:
         """Build a model."""
         speech_encoder_frontend = self.w2v2_encoder_builder.create_encoder_frontend()
+        print("speech_encoder_frontend",speech_encoder_frontend)
         speech_encoder = self.build_speech_encoder()
 
         if self.config.use_text_encoder:

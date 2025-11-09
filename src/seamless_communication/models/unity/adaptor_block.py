@@ -18,7 +18,8 @@ from fairseq2.models.transformer import (
     FeedForwardNetwork,
     MultiheadAttention,
     TransformerEncoder,
-    TransformerEncoderLayer
+    TransformerEncoderLayer,
+    AttentionBiasCache
 )
 
 
@@ -102,7 +103,8 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        seqs, padding_mask = self.inner(seqs, padding_mask)
+        from fairseq2.nn.batch_layout import BatchLayout
+        seqs = self.inner(seqs, BatchLayout.of(seqs))
 
         if self.inner_layer_norm is not None:
             seqs = self.inner_layer_norm(seqs)
@@ -285,16 +287,17 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         padding_mask = _compute_new_padding_mask(
             seqs, padding_mask, self.kernel_size, self.stride
         )
-
+        from fairseq2.nn.batch_layout import BatchLayout
         # The rest of the computation is identical to a vanilla Transformer
         # encoder layer.
         seqs = self.self_attn(
             seqs,
-            padding_mask,
+            BatchLayout.of(seqs),
             keys=seqs,
-            key_padding_mask=padding_mask,
+            keys_layout=BatchLayout.of(seqs),
             values=seqs,
-            attn_mask=self_attn_mask,
+            bias_cache=AttentionBiasCache()
+            # attn_mask=self_attn_mask,
         )
 
         if self.self_attn_dropout is not None:

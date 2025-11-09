@@ -53,7 +53,7 @@ from fairseq2.models.family import ModelFamily
 from fairseq2.runtime.dependency import get_dependency_resolver
 from fairseq2.assets import get_asset_store
 
-_FAMILY = "vocoder"
+_FAMILY = "vocoder_code_hifigan"
 
 def get_vocoder_model_hub() -> ModelHub[Vocoder, VocoderConfig]:
     resolver = get_dependency_resolver()
