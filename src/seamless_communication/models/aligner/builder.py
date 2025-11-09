@@ -9,10 +9,13 @@ from typing import Optional, Union
 
 import torch
 from fairseq2.assets.card import AssetCard
-from fairseq2.data.vocabulary_info import VocabularyInfo
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.data.tokenizers import VocabularyInfo
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.runtime.config_registry import ConfigRegistrar
+
 from fairseq2.nn.embedding import StandardEmbedding, init_scaled_embedding
-from fairseq2.typing import DataType, Device
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 from seamless_communication.models.aligner.model import (
     UnitY2AlignmentEncoder,
@@ -56,35 +59,37 @@ class UnitY2AlignmentConfig:
     alignment_frontend_config: UnitY2AlignmentFrontendConfig
 
 
-aligner_archs = ArchitectureRegistry[UnitY2AlignmentConfig]("unity2_aligner")
+# aligner_archs = ArchitectureRegistry[UnitY2AlignmentConfig]("unity2_aligner")
 
-aligner_arch = aligner_archs.decorator
+# aligner_arch = aligner_archs.decorator
 
+def load_arch_unity2_aligner(container):
+    arch = ConfigRegistrar(container, UnitY2AlignmentConfig)
 
-@aligner_arch("nar_t2u_aligner")
-def _aligner_nar_t2u() -> UnitY2AlignmentConfig:
-    encoder_config = AlignmentEncoderConfig(
-        model_dim=1024,
-        feat_dim=1024,
-        num_text_layers=2,
-        num_feat_layers=3,
-        dropout=0.1,
-        temperature=1.0,
-        reduction_factor=1,
-    )
+    @arch("nar_t2u_aligner")
+    def _aligner_nar_t2u() -> UnitY2AlignmentConfig:
+        encoder_config = AlignmentEncoderConfig(
+            model_dim=1024,
+            feat_dim=1024,
+            num_text_layers=2,
+            num_feat_layers=3,
+            dropout=0.1,
+            temperature=1.0,
+            reduction_factor=1,
+        )
 
-    frontend_config = UnitY2AlignmentFrontendConfig(
-        unit_vocab_info=VocabularyInfo(
-            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        text_vocab_size=10943,
-    )
+        frontend_config = UnitY2AlignmentFrontendConfig(
+            unit_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            text_vocab_size=10943,
+        )
 
-    return UnitY2AlignmentConfig(
-        model_name_or_card="nar_t2u_aligner",
-        alignment_encoder_config=encoder_config,
-        alignment_frontend_config=frontend_config,
-    )
+        return UnitY2AlignmentConfig(
+            model_name_or_card="nar_t2u_aligner",
+            alignment_encoder_config=encoder_config,
+            alignment_frontend_config=frontend_config,
+        )
 
 
 class UnitY2AlignmentBuilder:

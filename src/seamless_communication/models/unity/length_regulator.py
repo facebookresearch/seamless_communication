@@ -5,13 +5,17 @@
 # MIT_LICENSE file in the root directory of this source tree.
 from typing import Literal, Optional, Tuple, Union
 
+from seamless_communication.layer_norm import create_standard_layer_norm
+from seamless_communication.padding import PaddingMask, apply_padding_mask
 import torch
 import torch.nn.functional as F
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask, apply_padding_mask, to_padding_mask
+# from fairseq2.nn.padding import PaddingMask, apply_padding_mask, to_padding_mask
 from fairseq2.nn.projection import Linear
-from fairseq2.nn.transformer import create_standard_layer_norm
-from fairseq2.typing import DataType, Device
+# from fairseq2.models.transformer import create_standard_layer_norm
+# from fairseq2.typing import DataType, Device
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU, Sequential
 

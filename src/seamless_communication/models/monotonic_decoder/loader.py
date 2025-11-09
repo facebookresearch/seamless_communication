@@ -4,17 +4,17 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Dict, Mapping, Optional
 
+from seamless_communication.checkpoint import convert_fairseq_checkpoint
 import torch
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
-from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
+from fairseq2.assets import get_asset_store, download_manager
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 from seamless_communication.models.monotonic_decoder.builder import (
     MonotonicDecoderConfig,
     create_monotonic_decoder_model,
-    monotonic_decoder_archs,
 )
 from seamless_communication.models.monotonic_decoder.model import MonotonicDecoderModel
 
@@ -74,19 +74,63 @@ def convert_monotonic_checkpoint(
 
     return checkpoint
 
+# Converti un checkpoint fairseq1 -> fairseq2
+    # from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
+    # checkpoint = convert_fairseq_checkpoint(checkpoint, key_map)
 
-load_monotonic_decoder_config = ConfigLoader[MonotonicDecoderConfig](
-    asset_store, monotonic_decoder_archs
-)
+    # state_dict = checkpoint["model"]
+
+    # embeds = state_dict["final_proj.weight"]
+
+    # # Cas NLLB-100 (dummy token à enlever)
+    # if embeds.size(0) == 256103:
+    #     embeds = embeds[:-1]
+    #     state_dict["final_proj.weight"] = embeds
+
+    # # Assure le partage des embeddings (tie) côté fairseq2
+    # state_dict["text_decoder_frontend.embed.weight"] = embeds
+
+    # # Réarrange les 4 premiers indices (PAD/UNK/BOS/EOS)
+    # with torch.inference_mode():
+    #     # (BOS, PAD, EOS, UNK) -> (PAD, UNK, BOS, EOS)
+    #     embeds[[0, 1, 2, 3]] = embeds[[1, 3, 0, 2]]
+
+    # return checkpoint
 
 
-load_monotonic_decoder_model = ModelLoader[
-    MonotonicDecoderModel, MonotonicDecoderConfig
-](
-    asset_store,
-    download_manager,
-    load_monotonic_decoder_config,
-    create_monotonic_decoder_model,
-    convert_monotonic_checkpoint,
-    restrict_checkpoints=False,
-)
+# ---------------------------------------------------------------------------
+# API "loader" (remplace ConfigLoader / ModelLoader par le Model Hub)
+# ---------------------------------------------------------------------------
+
+def load_monotonic_decoder_config(name: str) -> MonotonicDecoderConfig:
+    """
+    Charge la configuration effective d'un modèle à partir d'une card YAML `name`.
+    (arch de base + overrides de la card).
+    """
+    from . import get_monotonic_decoder_model_hub
+    hub = get_monotonic_decoder_model_hub()
+    return hub.get_model_config(name)
+
+
+def load_monotonic_decoder_model(
+    name: str,
+    *,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> MonotonicDecoderModel:
+    """
+    Charge un modèle complet (téléchargement/cache selon la card YAML `name`).
+    """
+    from . import get_monotonic_decoder_model_hub
+    hub = get_monotonic_decoder_model_hub()
+    return hub.load_model(name, device=device, dtype=dtype)
+
+
+# (Optionnel) création "neuve" sans card (poids aléatoires)
+def create_new_monotonic_decoder_model(
+    cfg: MonotonicDecoderConfig,
+    *,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> MonotonicDecoderModel:
+    return create_monotonic_decoder_model(cfg, device=device, dtype=dtype)

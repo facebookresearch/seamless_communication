@@ -7,15 +7,20 @@
 import math
 from typing import List, Optional, Tuple, final
 
+from seamless_communication.layer_norm import create_standard_layer_norm
+from seamless_communication.padding import PaddingMask
 import torch
-from fairseq2.data import VocabularyInfo
+from fairseq2.data.tokenizers import VocabularyInfo
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
 from fairseq2.nn.embedding import Embedding
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
+# from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.position_encoder import PositionEncoder
-from fairseq2.nn.transformer import create_standard_layer_norm
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.models.transformer import create_standard_layer_norm
+# from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
+from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import Dropout, Module, Parameter
 
@@ -78,7 +83,7 @@ class NARDecoderFrontend(Module):
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ):
-        self.model_dim = embed.embedding_dim
+        self.model_dim = embed.embed_dim
 
         super().__init__()
 

@@ -8,7 +8,7 @@ from typing import Optional, Tuple, final
 
 from fairseq2.models.transformer.frontend import TransformerFrontend
 from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.padding import PaddingMask
+# from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.projection import Projection
 from overrides import final as finaloverride
 from torch import Tensor
@@ -41,12 +41,12 @@ class MonotonicDecoderModel(Module):
     def decode(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         encoder_output: Tensor,
-        encoder_padding_mask: Optional[PaddingMask],
+        encoder_padding_mask,
         *,
         state_bag: Optional[IncrementalStateBag] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
+    ):
         seqs, padding_mask = self.text_decoder_frontend(
             seqs, padding_mask, state_bag=state_bag
         )

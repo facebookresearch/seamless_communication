@@ -5,11 +5,17 @@
 # MIT_LICENSE file in the root directory of this source tree.
 
 name: seamless_streaming_unity
-base: unity_nllb-100
+model_family: unity
+model_type: unity
+# base: unity_nllb-100
+tokenizer_family: nllb 
+# tokenizer_arch: base 
+tokenizer: "https://huggingface.co/facebook/seamless-m4t-large/resolve/main/tokenizer.model"
 model_arch: base_v2
-char_tokenizer: "https://huggingface.co/facebook/seamless-streaming/resolve/main/spm_char_lang38_tc.model"
 checkpoint: "https://huggingface.co/facebook/seamless-streaming/resolve/main/seamless_streaming_unity.pt"
+char_tokenizer: "https://huggingface.co/facebook/seamless-streaming/resolve/main/spm_char_lang38_tc.model"
 num_units: 10000
+default_lang: eng
 unit_langs:
   - arb
   - ben
@@ -49,3 +55,103 @@ unit_langs:
   - urd
   - uzn
   - vie
+
+langs:
+  - afr
+  - amh
+  - arb
+  - ary
+  - arz
+  - asm
+  - azj
+  - bel
+  - ben
+  - bos
+  - bul
+  - cat
+  - ceb
+  - ces
+  - ckb
+  - cmn
+  - cmn_Hant
+  - cym
+  - dan
+  - deu
+  - ell
+  - eng
+  - est
+  - eus
+  - fin
+  - fra
+  - fuv
+  - gaz
+  - gle
+  - glg
+  - guj
+  - heb
+  - hin
+  - hrv
+  - hun
+  - hye
+  - ibo
+  - ind
+  - isl
+  - ita
+  - jav
+  - jpn
+  - kan
+  - kat
+  - kaz
+  - khk
+  - khm
+  - kir
+  - kor
+  - lao
+  - lit
+  - lug
+  - luo
+  - lvs
+  - mai
+  - mal
+  - mar
+  - mkd
+  - mlt
+  - mni
+  - mya
+  - nld
+  - nno
+  - nob
+  - npi
+  - nya
+  - ory
+  - pan
+  - pbt
+  - pes
+  - pol
+  - por
+  - ron
+  - rus
+  - sat
+  - slk
+  - slv
+  - sna
+  - snd
+  - som
+  - spa
+  - srp
+  - swe
+  - swh
+  - tam
+  - tel
+  - tgk
+  - tgl
+  - tha
+  - tur
+  - ukr
+  - urd
+  - uzn
+  - vie
+  - yor
+  - yue
+  - zsm
+  - zul

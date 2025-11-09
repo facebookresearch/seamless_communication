@@ -6,22 +6,47 @@
 
 from typing import Any, Dict, List, Mapping, Tuple, Union
 
-import torch
-from fairseq2.assets import AssetStore, asset_store, download_manager
-from fairseq2.assets.card import AssetCard, AssetCardFieldNotFoundError
-from fairseq2.models.nllb import NllbConfig
-from fairseq2.models.nllb.loader import NllbTokenizerLoader
-from fairseq2.models.utils import ConfigLoader, ModelLoader
-from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
+from typing import Optional
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
+from seamless_communication.checkpoint import convert_fairseq_checkpoint
+from seamless_communication.models.unity.t2u_builder import UnitYT2UConfig
+import torch
+
+from fairseq2.assets import AssetStore, get_asset_store
+from fairseq2.assets.card import AssetCard, AssetCardField
+from fairseq2.models.nllb import NllbConfig
+from fairseq2.models.nllb import get_nllb_tokenizer_hub
+# from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.data.tokenizers.sentencepiece import BasicSentencePieceTokenizer as SentencePieceTokenizer
 from seamless_communication.models.unity.builder import (
     UnitYConfig,
     create_unity_model,
-    unity_archs,
+    load_arch_unity
+    # unity_archs,
 )
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
-from seamless_communication.models.unity.model import UnitYModel
+from seamless_communication.models.unity.model import UnitYModel, UnitYNART2UModel, UnitYT2UModel
 from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
+
+from fairseq2.models.hub import ModelHub
+from fairseq2.models.family import ModelFamily
+from fairseq2.runtime.dependency import get_dependency_resolver
+from fairseq2.assets import get_asset_store
+
+# _FAMILY = "unity"
+
+# def get_unity_t2u_model_hub() -> ModelHub[Union[UnitYT2UModel, UnitYNART2UModel], UnitYT2UConfig]:
+#     resolver = get_dependency_resolver()
+#     family = resolver.resolve(ModelFamily, key=_FAMILY)
+#     return ModelHub(family, get_asset_store())
+
+# _FAMILY_2 = "unity_nart2u"
+# def get_unity_nart2u_model_hub() -> ModelHub[UnitYNART2UModel, UnitYT2UConfig]:
+#     resolver = get_dependency_resolver()
+#     family = resolver.resolve(ModelFamily, key=_FAMILY_2)
+#     return ModelHub(family, get_asset_store())
 
 
 def convert_unity_checkpoint(
@@ -31,7 +56,7 @@ def convert_unity_checkpoint(
 
     # Check if we have a fairseq2 checkpoint.
     if "speech_encoder.inner.layers.0.self_attn_layer_norm.weight" in state_dict:
-        return checkpoint
+        return state_dict
 
     key_map = _fairseq_key_map(config)
 
@@ -152,7 +177,7 @@ def convert_unity_checkpoint(
         if "t2u_model.decoder_frontend.embed.weight" in state_dict:
             state_dict["t2u_model.decoder_frontend.embed.weight"] = embeds
 
-    return checkpoint
+    return state_dict
 
 
 def _get_char_index_mapping(config: UnitYConfig) -> List[int]:
@@ -388,22 +413,77 @@ def _fairseq_key_map(config: UnitYConfig) -> Dict[str, str]:
 
     return key_map
 
+# asset_store = get_asset_store()
+def load_unity_t2u_config(name: str) -> UnitYT2UConfig:
+    from . import get_unity_t2u_model_hub 
+    hub = get_unity_t2u_model_hub()
+    return hub.get_model_config(name)
 
-load_unity_config = ConfigLoader[UnitYConfig](asset_store, unity_archs)
+def load_unity_config(name: str) -> UnitYConfig:
+    from . import get_unity_model_hub 
+    hub = get_unity_model_hub()
+    return hub.get_model_config(name)
+
+# def load_unity_nart2u_config(name: str) -> UnitYConfig:
+#     hub = get_unity_nart2u_model_hub()
+#     return hub.get_model_config(name)
 
 
-load_unity_model = ModelLoader[UnitYModel, UnitYConfig](
-    asset_store,
-    download_manager,
-    load_unity_config,
-    create_unity_model,
-    convert_unity_checkpoint,
-    restrict_checkpoints=False,
-)
+def load_unity_t2u_model(
+    name: str,
+    *,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> UnitYModel:
+    from . import get_unity_t2u_model_hub 
+    return get_unity_t2u_model_hub().load_model(name, device=device, dtype=dtype)
+
+# def load_unity_nart2u_model(
+#     name: str,
+#     *,
+#     device: Optional[Device] = None,
+#     dtype: Optional[DataType] = None,
+# ) -> UnitYModel:
+#     return get_unity_nart2u_model_hub().load_model(name, device=device, dtype=dtype)
+
+# load_unity_model = ModelLoader[UnitYModel, UnitYConfig](
+#     asset_store,
+#     download_manager,
+#     load_unity_config,
+#     create_unity_model,
+#     convert_unity_checkpoint,
+#     restrict_checkpoints=False,
+# )
 
 
-load_unity_text_tokenizer = NllbTokenizerLoader(asset_store, download_manager)
+# load_unity_text_tokenizer = NllbTokenizerLoader(asset_store, download_manager)
+# from seamless_communication.models.nllb.tokenizer_loader import load_nllb_tokenizer  # adapte le chemin
 
+# from seamless_communication.models. import NllbTokenizerLoader
+
+# load_unity_text_tokenizer = NllbTokenizerLoader(get_asset_store()) 
+def load_unity_text_tokenizer(*args):
+    return get_nllb_tokenizer_hub().load_tokenizer(*args)
+
+# def load_unity_text_tokenizer(model_name_or_card: Union[str, AssetCard]) -> SentencePieceTokenizer:
+#     store = get_asset_store()
+#     card = model_name_or_card if isinstance(model_name_or_card, AssetCard) else store.retrieve_card(model_name_or_card)
+
+#     # 1) chercher une resource explicite
+#     uri = next(
+#         (r.uri for r in card.resources() if r.name in ("text_tokenizer", "char_tokenizer", "tokenizer")),
+#         None,
+#     )
+#     # 2) champs à plat possibles
+#     if uri is None and card.has_field("tokenizer"):
+#         uri = card.field("tokenizer").as_(str)
+#     if uri is None and card.has_field("char_tokenizer"):
+#         uri = card.field("char_tokenizer").as_(str)
+
+#     if uri is None:
+#         raise ValueError(f"Card '{card.name}' has no tokenizer resource/field ('tokenizer' / 'char_tokenizer').")
+
+#     return SentencePieceTokenizer.from_file(uri)
 
 class UnitYUnitTokenizerLoader:
     """Loads speech unit tokenizers of UnitY models."""
@@ -425,15 +505,40 @@ class UnitYUnitTokenizerLoader:
             card = model_name_or_card
         else:
             card = self.asset_store.retrieve_card(model_name_or_card)
-
+        
+        langs_raw = card.field("unit_langs").as_(list)
+        unit_langs = [str(x) for x in langs_raw]
         return UnitTokenizer(
             card.field("num_units").as_(int),
-            card.field("unit_langs").as_list(str),
+            unit_langs,
             card.field("model_arch").as_(str),
         )
 
+# def as_list(self,kls, allow_empty: bool = False):
+#     """Return the value of this field as a :class:`list` of type ``kls``.
 
-load_unity_unit_tokenizer = UnitYUnitTokenizerLoader(asset_store)
+#     :param kls:
+#         The type of the field elements.
+#     :param allow_empty:
+#         If ``True``, allows the list to be empty.
+#     """
+#     value = self.as_(list, allow_empty)
+
+#     for element in value:
+#         if not isinstance(element, kls):
+#             pathname = ".".join(self.path)
+
+#             raise AssetCardError(
+#                 f"The elements of the field '{pathname}' of the asset card '{self.card.name}' must be of type `{kls}`, but at least one element is of type `{type(element)}` instead."
+#             )
+
+#     return value
+
+def load_unity_unit_tokenizer(*args):
+    return UnitYUnitTokenizerLoader(get_asset_store())(*args)
+
+# load_unity_unit_tokenizer = UnitYUnitTokenizerLoader(get_asset_store())
+# asset_store=get_asset_store()
 
 
 class GcmvnStatsLoader:
@@ -461,11 +566,12 @@ class GcmvnStatsLoader:
 
         try:
             gcmvn_stats: Dict[str, List[float]] = card.field("gcmvn_stats").as_(dict)
-        except AssetCardFieldNotFoundError:
+        except AssetCardField:
             model_override = card.field("model_config").as_(dict)
             gcmvn_stats = model_override["gcmvn_stats"]
 
         return gcmvn_stats["mean"], gcmvn_stats["std"]
 
 
-load_gcmvn_stats = GcmvnStatsLoader(asset_store)
+def load_gcmvn_stats(*args):
+    return GcmvnStatsLoader(get_asset_store())(*args)

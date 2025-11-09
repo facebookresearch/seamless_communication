@@ -6,11 +6,17 @@
 
 from typing import Iterable, Optional, Tuple, final
 
-from fairseq2.nn.module_list import ModuleList
+# from fairseq2.nn.module_list import ModuleList
+from seamless_communication.padding import PaddingMask
+from torch.nn import ModuleList
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
-from fairseq2.nn.transformer import TransformerNormOrder, create_standard_layer_norm
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.nn.padding import PaddingMask
+from fairseq2.models.transformer import TransformerNormOrder
+
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
+from overrides import final as finaloverride
+from seamless_communication.layer_norm import create_standard_layer_norm
 from torch import Tensor
 from torch.nn import Module
 

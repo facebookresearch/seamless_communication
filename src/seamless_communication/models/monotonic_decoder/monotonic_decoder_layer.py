@@ -8,18 +8,31 @@ from typing import Optional, Tuple, final
 
 from fairseq2.nn.incremental_state import IncrementalStateBag
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
-from fairseq2.nn.transformer import (
-    AttentionMask,
+from fairseq2.models.transformer import (
     FeedForwardNetwork,
-    MultiheadAttention,
-    create_standard_layer_norm,
+    MultiheadAttention
 )
-from fairseq2.typing import DataType, Device, finaloverride
+from fairseq2.nn.normalization import StandardLayerNorm
+from overrides import final
+from seamless_communication.attention_mask import AttentionMask
+from seamless_communication.layer_norm import create_standard_layer_norm
+finaloverride = final
+
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 from torch import Tensor
 from torch.nn import Dropout, Module
 
 from seamless_communication.models.monotonic_decoder.p_choose import PChooseLayer
+
+
+from abc import ABC, abstractmethod
+from typing import Optional, Protocol, final
+
+import torch
+from torch import Tensor
+
+from fairseq2.nn.incremental_state import IncrementalStateBag
 
 
 @final
@@ -63,8 +76,8 @@ class MonotonicTransformerDecoderLayer(Module):
 
         self.model_dim = self_attn.model_dim
 
-        self_attn_layer_norm = create_standard_layer_norm(
-            self.model_dim, device=device, dtype=dtype
+        self_attn_layer_norm = StandardLayerNorm(
+            self.model_dim, bias=True, device=device, dtype=dtype
         )
 
         self.self_attn_layer_norm = self_attn_layer_norm
@@ -108,13 +121,13 @@ class MonotonicTransformerDecoderLayer(Module):
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         self_attn_mask: Optional[AttentionMask] = None,
         encoder_output: Optional[Tensor] = None,
-        encoder_padding_mask: Optional[PaddingMask] = None,
+        encoder_padding_mask = None,
         *,
         state_bag: Optional[IncrementalStateBag] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
+    ):
         seqs = self._forward_self_attn(seqs, padding_mask, self_attn_mask, state_bag)
 
         seqs, p_choose = self._forward_encoder_decoder_attn(
@@ -128,7 +141,7 @@ class MonotonicTransformerDecoderLayer(Module):
     def _forward_self_attn(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         self_attn_mask: Optional[AttentionMask],
         state_bag: Optional[IncrementalStateBag],
     ) -> Tensor:
@@ -156,9 +169,9 @@ class MonotonicTransformerDecoderLayer(Module):
     def _forward_encoder_decoder_attn(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         encoder_output: Optional[Tensor],
-        encoder_padding_mask: Optional[PaddingMask],
+        encoder_padding_mask,
     ) -> Tuple[Tensor, Tensor]:
         if encoder_output is None:
             raise ValueError(

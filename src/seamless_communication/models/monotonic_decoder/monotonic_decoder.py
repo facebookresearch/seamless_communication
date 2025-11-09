@@ -6,23 +6,25 @@
 
 from typing import Iterable, List, Optional, Tuple, final
 
+from seamless_communication.attention_mask import AttentionMaskFactory, CausalAttentionMaskFactory
 import torch
 from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.module_list import ModuleList
+from torch.nn import ModuleList
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
-from fairseq2.nn.transformer import (
-    AttentionMaskFactory,
-    CausalAttentionMaskFactory,
-    create_standard_layer_norm,
-)
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.nn.padding import PaddingMask
+from fairseq2.nn.normalization import StandardLayerNorm
+
 from torch import Tensor
 from torch.nn import Module
 
 from seamless_communication.models.monotonic_decoder.monotonic_decoder_layer import (
     MonotonicTransformerDecoderLayer,
 )
+from overrides import final
+finaloverride = final
+
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 
 @final
@@ -58,20 +60,20 @@ class MonotonicTransformerDecoder(Module):
 
         self.layers = layer_list
 
-        self.layer_norm = create_standard_layer_norm(
-            self.model_dim, device=device, dtype=dtype
+        self.layer_norm = StandardLayerNorm(
+            self.model_dim, bias=True, device=device, dtype=dtype
         )
 
     @finaloverride
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         encoder_output: Optional[Tensor] = None,
-        encoder_padding_mask: Optional[PaddingMask] = None,
+        encoder_padding_mask = None,
         *,
         state_bag: Optional[IncrementalStateBag] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
+    ):
         self_attn_mask = self.self_attn_mask_factory(
             seqs, keys=seqs, training=self.training, state_bag=state_bag
         )

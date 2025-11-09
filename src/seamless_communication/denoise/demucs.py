@@ -10,7 +10,7 @@ import tempfile
 from typing import Union
 from torch import Tensor
 import torchaudio
-from fairseq2.memory import MemoryBlock
+from fairseq2.data._memory import MemoryBlock
 from dataclasses import dataclass
 from typing import Optional
 import os

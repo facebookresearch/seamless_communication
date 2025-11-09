@@ -6,10 +6,11 @@
 
 from pathlib import Path
 
-from fairseq2.assets import InProcAssetMetadataProvider, asset_store
+from fairseq2.assets import InProcAssetMetadataProvider, get_asset_store
 
 
 def add_gated_assets(model_dir: Path) -> None:
+    asset_store=get_asset_store()
     asset_store.env_resolvers.append(lambda: "gated")
 
     model_dir = model_dir.resolve()

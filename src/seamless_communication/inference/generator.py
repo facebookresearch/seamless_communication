@@ -7,22 +7,25 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from seamless_communication.models.unity.char_tokenizer import TextTokenizer
+from seamless_communication.padding import PaddingMask, apply_padding_mask, get_seqs_and_padding_mask, pad_seqs
 import torch
-from fairseq2.data import SequenceData, StringLike
-from fairseq2.data.text import TextTokenizer
+from fairseq2.data import SequenceData
+# from fairseq2.data.text import TextTokenizer
+
+from fairseq2.generation.beam_search import BeamSearchSeq2SeqGenerator
+from fairseq2.generation.text import SequenceToTextConverter
+from fairseq2.generation.step_processor import StepProcessor
 from fairseq2.generation import (
-    BeamSearchSeq2SeqGenerator,
     Seq2SeqGenerator,
-    SequenceToTextConverter,
-    StepProcessor,
 )
-from fairseq2.nn.padding import (
-    PaddingMask,
-    apply_padding_mask,
-    get_seqs_and_padding_mask,
-    pad_seqs,
-)
-from fairseq2.nn.utils.module import infer_device
+# from fairseq2.nn.padding import (
+#     PaddingMask,
+#     apply_padding_mask,
+#     get_seqs_and_padding_mask,
+#     pad_seqs,
+# )
+from fairseq2.nn.utils.module import maybe_infer_device as infer_device
 from torch import Tensor
 
 from seamless_communication.models.unity.model import (
@@ -234,7 +237,7 @@ class UnitYGenerator:
         ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-    ) -> Tuple[List[StringLike], Optional[Tensor]]:
+    ):
         """
         :param source_seqs:
             The source sequences to use for generation. *Shape:* :math:`(N,S,*)`,

@@ -4,27 +4,150 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
+from abc import ABC, abstractmethod
 from typing import Optional, Union, final
 
+from fairseq2.data.tokenizers import VocabularyInfo
 from fairseq2.assets import (
     AssetDownloadManager,
     AssetStore,
-    asset_store,
-    download_manager,
+    get_asset_store,
+    # download_manager,
+    get_asset_download_manager,
 )
 from fairseq2.assets.card import AssetCard
-from fairseq2.data.text import (
+from fairseq2.data.tokenizers.sentencepiece import (
     SentencePieceDecoder,
     SentencePieceEncoder,
     SentencePieceModel,
-    TextTokenDecoder,
-    TextTokenEncoder,
-    TextTokenizer,
-    vocab_info_from_sentencepiece,
 )
-from fairseq2.data.typing import PathLike
-from fairseq2.typing import Device, finaloverride
+from fairseq2.device import Device
 
+from torch import Tensor
+
+def vocab_info_from_sentencepiece(model: SentencePieceModel) -> VocabularyInfo:
+    """Return the vocabulary information of ``model``."""
+    return VocabularyInfo(
+        model.vocabulary_size,
+        model.unk_idx,
+        model.bos_idx,
+        model.eos_idx,
+        model.pad_idx,
+    )
+class TextTokenDecoder(ABC):
+    """Decodes text from tokens or token indices."""
+
+    @abstractmethod
+    def __call__(self, token_indices: Tensor):
+        """
+        :param token_indices:
+            The token indices to decode from.
+        """
+
+    @abstractmethod
+    def decode_from_tokens(self, tokens):
+        """
+        :param tokens:
+            The tokens to decode from.
+        """
+
+class TextTokenEncoder(ABC):
+    """Encodes text into tokens or token indices."""
+
+    @abstractmethod
+    def __call__(self, text) -> Tensor:
+        """
+        :param text:
+            The text to encode.
+        """
+
+    @abstractmethod
+    def encode_as_tokens(self, text):
+        """
+        :param text:
+            The text to encode.
+        """
+
+    @property
+    @abstractmethod
+    def prefix_indices(self) -> Optional[Tensor]:
+        """Get the indices of the prefix tokens. *Shape:* :math:`(S)`, where
+        :math:`S` is the number of indices."""
+
+    @property
+    @abstractmethod
+    def suffix_indices(self) -> Optional[Tensor]:
+        """Get the indices of the suffix tokens. *Shape:* :math:`(S)`, where
+        :math:`S` is the number of indices."""
+
+
+class TextTokenizer(ABC):
+    """Represents a tokenizer to encode and decode text."""
+
+    vocab_info: VocabularyInfo
+
+    def __init__(self, vocab_info: VocabularyInfo) -> None:
+        """
+        :param vocab_info:
+            The vocabulary information associated with the tokenizer.
+        """
+        self.vocab_info = vocab_info
+
+    @abstractmethod
+    def create_encoder(
+        self,
+        *,
+        task: Optional[str] = None,
+        lang: Optional[str] = None,
+        mode: Optional[str] = None,
+        device: Optional[Device] = None,
+        pin_memory: bool = False,
+    ) -> TextTokenEncoder:
+        """Create a token encoder.
+
+        The valid arguments for the ``task``, ``lang``, and ``mode`` parameters
+        are implementation specific. Refer to concrete ``TextTokenizer``
+        subclasses for more information.
+
+        :param task:
+            The task for which to generate token indices. Typically, multi-task
+            jobs use ``task`` to distinguish between different tasks such as
+            'translation' or 'transcription'.
+        :param lang:
+            The language of generated token indices. Typically, multilingual
+            translation tasks use ``lang`` to distinguish between different
+            languages such as 'en-US' or 'de-DE'.
+        :param mode:
+            The mode in which to generate token indices. Typically, translation
+            tasks use ``mode`` to distinguish between different modes such as
+            'source' or 'target'.
+        :param device:
+            The device on which to construct tensors.
+        :param pin_memory:
+            If ``True``, uses pinned memory while constructing tensors.
+        """
+
+    @abstractmethod
+    def create_raw_encoder(
+        self, *, device: Optional[Device] = None, pin_memory: bool = False
+    ) -> TextTokenEncoder:
+        """Create a raw token encoder with no control symbols.
+
+        :param device:
+            The device on which to construct tensors.
+        :param pin_memory:
+            If ``True``, uses pinned memory while constructing tensors.
+        """
+
+    @abstractmethod
+    def create_decoder(self) -> TextTokenDecoder:
+        """Create a token decoder."""
+
+
+# vocab_info_from_sentencepiece,
+
+from fairseq2.device import Device
+from overrides import final as finaloverride
 
 @final
 class CharTokenizer(TextTokenizer):
@@ -32,7 +155,7 @@ class CharTokenizer(TextTokenizer):
 
     model: SentencePieceModel
 
-    def __init__(self, pathname: PathLike) -> None:
+    def __init__(self, pathname) -> None:
         """
         :param pathname:
             The pathname of the SentencePiece model file.
@@ -110,4 +233,5 @@ class UnitYCharTokenizerLoader:
         return CharTokenizer(pathname)
 
 
-load_unity_char_tokenizer = UnitYCharTokenizerLoader(asset_store, download_manager)
+def load_unity_char_tokenizer(*args):
+    return UnitYCharTokenizerLoader(get_asset_store(), get_asset_download_manager())(*args)

@@ -6,13 +6,15 @@
 
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
+from seamless_communication.padding import PaddingMask
 import torch
 import torch.nn.functional as F
 from fairseq2.nn.embedding import Embedding, StandardEmbedding
-from fairseq2.nn.padding import PaddingMask
+# from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.position_encoder import PositionEncoder
 from fairseq2.nn.projection import Projection
-from fairseq2.typing import DataType, Device
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 from torch.nn import (
     ELU,
     BatchNorm1d,

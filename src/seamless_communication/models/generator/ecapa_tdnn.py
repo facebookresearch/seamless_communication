@@ -8,7 +8,30 @@ from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from fairseq2.nn.padding import PaddingMask, to_padding_mask
+from torch import Tensor
+
+def to_padding_mask(seq_lens: Tensor, batch_seq_len: int) -> Tensor:
+    """Convert a sequence length array to a boolean padding mask tensor.
+
+    :param seq_lens:
+        An array where each element represents the length of a sequence. *Shape:*
+        :math:`(N)`, where :math:`N` is the batch size.
+    :param batch_seq_len:
+        The sequence length of the mask.
+
+    :returns:
+        The mask. *Shape:* :math:`(N,S)`, where :math:`N` is the batch size and
+        :math:`S` is the sequence length.
+    """
+    batch_size = seq_lens.size(0)
+
+    # (N, S)
+    indices = torch.arange(batch_seq_len, device=seq_lens.device).expand(batch_size, -1)
+
+    # (N) -> (N, S)
+    lengths = seq_lens.unsqueeze(1).expand(-1, batch_seq_len)
+
+    return indices < lengths
 from torch import Tensor
 from torch.nn import Conv1d, LayerNorm, Module, ModuleList, ReLU, Sigmoid, Tanh, init
 
@@ -111,7 +134,7 @@ class ECAPA_TDNN(Module):
     def forward(
         self,
         x: Tensor,
-        padding_mask: Optional[PaddingMask] = None,
+        padding_mask = None,
     ) -> Tensor:
         """Returns the embedding vector.
 
@@ -188,7 +211,7 @@ class TDNNBlock(Module):
         self.activation = ReLU()
         self.norm = LayerNorm(out_channels, eps=1e-12)
 
-    def forward(self, x: Tensor, padding_mask: Optional[PaddingMask] = None) -> Tensor:
+    def forward(self, x: Tensor, padding_mask = None) -> Tensor:
         """Processes the input tensor x and returns an output tensor."""
         x = self.activation(self.conv(x))
 
@@ -293,7 +316,7 @@ class SEBlock(Module):
         )
         self.sigmoid = Sigmoid()
 
-    def forward(self, x: Tensor, padding_mask: Optional[PaddingMask] = None) -> Tensor:
+    def forward(self, x: Tensor, padding_mask = None) -> Tensor:
         """Processes the input tensor x and returns an output tensor."""
         if padding_mask is not None:
             mask = padding_mask.materialize().unsqueeze(1)
@@ -338,7 +361,7 @@ class AttentiveStatisticsPooling(Module):
             in_channels=attention_channels, out_channels=channels, kernel_size=1
         )
 
-    def forward(self, x: Tensor, padding_mask: Optional[PaddingMask] = None) -> Tensor:
+    def forward(self, x: Tensor, padding_mask = None) -> Tensor:
         """Calculates mean and std for a batch (input tensor).
 
         Arguments
@@ -460,7 +483,7 @@ class SERes2NetBlock(Module):
                 kernel_size=1,
             )
 
-    def forward(self, x: Tensor, padding_mask: Optional[PaddingMask] = None) -> Tensor:
+    def forward(self, x: Tensor, padding_mask = None) -> Tensor:
         """Processes the input tensor x and returns an output tensor."""
         residual = x
         if self.shortcut:

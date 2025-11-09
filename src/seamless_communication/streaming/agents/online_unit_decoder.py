@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
+import time
 from typing import Any, List, Optional
 
 import torch
@@ -93,6 +94,7 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
     @torch.inference_mode()
     def policy(self, states: NARUnitDecoderAgentStates) -> Action:
+        print("NARUnitYUnitDecoderAgent", time.time())
         if states.target_finished:
             return WriteAction("", finished=True)
 
@@ -136,7 +138,6 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
         # minus one because we add a ending_token on each s2t output phrase
         states.duration_start_index = len(durations) - 1
-
         return WriteAction(
             TextSegment(
                 content=units,

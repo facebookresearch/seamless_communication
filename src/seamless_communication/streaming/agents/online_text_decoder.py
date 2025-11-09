@@ -302,6 +302,8 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):  # type: ignore
 
     @torch.inference_mode()
     def policy(self, states: DecoderAgentStates) -> Action:
+        import time
+        print("MMATextDecoder", time.time())
         if len(states.source) == 0:
             return ReadAction()
 

@@ -7,7 +7,8 @@ from typing import Optional
 
 import torch
 from fairseq2.nn.projection import Linear
-from fairseq2.typing import DataType, Device
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
 from torch import Tensor
 from torch.nn import Module, Parameter
 

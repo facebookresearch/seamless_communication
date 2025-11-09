@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from seamless_communication.padding import PaddingMask
 import torch
 import torch.nn as nn
-from fairseq2.assets import asset_store, download_manager
+from fairseq2.assets import get_asset_store, download_manager
 from fairseq2.assets.card import AssetCard
 from fairseq2.data import Collater
 from fairseq2.data.audio import (
@@ -18,11 +19,13 @@ from fairseq2.data.audio import (
     AudioDecoderOutput,
     WaveformToFbankConverter,
 )
-from fairseq2.generation import BeamSearchSeq2SeqGenerator, Seq2SeqGeneratorOutput
-from fairseq2.memory import MemoryBlock
+from fairseq2.generation.beam_search import BeamSearchSeq2SeqGenerator
+
+from fairseq2.data._memory import MemoryBlock
 from fairseq2.models.nllb.tokenizer import NllbTokenizer
-from fairseq2.nn.transformer.multihead_attention import AttentionWeightHook
-from fairseq2.typing import DataType, Device
+from fairseq2.models.transformer.multihead_attention import AttentionWeightHook
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 from scipy.signal import medfilt2d
 from torch import Tensor
 
@@ -30,11 +33,44 @@ from seamless_communication.denoise.demucs import Demucs, DenoisingConfig
 from seamless_communication.models.tokenizer import SPMTokenizer
 from seamless_communication.models.unity import (
     UnitYX2TModel,
-    load_unity_model,
+    # load_unity_model,
+    # load_unity_nart2u_config,
+    load_unity_t2u_config,
     load_unity_text_tokenizer,
 )
 from seamless_communication.segment.silero_vad import SileroVADSegmenter
 
+@dataclass
+class Hypothesis:
+    """Represents a hypothesis produced by a sequence generator."""
+
+    seq: Tensor
+    """The generated sequence. *Shape:* :math:`(S)`, where :math:`S` is the
+    sequence length."""
+
+    score: Optional[Tensor]
+    """The score of the hypothesis. *Shape:* Scalar."""
+
+    step_scores: Optional[Tensor]
+    """The score of each sequence step. *Shape:* :math:`(S)`, where :math:`S` is
+    the sequence length."""
+
+
+@dataclass
+class Seq2SeqGeneratorOutput:
+    hypotheses: List[List[Hypothesis]]
+    """The list of hypothesis generated per prompt, ordered by score."""
+
+    encoder_output: Tensor
+    """The encoder output used in encoder-decoder attention. *Shape:*
+    :math:`(N,S_{enc},M)`, where :math:`N` is the batch size, :math:`S_{enc}` is
+    the encoder output sequence length, and :math:`M` is the dimensionality of
+    the model."""
+
+    encoder_padding_mask: Optional[PaddingMask]
+    """The padding mask of :attr:`encoder_output`. *Shape:* :math:`(N,S_{enc})`,
+    where :math:`N` is the batch size and :math:`S_{enc}` is the encoder output
+    sequence length."""
 
 class EncDecAttentionsCollect(AttentionWeightHook):
     def __init__(self):
@@ -148,7 +184,7 @@ class Transcriber(nn.Module):
         if isinstance(model_name_or_card, AssetCard):
             model_card = model_name_or_card
         else:
-            model_card = asset_store.retrieve_card(model_name_or_card)
+            model_card = get_asset_store().retrieve_card(model_name_or_card)
 
         tokenizer_type = model_card.field("tokenizer_type").as_(str)
 

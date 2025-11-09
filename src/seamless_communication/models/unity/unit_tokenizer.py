@@ -7,8 +7,8 @@
 from typing import Dict, Optional, Sequence
 
 import torch
-from fairseq2.data import VocabularyInfo
-from fairseq2.typing import Device
+from fairseq2.data.tokenizers import VocabularyInfo
+from fairseq2.device import Device
 from torch import Tensor
 
 

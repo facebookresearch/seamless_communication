@@ -11,10 +11,10 @@ import numpy.typing as npt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fairseq2.data import CString
+# from fairseq2.data import CString
 from fairseq2.nn.embedding import StandardEmbedding
-from fairseq2.nn.padding import to_padding_mask
-from fairseq2.typing import DataType
+# from fairseq2.nn.padding import to_padding_mask
+from fairseq2.data_type import DataType
 from torch import Tensor
 from torch.nn import Module
 
@@ -53,7 +53,7 @@ class UnitY2AlignmentFrontend(Module):
 
     def tokenize_text_to_tokens(
         self, text: str, add_trailing_silence: bool = False
-    ) -> List[Union[CString, str]]:
+    ):
         tokenized = self.encode_text.encode_as_tokens(text)
         if add_trailing_silence:
             tokenized = tokenized + [tokenized[0]]

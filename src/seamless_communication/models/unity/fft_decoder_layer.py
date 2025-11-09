@@ -7,9 +7,13 @@
 from typing import Optional, Tuple, final
 
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask, apply_padding_mask
-from fairseq2.nn.transformer import MultiheadAttention, create_standard_layer_norm
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.nn.padding import apply_padding_mask
+from fairseq2.models.transformer import MultiheadAttention
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
+from overrides import final as finaloverride
+from seamless_communication.layer_norm import create_standard_layer_norm
+from seamless_communication.padding import PaddingMask, apply_padding_mask
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU
 
@@ -125,6 +129,7 @@ class FeedForwardTransformerLayer(Module):
         film_cond_dim: int = 512,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
+        model_dim = None
     ) -> None:
         """
         :param self_attn:
@@ -142,7 +147,7 @@ class FeedForwardTransformerLayer(Module):
         """
         super().__init__()
 
-        self.model_dim = self_attn.model_dim
+        self.model_dim = model_dim
 
         self.self_attn = self_attn
 

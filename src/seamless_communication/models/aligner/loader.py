@@ -7,12 +7,12 @@
 from typing import Any, List, Mapping
 
 import torch
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
-
+from fairseq2.assets import get_asset_store, download_manager
+# from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.runtime.config_registry import ConfigRegistrar
 from seamless_communication.models.aligner.builder import (
     UnitY2AlignmentConfig,
-    aligner_archs,
+    # aligner_archs,
     create_unity2_alignment_model,
 )
 from seamless_communication.models.aligner.model import UnitY2AlignmentModel
@@ -74,15 +74,39 @@ def _get_char_index_mapping(config: UnitY2AlignmentConfig) -> List[int]:
     return model_to_dict_mapping
 
 
-load_unity2_alignment_config = ConfigLoader[UnitY2AlignmentConfig](
-    asset_store, aligner_archs
-)
+# load_unity2_alignment_config = ConfigLoader[UnitY2AlignmentConfig](
+#     asset_store, aligner_archs
+# )
 
-load_unity2_alignment_model = ModelLoader[UnitY2AlignmentModel, UnitY2AlignmentConfig](
-    asset_store,
-    download_manager,
-    load_unity2_alignment_config,
-    create_unity2_alignment_model,
-    convert_unity2_aligner_checkpoint,
-    restrict_checkpoints=False,
-)
+# load_unity2_alignment_model = ModelLoader[UnitY2AlignmentModel, UnitY2AlignmentConfig](
+#     asset_store,
+#     download_manager,
+#     load_unity2_alignment_config,
+#     create_unity2_alignment_model,
+#     convert_unity2_aligner_checkpoint,
+#     restrict_checkpoints=False,
+# )
+
+def load_unity2_alignment_config(name: str) -> UnitY2AlignmentConfig:
+    # ↔ ConfigLoader[UnitY2AlignmentConfig](asset_store, aligner_archs)
+    return get_unity2_alignment_model_hub().get_model_config(name)
+
+def load_unity2_alignment_model(
+    name: str,
+    *,
+    device = None,
+    dtype = None,
+) -> UnitY2AlignmentModel:
+    # ↔ ModelLoader[UnitY2AlignmentModel, UnitY2AlignmentConfig](...)
+    return get_unity2_alignment_model_hub().load_model(name, device=device, dtype=dtype)
+
+from fairseq2.assets import get_asset_store
+from fairseq2.models.hub import ModelHub
+from fairseq2.models.family import ModelFamily
+from fairseq2.runtime.dependency import get_dependency_resolver
+
+
+def get_unity2_alignment_model_hub() -> ModelHub[UnitY2AlignmentModel, UnitY2AlignmentConfig]:
+    resolver = get_dependency_resolver()
+    family = resolver.resolve(ModelFamily, key="unity2_alignment")
+    return ModelHub(family, get_asset_store())

@@ -100,6 +100,8 @@ class OnlineFeatureExtractorAgent(SpeechToSpeechAgent):  # type: ignore
         )
 
     def policy(self, states: FeatureStates) -> Action:
+        import time
+        print("OnlineFeatExtractor", time.time())
         if len(states.source) == 0:
             if states.source_finished:
                 return WriteAction({}, finished=states.source_finished)

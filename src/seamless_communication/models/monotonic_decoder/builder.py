@@ -7,16 +7,21 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from fairseq2.data import VocabularyInfo
+from fairseq2.data.tokenizers import VocabularyInfo
 from fairseq2.models.transformer import (
     TransformerEmbeddingFrontend,
     TransformerFrontend,
 )
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.runtime.dependency import DependencyContainer
+from fairseq2.runtime.config_registry import ConfigRegistrar
+from fairseq2.models.wav2vec2 import Wav2Vec2Model
+from fairseq2.composition import register_file_assets
+
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import TiedProjection
-from fairseq2.nn.transformer import (
+from fairseq2.models.transformer import (
     FeedForwardNetwork,
     MultiheadAttention,
     StandardFeedForwardNetwork,
@@ -24,7 +29,8 @@ from fairseq2.nn.transformer import (
     TransformerNormOrder,
     create_default_sdpa,
 )
-from fairseq2.typing import DataType, Device
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
 
 from seamless_communication.models.monotonic_decoder.model import MonotonicDecoderModel
 from seamless_communication.models.monotonic_decoder.monotonic_decoder import (
@@ -77,30 +83,30 @@ class MonotonicDecoderConfig:
     in the PChooseLayer."""
 
 
-monotonic_decoder_archs = ArchitectureRegistry[MonotonicDecoderConfig](
-    "monotonic_decoder"
-)
+# monotonic_decoder_archs = ArchitectureRegistry[MonotonicDecoderConfig](
+#     "monotonic_decoder"
+# )
 
-monotonic_decoder_arch = monotonic_decoder_archs.decorator
+# monotonic_decoder_arch = monotonic_decoder_archs.decorator
 
 
-@monotonic_decoder_arch("dense_1b")
-def _dense_1b() -> MonotonicDecoderConfig:
-    return MonotonicDecoderConfig(
-        model_dim=1024,
-        max_seq_len=4096,
-        vocab_info=VocabularyInfo(
-            size=256102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=0
-        ),
-        num_decoder_layers=24,
-        num_decoder_attn_heads=16,
-        ffn_inner_dim=1024 * 8,
-        dropout_p=0.1,
-        energy_bias_value=-0.5,
-        monotonic_temperature=0.2,
-        num_monotonic_energy_layers=4,
-        pre_decision_ratio=2,
-    )
+# @monotonic_decoder_arch("dense_1b")
+# def _dense_1b() -> MonotonicDecoderConfig:
+#     return MonotonicDecoderConfig(
+#         model_dim=1024,
+#         max_seq_len=4096,
+#         vocab_info=VocabularyInfo(
+#             size=256102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=0
+#         ),
+#         num_decoder_layers=24,
+#         num_decoder_attn_heads=16,
+#         ffn_inner_dim=1024 * 8,
+#         dropout_p=0.1,
+#         energy_bias_value=-0.5,
+#         monotonic_temperature=0.2,
+#         num_monotonic_energy_layers=4,
+#         pre_decision_ratio=2,
+#     )
 
 
 class MonotonicDecoderBuilder:
@@ -261,3 +267,26 @@ def create_monotonic_decoder_model(
         The data type of module parameters and buffers.
     """
     return MonotonicDecoderBuilder(config, device=device, dtype=dtype).build_model()
+
+
+def load_arch_monotonic(container):
+    arch = ConfigRegistrar(container, MonotonicDecoderConfig)
+    @arch("dense_1b")
+    def _dense_1b() -> MonotonicDecoderConfig:
+        from fairseq2.data.tokenizers import VocabularyInfo
+
+        return MonotonicDecoderConfig(
+            model_dim=1024,
+            max_seq_len=4096,
+            vocab_info=VocabularyInfo(
+                size=256_102, unk_idx=1, bos_idx=2, eos_idx=3, pad_idx=0
+            ),
+            num_decoder_layers=24,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=1024 * 8,
+            dropout_p=0.1,
+            energy_bias_value=-0.5,
+            monotonic_temperature=0.2,
+            num_monotonic_energy_layers=4,
+            pre_decision_ratio=2,
+        )

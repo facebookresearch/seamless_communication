@@ -8,17 +8,21 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, cast
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
+from seamless_communication.models.unity.char_tokenizer import TextTokenizer
+from seamless_communication.padding import PaddingMask, get_seqs_and_padding_mask
 import torch
 import torch.nn as nn
-from fairseq2.assets import asset_store
+from fairseq2.assets import get_asset_store
 from fairseq2.assets.card import AssetCard
-from fairseq2.data import Collater, SequenceData, StringLike
+from fairseq2.data import Collater, SequenceData
 from fairseq2.data.audio import AudioDecoder, WaveformToFbankConverter
-from fairseq2.data.text import TextTokenizer
-from fairseq2.memory import MemoryBlock
-from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
-from fairseq2.typing import DataType, Device
+# from fairseq2.data.text import TextTokenizer
+from fairseq2.data._memory import MemoryBlock
+# from fairseq2.nn.padding import PaddingMask, get_seqs_and_padding_mask
+# from fairseq2.typing import DataType, Device
 from torch import Tensor
 
 from seamless_communication.inference.generator import (
@@ -30,10 +34,13 @@ from seamless_communication.models.unity import (
     UnitYModel,
     UnitYNART2UModel,
     UnitYT2UModel,
-    load_unity_model,
+    # load_unity_nart2u_config,
+    load_unity_t2u_config,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
-    unity_archs,
+    # get_unity_nart2u_model_hub,
+    get_unity_t2u_model_hub,
+    get_unity_model_hub
 )
 from seamless_communication.models.vocoder import load_vocoder_model
 from seamless_communication.toxicity import (
@@ -90,12 +97,13 @@ class Translator(nn.Module):
         super().__init__()
 
         if isinstance(model_name_or_card, str):
-            model_name_or_card = asset_store.retrieve_card(model_name_or_card)
+            model_name_or_card = get_asset_store().retrieve_card(model_name_or_card)
 
         assert isinstance(model_name_or_card, AssetCard)
 
         if input_modality or output_modality:
-            unity_config = unity_archs.get_config(
+            unity_archs=get_unity_t2u_model_hub()
+            unity_config = unity_archs.get_arch_config(
                 model_name_or_card.field("model_arch").as_(str)
             )
             # Skip loading the text encoder.
@@ -110,7 +118,7 @@ class Translator(nn.Module):
         if device == torch.device("cpu"):
             dtype = torch.float32
 
-        self.model = load_unity_model(model_name_or_card, device=device, dtype=dtype)
+        self.model = load_unity_t2u_config(model_name_or_card, device=device, dtype=dtype) if unity_config.t2u_config.nar_decoder_config is None else load_unity_nart2u_config(model_name_or_card, device=device, dtype=dtype) 
         self.model.eval()
         assert isinstance(self.model, UnitYModel)
 
@@ -169,7 +177,7 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-    ) -> Tuple[List[StringLike], Optional[Tensor]]:
+    ) :
         # We disregard unit generations opts for the NAR T2U decoder.
         if output_modality != Modality.SPEECH or isinstance(
             model.t2u_model, UnitYNART2UModel
@@ -226,8 +234,8 @@ class Translator(nn.Module):
         unit_generation_ngram_filtering: bool = False,
         duration_factor: float = 1.0,
         prosody_encoder_input: Optional[SequenceData] = None,
-        src_text: Optional[StringLike] = None,
-    ) -> Tuple[List[StringLike], Optional[BatchedSpeechOutput]]:
+        src_text = None,
+    ) :
         """
         The main method used to perform inference on all tasks.
 
