@@ -80,7 +80,6 @@ LANG2_LANG3 = {
     "ms": "zlm",
     "ml": "mal",
     "tl": "tgl",
-    "tl": "fil",
     "my": "mya",
     "km": "khm",
     "lo": "lao",
