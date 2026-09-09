@@ -297,8 +297,8 @@ class UnitY2AlignmentModel(Module):
         attn_lprob, attn_hard_dur = self.alignment_encoder(
             embs_text,
             embs_unit,
-            torch.tensor([embs_text.size(1)]).to(embs_text).int(),
-            torch.tensor([embs_unit.size(1)]).to(embs_unit).int(),
+            torch.tensor([embs_text.size(1)]).to(device=embs_text.device).int(),
+            torch.tensor([embs_unit.size(1)]).to(device=embs_unit.device).int(),
         )
 
         return attn_lprob, attn_hard_dur
