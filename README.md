@@ -1,3 +1,4 @@
+![Zebra](https://github.com/user-attachments/assets/aa8eae62-dd99-4110-bb8d-cd32447d453e)
 ![](23-11_SEAMLESS_BlogHero_11.17.jpg)
 # Seamless Intro
 
@@ -127,7 +128,8 @@ You can also run the demo locally, by cloning the space from [here](https://hugg
 
 To launch the same demo Space we host on Hugging Face locally:
 
-```bash
+```bash![Access_Settings](https://github.com/user-attachments/assets/3772cc9f-d22f-4d54-9736-1afe3453d727)
+
 cd demo
 pip install -r requirements.txt
 python app.py
