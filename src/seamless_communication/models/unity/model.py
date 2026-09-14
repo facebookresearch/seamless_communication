@@ -238,18 +238,33 @@ class UnitYX2TModel(EncoderDecoderModel):
         encoder_padding_mask: Optional[PaddingMask],
         *,
         state_bag: Optional[IncrementalStateBag] = None,
+        cuda_graph_mask: Optional[Tensor] = None,
+        valid_seq_pos: Optional[Tensor] = None,
+        compiled_decoder = None,
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
         seqs, padding_mask = self.decoder_frontend(
             seqs, padding_mask, state_bag=state_bag
         )
-
-        return self.decoder(  # type: ignore[no-any-return]
-            seqs,
-            padding_mask,
-            encoder_output,
-            encoder_padding_mask,
-            state_bag=state_bag,
-        )
+        if compiled_decoder is not None:
+            return compiled_decoder(  # type: ignore[no-any-return]
+                seqs,
+                padding_mask,
+                encoder_output,
+                encoder_padding_mask,
+                state_bag=state_bag,
+                cuda_graph_mask=cuda_graph_mask,
+                valid_seq_pos=valid_seq_pos,
+            )
+        else:
+            return self.decoder(  # type: ignore[no-any-return]
+                seqs,
+                padding_mask,
+                encoder_output,
+                encoder_padding_mask,
+                state_bag=state_bag,
+                cuda_graph_mask=cuda_graph_mask,
+                valid_seq_pos=valid_seq_pos,
+            )
 
     @finaloverride
     def project(
@@ -428,7 +443,7 @@ class UnitYNART2UModel(Module):
             duration_factor,
             film_cond_emb,
         )
-
+        
         seqs, padding_mask = self.decoder(
             seqs, padding_mask, film_cond_emb=film_cond_emb
         )
