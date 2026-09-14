@@ -32,16 +32,13 @@ class PretsselGenerator(Module):
     ):
         super().__init__()
         # Load the model.
-        if device == torch.device("cpu"):
-            dtype = torch.float32
-
         self.device = device
-        self.dtype = dtype
+        self.dtype = torch.float32 if device == torch.device('cpu') else dtype
 
         self.pretssel_model = load_pretssel_vocoder_model(
             pretssel_name_or_card,
-            device=device,
-            dtype=dtype,
+            device=self.device,
+            dtype=self.dtype,
         )
         self.pretssel_model.eval()
 
