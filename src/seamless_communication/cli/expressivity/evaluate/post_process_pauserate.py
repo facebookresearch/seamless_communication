@@ -26,12 +26,12 @@ def get_pause(pause_data_tsv: str) -> Dict[str, float]:
         "wmean_joint_score",
     ]:
         metrics[score_name] = (
-            utt_pause_align_data[f"{score_name}"] * pause_duration_weight
+            utt_pause_align_data[f"{score_name}"].fillna(0) * pause_duration_weight
         ).sum()
     return metrics
 
 
-def get_rate(target_speech_tsv: str, source_speech_tsv: str) -> float:
+def get_rate(target_speech_tsv: str, source_speech_tsv: str) -> float {
     speech_unit = "syllable"
 
     target_speech_df = pd.read_csv(
@@ -44,5 +44,12 @@ def get_rate(target_speech_tsv: str, source_speech_tsv: str) -> float:
     # using "syllable" speech unit for rate computation
     src_speech_rate = source_speech_df[f"speech_rate_{speech_unit}"].to_numpy()
     tgt_speech_rate = target_speech_df[f"speech_rate_{speech_unit}"].to_numpy()
+
+    # Handle missing or NaN values to avoid crashing
+    src_speech_rate = src_speech_rate[~pd.isnull(src_speech_rate)]
+    tgt_speech_rate = tgt_speech_rate[~pd.isnull(tgt_speech_rate)]
+
     src_tgt_spearman = scipy.stats.spearmanr(src_speech_rate, tgt_speech_rate)
     return src_tgt_spearman.correlation  # type: ignore[no-any-return]
+}
+
