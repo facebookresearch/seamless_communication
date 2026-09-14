@@ -8,7 +8,12 @@ from typing import Optional, final
 
 import torch
 from fairseq2.nn.projection import Linear
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.typing import DataType, Device, finaloverride
+from overrides import final
+finaloverride = final
+
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 from torch import Tensor
 from torch.nn import AvgPool1d, Module, ModuleList, ReLU
 from torch.nn.parameter import Parameter

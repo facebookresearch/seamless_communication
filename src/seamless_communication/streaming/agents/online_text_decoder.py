@@ -135,7 +135,7 @@ class OnlineTextDecoderAgent(GenericAgent):  # type: ignore
     def enforce_tgt_lang_in_prefix(self, states: DecoderAgentStates) -> None:
         if states.tgt_lang:
             tgt_lang_tag = f"__{states.tgt_lang}__"
-            tgt_lang_tag_idx = self.text_tokenizer.model.token_to_index(tgt_lang_tag)
+            tgt_lang_tag_idx = self.text_tokenizer._model.token_to_index(tgt_lang_tag)
             self.prefix_indices[-1] = tgt_lang_tag_idx
 
 
@@ -218,8 +218,9 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):  # type: ignore
             ).unsqueeze(0)
 
         encoder_output = states.source
+        from fairseq2.nn.batch_layout import BatchLayout
         decoder_output, _, p_choose = self.model.decode(
-            target_input, None, encoder_output, None, state_bag=self.state_bag
+            target_input, BatchLayout.of(target_input), encoder_output, BatchLayout.of(encoder_output), state_bag=self.state_bag
         )
 
         logits = self.model.project(decoder_output)
@@ -302,6 +303,7 @@ class MMATextDecoderAgent(OnlineTextDecoderAgent):  # type: ignore
 
     @torch.inference_mode()
     def policy(self, states: DecoderAgentStates) -> Action:
+        import time
         if len(states.source) == 0:
             return ReadAction()
 
@@ -412,7 +414,7 @@ class UnitYMMATextDecoderAgent(MMASpeechToTextDecoderAgent):
         decoder_features_out: Optional[Tensor] = None,
     ) -> TextSegment:
         tokens: List[str] = [
-            self.text_tokenizer.model.index_to_token(idx) for idx in pred_indices
+            self.text_tokenizer._model.index_to_token(idx) for idx in pred_indices
         ]
         assert decoder_features_out is not None
         token_list = self.prefix_indices + states.target_indices
@@ -422,7 +424,7 @@ class UnitYMMATextDecoderAgent(MMASpeechToTextDecoderAgent):
         ):
             # Append "," to make speech smooth
             # TODO: a temporary solution.
-            ending_token_index = self.text_tokenizer.model.token_to_index(",")
+            ending_token_index = self.text_tokenizer._model.token_to_index(",")
             token_list.append(ending_token_index)
             self.state_bag.increment_step_nr()
 

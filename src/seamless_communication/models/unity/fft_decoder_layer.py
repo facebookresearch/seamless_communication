@@ -7,9 +7,13 @@
 from typing import Optional, Tuple, final
 
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask, apply_padding_mask
-from fairseq2.nn.transformer import MultiheadAttention, create_standard_layer_norm
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.nn.padding import apply_padding_mask
+from fairseq2.models.transformer import MultiheadAttention, IdentityBias
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
+from overrides import final as finaloverride
+from seamless_communication.layer_norm import create_standard_layer_norm
+from seamless_communication.padding import PaddingMask, apply_layout_mask, apply_padding_mask
 from torch import Tensor
 from torch.nn import Conv1d, Dropout, Module, ReLU
 
@@ -74,7 +78,7 @@ class Conv1dBlock(Module):
     @finaloverride
     def forward(self, seqs: Tensor, padding_mask: Optional[PaddingMask]) -> Tensor:
         # Ensure that we do not leak padded positions in the convolution layer.
-        seqs = apply_padding_mask(seqs, padding_mask)
+        seqs = apply_layout_mask(seqs, padding_mask)
 
         # (N, S, M) -> (N, M, S)
         seqs = seqs.transpose(1, 2)
@@ -85,7 +89,7 @@ class Conv1dBlock(Module):
         # (N, inner_dim, S) -> (N, S, inner_dim)
         seqs = seqs.transpose(1, 2)
 
-        seqs = apply_padding_mask(seqs, padding_mask)
+        seqs = apply_layout_mask(seqs, padding_mask)
 
         seqs = self.activation(seqs)
 
@@ -125,6 +129,7 @@ class FeedForwardTransformerLayer(Module):
         film_cond_dim: int = 512,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
+        model_dim = None
     ) -> None:
         """
         :param self_attn:
@@ -142,7 +147,7 @@ class FeedForwardTransformerLayer(Module):
         """
         super().__init__()
 
-        self.model_dim = self_attn.model_dim
+        self.model_dim = model_dim
 
         self.self_attn = self_attn
 
@@ -201,8 +206,9 @@ class FeedForwardTransformerLayer(Module):
             seqs,
             padding_mask,
             keys=seqs,
-            key_padding_mask=padding_mask,
+            keys_layout=padding_mask,
             values=seqs,
+            bias_cache=IdentityBias()
         )
 
         if self.self_attn_dropout is not None:

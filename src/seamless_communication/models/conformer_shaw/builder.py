@@ -7,20 +7,26 @@
 from dataclasses import asdict, dataclass
 from typing import Optional
 
-from fairseq2.models.conformer import ConformerConvolution
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
-from fairseq2.models.w2vbert import w2vbert_archs
-from fairseq2.models.wav2vec2.builder import (
-    Wav2Vec2Builder,
-    Wav2Vec2Config,
-    Wav2Vec2EncoderBuilder,
-    Wav2Vec2EncoderConfig,
-    wav2vec2_arch,
-)
-from fairseq2.models.wav2vec2.model import Wav2Vec2Model
-from fairseq2.nn.transformer import SDPA, ShawRelativePositionSDPA, create_default_sdpa
-from fairseq2.typing import DataType, Device
+from fairseq2.runtime.config_registry import ConfigRegistrar
 
+from fairseq2.models.conformer import ConformerConvolution
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.models.w2vbert import get_w2vbert_model_hub
+from fairseq2.models.wav2vec2 import (
+    Wav2Vec2Factory,
+    Wav2Vec2Config,
+    Wav2Vec2EncoderFactory,
+    Wav2Vec2EncoderConfig,
+    # wav2vec2_arch,
+)
+from fairseq2.models.wav2vec2 import Wav2Vec2Model, Wav2Vec2EncoderFactory
+from fairseq2.models.transformer import RelativePositionalEncoding, MultiheadAttention, RelativePositionSDPA, create_default_sdpa, IdentityBias, StandardMultiheadAttention, SDPA, ShawRelativePositionSDPA, create_default_sdpa
+from fairseq2.nn.position_encoder import RotaryEncoder
+from fairseq2.runtime.lazy import Lazy
+from overrides import override as override
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
+from fairseq2.nn import init_bert_projection
 
 @dataclass
 class ShawRelativePositionSDPAConfig:
@@ -44,118 +50,139 @@ class ConformerShawEncoderConfig(Wav2Vec2EncoderConfig):
     """The parameters for ShawRelativePositionSDPA."""
 
 
-conformer_shaw_archs = ArchitectureRegistry[ConformerShawEncoderConfig](
-    "conformer_shaw"
-)
+# conformer_shaw_archs = ArchitectureRegistry[ConformerShawEncoderConfig](
+#     "conformer_shaw"
+# )
 
-conformer_shaw_arch = conformer_shaw_archs.decorator
+# conformer_shaw_arch = conformer_shaw_archs.decorator
 
-
-@conformer_shaw_arch("600m")
-def _conformer_shaw_600m_encoder() -> ConformerShawEncoderConfig:
-    w2vbert_config = w2vbert_archs.get_config("600m")
-    w2v2_encoder_config = w2vbert_config.w2v2_config.encoder_config
-    sdpa_config = ShawRelativePositionSDPAConfig(
-        max_left_rel_pos=64,
-        max_right_rel_pos=8,
-        use_rel_pos_values=False,
-    )
-    conformer_shaw_encoder_config = ConformerShawEncoderConfig(
-        **asdict(w2v2_encoder_config),
-        shaw_rel_pos_sdpa_config=sdpa_config,
-    )
-    conformer_shaw_encoder_config.pos_encoder_type = "shaw_relative"
-    return conformer_shaw_encoder_config
-
-
-@wav2vec2_arch("conformer_shaw_600m")
-def _conformer_shaw_600m() -> Wav2Vec2Config:
-    encoder_config = _conformer_shaw_600m_encoder()
-
-    return Wav2Vec2Config(
-        encoder_config,
-        final_dim=768,
-        final_proj_bias=True,
-        temporal_mask_span_len=10,
-        max_temporal_mask_prob=0.65,
-        spatial_mask_span_len=10,
-        max_spatial_mask_prob=0.0,
-        quantized_dim=768,
-        num_codebooks=2,
-        num_codebook_entries=320,
-        codebook_sampling_temperature=(2.0, 0.1, 0.999995),
-        num_distractors=100,
-        logit_temp=0.1,
-        diversity_loss_weight=0.2,
-    )
+def load_arch_conformer_shaw(container):
+    arch = ConfigRegistrar(container, ConformerShawEncoderConfig)
+    @arch("600m")
+    def _conformer_shaw_600m_encoder() -> ConformerShawEncoderConfig:
+        w2vbert_hub=get_w2vbert_model_hub()
+        w2vbert_config = w2vbert_hub.get_arch_config("600m")
+        w2v2_encoder_config = w2vbert_config.w2v2_config.encoder_config
+        sdpa_config = ShawRelativePositionSDPAConfig(
+            max_left_rel_pos=64,
+            max_right_rel_pos=8,
+            use_rel_pos_values=False,
+        )
+        conformer_shaw_encoder_config = ConformerShawEncoderConfig(
+            **asdict(w2v2_encoder_config),
+            shaw_rel_pos_sdpa_config=sdpa_config,
+        )
+        conformer_shaw_encoder_config.pos_encoder_type = "shaw_relative"
+        return conformer_shaw_encoder_config
 
 
-class ConformerShawEncoderBuilder(Wav2Vec2EncoderBuilder):
+    @arch("conformer_shaw_600m")
+    def _conformer_shaw_600m() -> Wav2Vec2Config:
+        encoder_config = _conformer_shaw_600m_encoder()
+
+        return Wav2Vec2Config(
+            encoder_config,
+            final_dim=768,
+            final_proj_bias=True,
+            temporal_mask_span_len=10,
+            max_temporal_mask_prob=0.65,
+            spatial_mask_span_len=10,
+            max_spatial_mask_prob=0.0,
+            quantized_dim=768,
+            num_codebooks=2,
+            num_codebook_entries=320,
+            codebook_sampling_temperature=(2.0, 0.1, 0.999995),
+            num_distractors=100,
+            logit_temp=0.1,
+            diversity_loss_weight=0.2,
+        )
+
+
+class ConformerShawEncoderFactory(Wav2Vec2EncoderFactory):
     """
-    Builds modules of a `ConformerShawEncoderBuilder`.
-
-    This is a Conformer architecture with these differences:
-    - ShawRelativePositionSDPA as the SDPA.
-    - ConformerConvolution with causal depthwise convolution
-    and norm_type "layer_norm".
+    Conformer + ShawRelativePositionSDPA + depthwise conv causale + layer_norm.
     """
 
-    config: ConformerShawEncoderConfig
+    def __init__(self, config: ConformerShawEncoderConfig) -> None:
+        super().__init__(config)
+        self.config = config
 
-    def __init__(
-        self,
-        config: ConformerShawEncoderConfig,
-        *,
-        device: Optional[Device] = None,
-        dtype: Optional[DataType] = None,
-    ) -> None:
-        """
-        :param config:
-            The configuration to use.
-        :param device:
-            The device on which to initialize modules.
-        :param dtype:
-            The data type of module parameters and buffers.
-        """
-        super().__init__(config, device=device, dtype=dtype)
-
-        assert self.config.use_conformer, "This architecture only supports a Conformer."
+        assert self._config.use_conformer, "This architecture only supports a Conformer."
         assert (
-            self.config.pos_encoder_type == "shaw_relative"
+            self._config.pos_encoder_type == "shaw_relative"
         ), "This architecture only supports ShawRelativePositionSDPA."
 
-    def build_sdpa(self) -> SDPA:
-        if self.config.shaw_rel_pos_sdpa_config is None:
+        if self._config.shaw_rel_pos_sdpa_config is None:
             raise ValueError(
                 "`shaw_rel_pos_sdpa_config` must be specified when `pos_encoder_type` is 'shaw_relative'."
             )
 
-        sdpa = create_default_sdpa(attn_dropout_p=self.config.attn_dropout_p)
+    # On garde le pipeline de la Factory par défaut (create_encoder, etc.),
+    # mais on spécialise les deux points suivants: SDPA et la conv Conformer.
 
-        sdpa_config = self.config.shaw_rel_pos_sdpa_config
+    def create_self_attention(
+        self, lazy_rel_pos_encoding: Lazy[RelativePositionalEncoding]
+    ) -> MultiheadAttention:
+        cfg = self._config
 
-        return ShawRelativePositionSDPA(
-            self.config.model_dim,
-            self.config.num_encoder_attn_heads,
-            sdpa_config.max_left_rel_pos,
-            max_right_rel_pos=sdpa_config.max_right_rel_pos,
-            use_rel_pos_values=sdpa_config.use_rel_pos_values,
-            inner_sdpa=sdpa,
-            device=self.device,
-            dtype=self.dtype,
+        # Positional encoder (rotary ou rien) — inchangé par rapport à la factory
+        if cfg.pos_encoder_type == "rotary":
+            pos_encoder = RotaryEncoder(
+                cfg.model_dim // cfg.num_encoder_attn_heads, cfg.max_seq_len
+            )
+        else:
+            pos_encoder = None
+
+        attn_bias = IdentityBias()
+
+        # >>> ShawRelativePositionSDPA <<<
+        # sdpa_base = create_default_sdpa(attn_bias, dropout_p=cfg.attn_dropout_p)
+
+        s = cfg.shaw_rel_pos_sdpa_config
+        sdpa: SDPA = ShawRelativePositionSDPA(
+            cfg.model_dim,
+            cfg.num_encoder_attn_heads,
+            attn_bias,
+            max_lhs_rel_pos=s.max_left_rel_pos,
+            max_rhs_rel_pos=s.max_right_rel_pos,
+            use_rel_pos_values=s.use_rel_pos_values,
+            # inner_sdpa=sdpa_base,
         )
 
-    def build_conformer_conv(self) -> ConformerConvolution:
+        return StandardMultiheadAttention(
+            cfg.model_dim,
+            cfg.num_encoder_attn_heads,
+            sdpa,
+            qkv_proj_init_fn=init_bert_projection,
+            pos_encoder=pos_encoder,
+            output_proj_init_fn=init_bert_projection,
+        )
+
+    def create_conformer_conv(self) -> ConformerConvolution:
+        cfg = self._config
+        # >>> profondeur causale + LayerNorm <<<
         return ConformerConvolution(
-            self.config.model_dim,
-            self.config.depthwise_conv_kernel_size,
+            cfg.model_dim,
+            cfg.depthwise_conv_kernel_size,
             causal_depthwise_conv=True,
             norm_type="layer_norm",
-            device=self.device,
-            dtype=self.dtype,
         )
 
+from fairseq2.models.wav2vec2 import Wav2Vec2Factory, Wav2Vec2Model, Wav2Vec2Config
+from fairseq2.models.wav2vec2 import Wav2Vec2Frontend
+from fairseq2.models.transformer import TransformerEncoder
 
+class ConformerShawWav2Vec2Factory(Wav2Vec2Factory):
+    def create_encoder_frontend(self) -> Wav2Vec2Frontend:
+        cfg = self._config
+        enc_factory = ConformerShawEncoderFactory(cfg.encoder_config)
+        return enc_factory.create_encoder_frontend()
+
+    def create_encoder(self) -> TransformerEncoder:
+        cfg = self._config
+        enc_factory = ConformerShawEncoderFactory(cfg.encoder_config)
+        return enc_factory.create_encoder()
+    
 def create_conformer_shaw_model(
     config: Wav2Vec2Config,
     *,
@@ -171,12 +198,11 @@ def create_conformer_shaw_model(
     :param dtype:
         The data type of module parameters and buffers.
     """
-    assert isinstance(config.encoder_config, ConformerShawEncoderConfig)
+    # construit tout en CPU / dtype par défaut
+    model = ConformerShawWav2Vec2Factory(config).create_model()
 
-    encoder_builder = ConformerShawEncoderBuilder(
-        config.encoder_config, device=device, dtype=dtype
-    )
+    # placement/typage unifié (optionnel)
+    if device is not None or dtype is not None:
+        model = model.to(device=device, dtype=dtype)
 
-    builder = Wav2Vec2Builder(config, encoder_builder, device=device, dtype=dtype)
-
-    return builder.build_model()
+    return model

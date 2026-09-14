@@ -7,9 +7,8 @@
 from dataclasses import dataclass
 import torch
 from torch import nn
-from fairseq2.typing import DataType, Device
-
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+# from fairseq2.typing import DataType, Device
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from typing import Optional
 
 
@@ -32,5 +31,3 @@ class MutoxConfig:
     # size of the input embedding supported by this model
     input_size: int
 
-
-mutox_archs = ArchitectureRegistry[MutoxConfig]("mutox_classifier")

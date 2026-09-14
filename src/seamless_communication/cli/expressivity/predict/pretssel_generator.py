@@ -5,6 +5,7 @@
 
 from typing import List
 
+from seamless_communication.padding import get_seqs_and_padding_mask
 import torch
 from torch.nn import Module
 
@@ -16,7 +17,7 @@ from fairseq2.data import (
     SequenceData,
     VocabularyInfo,
 )
-from fairseq2.nn.padding import get_seqs_and_padding_mask
+# from fairseq2.nn.padding import get_seqs_and_padding_mask
 
 from seamless_communication.inference import BatchedSpeechOutput
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model

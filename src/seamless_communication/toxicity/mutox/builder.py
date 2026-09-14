@@ -9,10 +9,12 @@ from seamless_communication.toxicity.mutox.classifier import (
     MutoxClassifier,
     MutoxConfig,
 )
+from fairseq2.runtime.config_registry import ConfigRegistrar
+
 import torch
 from torch import nn
-from fairseq2.typing import DataType, Device
-
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 class MutoxClassifierBuilder:
     """
@@ -89,3 +91,15 @@ def create_mutox_model(
         device=device,
         dtype=dtype,
     ).build_model()
+
+
+def load_arch_mutox_classifier(container):
+    arch = ConfigRegistrar(container, MutoxConfig)
+    # arch = ArchitectureRegistry[MutoxConfig]("mutox_classifier")
+
+    @arch("mutox")
+    def _base_mutox() -> MutoxConfig:
+        return MutoxConfig(
+            input_size=1024,
+        )
+

@@ -5,15 +5,25 @@
 # MIT_LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Sequence, Union
+from seamless_communication.padding import get_seqs_and_padding_mask
+from typing_extensions import TypeAlias, TypeGuard
+from typing import TYPE_CHECKING, List, Optional, overload
 
 import torch
+from fairseq2.device import Device
+from torch import Tensor
+from fairseq2.data.tokenizers import VocabularyInfo
+
 from fairseq2.data import SequenceData
 from fairseq2.data.data_pipeline import Collater
-from fairseq2.data.text import TextTokenizer
+from fairseq2.data.tokenizers import (
+    Tokenizer
+)
 from fairseq2.models.wav2vec2 import Wav2Vec2EncoderConfig
-from fairseq2.nn.padding import get_seqs_and_padding_mask
+
 from seamless_communication.models.unity.model import UnitYModel
 from simuleval.agents import SpeechToSpeechAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
@@ -66,6 +76,7 @@ class OfflineWav2VecBertEncoderAgent(NoUpdateTargetMixin, SpeechToSpeechAgent): 
         The policy for encoder is always write
         only if the input is too short
         """
+        import time
         if (
             self.min_starting_wait is not None
             and len(states.source) < self.min_starting_wait
@@ -106,5 +117,5 @@ class OfflineWav2VecBertEncoderAgent(NoUpdateTargetMixin, SpeechToSpeechAgent): 
         unity_config = kwargs.get("unity_config", None)
         assert unity_config is not None
         text_tokenizer = kwargs.get("text_tokenizer", None)
-        assert isinstance(text_tokenizer, TextTokenizer)
+        assert isinstance(text_tokenizer, Tokenizer)
         return cls(unity_model, unity_config.w2v2_encoder_config, text_tokenizer, args)

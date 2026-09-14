@@ -10,7 +10,7 @@ from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List, Optional, Union
 
 import torch
-from fairseq2.assets import asset_store
+from fairseq2.assets import get_asset_store
 from seamless_communication.inference.translator import Modality, Translator
 from seamless_communication.models.generator.loader import load_pretssel_vocoder_model
 from seamless_communication.models.generator.vocoder import PretsselVocoder
@@ -21,8 +21,12 @@ from seamless_communication.models.monotonic_decoder import (
 from seamless_communication.models.unity import (
     load_unity_config,
     load_unity_model,
+    # load_unity_nart2u_config,
+    # load_unity_t2u_config,
     load_unity_text_tokenizer,
     load_unity_unit_tokenizer,
+    # load_unity_t2u_model,
+    # load_unity_nart2u_model
 )
 from seamless_communication.models.vocoder.loader import load_vocoder_model
 from seamless_communication.models.vocoder.vocoder import Vocoder
@@ -122,13 +126,14 @@ class UnitYPipelineMixin:
         else:
             unit_tokenizer = load_unity_unit_tokenizer(args.unity_model_name)
 
-        asset_card = asset_store.retrieve_card(args.unity_model_name)
-        asset_card.field("model_config").set(unity_config)
+        # asset_card = get_asset_store().retrieve_card(args.unity_model_name)
+        # asset_card.field("model_config").set(unity_config)
+        
 
         logger.info(
             f"Loading the UnitY model: {args.unity_model_name} on device={args.device}, dtype={args.dtype}"
         )
-        unity_model = load_unity_model(asset_card, device=args.device, dtype=args.dtype)
+        unity_model = load_unity_model(args.unity_model_name, device=args.device, dtype=args.dtype, config=unity_config) # if unity_config.t2u_config.nar_decoder_config is None else load_unity_nart2u_model(asset_card, device=args.device, dtype=args.dtype)
         unity_model.eval()
 
         monotonic_decoder_config = load_monotonic_decoder_config(

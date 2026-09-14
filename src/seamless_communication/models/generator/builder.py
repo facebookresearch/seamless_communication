@@ -6,25 +6,27 @@
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
-
-from fairseq2.data import VocabularyInfo
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.runtime.config_registry import ConfigRegistrar
+from fairseq2.data.tokenizers import VocabularyInfo
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.nn.embedding import StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import Linear
-from fairseq2.nn.transformer import (
+from fairseq2.models.transformer import (
     MultiheadAttention,
     StandardMultiheadAttention,
     TransformerNormOrder,
     create_default_sdpa,
 )
-from fairseq2.typing import DataType, Device
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 from torch.nn import Conv1d
 
 from seamless_communication.models.generator.ecapa_tdnn_builder import (
-    EcapaTDNNBuilder,
+    EcapaTDNNFactory,
     EcapaTDNNConfig,
-    ecapa_tdnn_archs,
+    get_ecapa_tdnn_model_hub
+    # ecapa_tdnn_archs,
 )
 from seamless_communication.models.generator.vocoder import (
     PretsselDecoderFrontend,
@@ -110,15 +112,16 @@ class VocoderConfig:
     gcmvn_stats: Dict[str, List]  # type: ignore[type-arg]
 
 
-vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_pretssel")
+# vocoder_archs = ArchitectureRegistry[VocoderConfig]("vocoder_pretssel")
 
 
-vocoder_arch = vocoder_archs.decorator
+# vocoder_arch = vocoder_archs.decorator
 
 
 def pretssel_config() -> (
     Tuple[PretsselEncoderFrontendConfig, FFTLayerConfig, PretsselDecoderFrontendConfig]
-):
+):  
+    ecapa_tdnn_archs=get_ecapa_tdnn_model_hub()
     prosody_encoder_config = ecapa_tdnn_archs.get_config("base")
 
     encoder_frontend_config = PretsselEncoderFrontendConfig(
@@ -156,117 +159,118 @@ def pretssel_config() -> (
         decoder_frontend_config,
     )
 
+def load_arch_vocoder_pretssel(container):
+    arch = ConfigRegistrar(container, VocoderConfig)
+    @arch("16khz")
+    def _16khz_vocoder() -> VocoderConfig:
+        (
+            encoder_frontend_config,
+            fft_layer_config,
+            decoder_frontend_config,
+        ) = pretssel_config()
 
-@vocoder_arch("16khz")
-def _16khz_vocoder() -> VocoderConfig:
-    (
-        encoder_frontend_config,
-        fft_layer_config,
-        decoder_frontend_config,
-    ) = pretssel_config()
-
-    return VocoderConfig(
-        encoder_frontend_config=encoder_frontend_config,
-        fft_layer_config=fft_layer_config,
-        decoder_frontend_config=decoder_frontend_config,
-        pn_conv_dim=512,
-        pn_layers=5,
-        pn_conv_kernel_size=5,
-        pn_dropout=0.5,
-        vocab_info=VocabularyInfo(
-            size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        model_dim=256,
-        max_seq_len=10000,
-        encoder_layers=4,
-        decoder_layers=4,
-        mel_dim=80,
-        langs=[],
-        upsample_rates=[5, 4, 4, 2],
-        upsample_kernel_sizes=[10, 8, 8, 4],
-        upsample_initial_channel=512,
-        resblock_kernel_sizes=[3, 7, 11],
-        resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
-        channels=1,
-        dimension=128,
-        n_filters=32,
-        ratios=[8, 5, 4, 2],
-        norm="weight_norm",
-        norm_params={},
-        kernel_size=7,
-        last_kernel_size=7,
-        residual_kernel_size=3,
-        causal=False,
-        pad_mode="constant",
-        true_skip=True,
-        compress=2,
-        lstm=2,
-        disable_norm_outer_blocks=0,
-        trim_right_ratio=1.0,
-        gcmvn_stats={},
-    )
+        return VocoderConfig(
+            encoder_frontend_config=encoder_frontend_config,
+            fft_layer_config=fft_layer_config,
+            decoder_frontend_config=decoder_frontend_config,
+            pn_conv_dim=512,
+            pn_layers=5,
+            pn_conv_kernel_size=5,
+            pn_dropout=0.5,
+            vocab_info=VocabularyInfo(
+                size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            model_dim=256,
+            max_seq_len=10000,
+            encoder_layers=4,
+            decoder_layers=4,
+            mel_dim=80,
+            langs=[],
+            upsample_rates=[5, 4, 4, 2],
+            upsample_kernel_sizes=[10, 8, 8, 4],
+            upsample_initial_channel=512,
+            resblock_kernel_sizes=[3, 7, 11],
+            resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+            channels=1,
+            dimension=128,
+            n_filters=32,
+            ratios=[8, 5, 4, 2],
+            norm="weight_norm",
+            norm_params={},
+            kernel_size=7,
+            last_kernel_size=7,
+            residual_kernel_size=3,
+            causal=False,
+            pad_mode="constant",
+            true_skip=True,
+            compress=2,
+            lstm=2,
+            disable_norm_outer_blocks=0,
+            trim_right_ratio=1.0,
+            gcmvn_stats={},
+        )
 
 
-@vocoder_arch("24khz")
-def _24khz_vocoder() -> VocoderConfig:
-    (
-        encoder_frontend_config,
-        fft_layer_config,
-        decoder_frontend_config,
-    ) = pretssel_config()
+    @arch("24khz")
+    def _24khz_vocoder() -> VocoderConfig:
+        (
+            encoder_frontend_config,
+            fft_layer_config,
+            decoder_frontend_config,
+        ) = pretssel_config()
 
-    return VocoderConfig(
-        encoder_frontend_config=encoder_frontend_config,
-        fft_layer_config=fft_layer_config,
-        decoder_frontend_config=decoder_frontend_config,
-        pn_conv_dim=512,
-        pn_layers=5,
-        pn_conv_kernel_size=5,
-        pn_dropout=0.5,
-        vocab_info=VocabularyInfo(
-            size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        model_dim=256,
-        max_seq_len=10000,
-        encoder_layers=4,
-        decoder_layers=4,
-        mel_dim=80,
-        langs=[],
-        upsample_rates=[5, 4, 4, 3],
-        upsample_kernel_sizes=[10, 8, 8, 6],
-        upsample_initial_channel=512,
-        resblock_kernel_sizes=[3, 7, 11],
-        resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
-        channels=1,
-        dimension=128,
-        n_filters=32,
-        ratios=[8, 5, 4, 2],
-        norm="weight_norm",
-        norm_params={},
-        kernel_size=7,
-        last_kernel_size=7,
-        residual_kernel_size=3,
-        causal=False,
-        pad_mode="constant",
-        true_skip=True,
-        compress=2,
-        lstm=2,
-        disable_norm_outer_blocks=0,
-        trim_right_ratio=1.0,
-        gcmvn_stats={},
-    )
+        return VocoderConfig(
+            encoder_frontend_config=encoder_frontend_config,
+            fft_layer_config=fft_layer_config,
+            decoder_frontend_config=decoder_frontend_config,
+            pn_conv_dim=512,
+            pn_layers=5,
+            pn_conv_kernel_size=5,
+            pn_dropout=0.5,
+            vocab_info=VocabularyInfo(
+                size=10004, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            model_dim=256,
+            max_seq_len=10000,
+            encoder_layers=4,
+            decoder_layers=4,
+            mel_dim=80,
+            langs=[],
+            upsample_rates=[5, 4, 4, 3],
+            upsample_kernel_sizes=[10, 8, 8, 6],
+            upsample_initial_channel=512,
+            resblock_kernel_sizes=[3, 7, 11],
+            resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+            channels=1,
+            dimension=128,
+            n_filters=32,
+            ratios=[8, 5, 4, 2],
+            norm="weight_norm",
+            norm_params={},
+            kernel_size=7,
+            last_kernel_size=7,
+            residual_kernel_size=3,
+            causal=False,
+            pad_mode="constant",
+            true_skip=True,
+            compress=2,
+            lstm=2,
+            disable_norm_outer_blocks=0,
+            trim_right_ratio=1.0,
+            gcmvn_stats={},
+        )
 
 
 class PretsselVocoderBuilder:
     config: VocoderConfig
-    prosody_encoder_builder: EcapaTDNNBuilder
+    prosody_encoder_builder: EcapaTDNNFactory
     device: Optional[Device] = None
     dtype: Optional[DataType] = None
 
     def __init__(
         self,
         config: VocoderConfig,
-        prosody_encoder_builder: EcapaTDNNBuilder,
+        prosody_encoder_builder: EcapaTDNNFactory,
         *,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
@@ -329,6 +333,7 @@ class PretsselVocoderBuilder:
             film_cond_dim=self.config.fft_layer_config.film_cond_dim,
             device=self.device,
             dtype=self.dtype,
+            model_dim=self.config.model_dim
         )
 
     def build_attention(self, num_heads: int) -> MultiheadAttention:
@@ -496,7 +501,7 @@ def create_vocoder_model(
     device: Optional[Device] = None,
     dtype: Optional[DataType] = None,
 ) -> PretsselVocoder:
-    prosody_encoder_builder = EcapaTDNNBuilder(
+    prosody_encoder_builder = EcapaTDNNFactory(
         config.encoder_frontend_config.prosody_encoder_config,
         device=device,
         dtype=dtype,

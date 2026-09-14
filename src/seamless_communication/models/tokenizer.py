@@ -6,17 +6,20 @@
 
 from typing import Optional, Sequence, Set, final
 
-from fairseq2.data.text import (
+# from fairseq2.data.text import (
+#     TextTokenEncoder,
+#     TextTokenizer,
+#     vocab_info_from_sentencepiece,
+# )
+from fairseq2.data.tokenizers.sentencepiece import (
     SentencePieceDecoder,
     SentencePieceEncoder,
     SentencePieceModel,
-    TextTokenDecoder,
-    TextTokenEncoder,
-    TextTokenizer,
-    vocab_info_from_sentencepiece,
 )
-from fairseq2.data.typing import PathLike
-from fairseq2.typing import Device, finaloverride
+from fairseq2.device import Device
+from overrides import final
+finaloverride = final
+from seamless_communication.models.unity.char_tokenizer import TextTokenDecoder, TextTokenEncoder, TextTokenizer, vocab_info_from_sentencepiece
 
 
 @final
@@ -29,7 +32,7 @@ class SPMTokenizer(TextTokenizer):
 
     def __init__(
         self,
-        pathname: PathLike,
+        pathname,
         langs: Sequence[str],
         prepend_target_langtok_to_target: bool = True,
     ) -> None:

@@ -6,19 +6,23 @@
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
-from fairseq2.assets import asset_store, download_manager
+from fairseq2.assets import get_asset_store, download_manager
 from fairseq2.assets.card import AssetCard
-from fairseq2.data import VocabularyInfo
-from fairseq2.models.nllb.loader import NllbTokenizerLoader
+from fairseq2.data.tokenizers import VocabularyInfo
+from fairseq2.models.nllb import load_nllb_tokenizer
 from fairseq2.models.transformer import (
     TransformerEmbeddingFrontend,
     TransformerFrontend,
 )
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+from fairseq2.nn.normalization import StandardLayerNorm
+
+from fairseq2.models.transformer import IdentityBias
+from fairseq2.runtime.config_registry import ConfigRegistrar
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
 from fairseq2.nn.embedding import Embedding, StandardEmbedding, init_scaled_embedding
 from fairseq2.nn.position_encoder import SinusoidalPositionEncoder
 from fairseq2.nn.projection import Linear, Projection, TiedProjection
-from fairseq2.nn.transformer import (
+from fairseq2.models.transformer import (
     FeedForwardNetwork,
     MultiheadAttention,
     StandardFeedForwardNetwork,
@@ -34,7 +38,8 @@ from fairseq2.nn.transformer import (
     TransformerNormOrder,
     create_default_sdpa,
 )
-from fairseq2.typing import DataType, Device
+from fairseq2.data_type import DataType
+from fairseq2.device import Device
 from torch.nn import GELU, ReLU
 
 from seamless_communication.models.unity.char_tokenizer import load_unity_char_tokenizer
@@ -49,7 +54,8 @@ from seamless_communication.models.unity.length_regulator import (
 )
 from seamless_communication.models.unity.model import UnitYNART2UModel, UnitYT2UModel
 from seamless_communication.models.unity.nar_decoder_frontend import NARDecoderFrontend
-
+# from fairseq2.nn.norm import StandardLayerNorm as LayerNorm
+from fairseq2.models.nllb.hub import get_nllb_tokenizer_hub
 
 @dataclass
 class VariancePredictorConfig:
@@ -131,157 +137,159 @@ class UnitYT2UConfig:
     """The dimensionality of prosody encoder (e.g. ECAPA_TDNN) output"""
 
 
-unity_t2u_archs = ArchitectureRegistry[UnitYT2UConfig]("unity_t2u")
+# unity_t2u_archs = ArchitectureRegistry[UnitYT2UConfig]("unity_t2u")
 
 
-unity_t2u_arch = unity_t2u_archs.decorator
+# unity_t2u_arch = unity_t2u_archs.decorator
+
+def load_arch_unity_t2u(container):
+    arch = ConfigRegistrar(container, UnitYT2UConfig)
+
+    @arch("base")
+    def _base_t2u() -> UnitYT2UConfig:
+        return UnitYT2UConfig(
+            model_dim=1024,
+            unit_max_seq_len=2048,
+            target_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+            nar_decoder_frontend_config=None,
+            nar_decoder_config=None,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=1024 * 8,
+            dropout_p=0.1,
+            use_gelu=False,
+            char_pad_idx=1,
+            use_prosody_proj=False,
+            prosody_encoder_dim=0,
+        )
 
 
-@unity_t2u_arch("base")
-def _base_t2u() -> UnitYT2UConfig:
-    return UnitYT2UConfig(
-        model_dim=1024,
-        unit_max_seq_len=2048,
-        target_vocab_info=VocabularyInfo(
-            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        nar_decoder_frontend_config=None,
-        nar_decoder_config=None,
-        num_encoder_attn_heads=16,
-        num_decoder_attn_heads=16,
-        ffn_inner_dim=1024 * 8,
-        dropout_p=0.1,
-        use_gelu=False,
-        char_pad_idx=1,
-        use_prosody_proj=False,
-        prosody_encoder_dim=0,
-    )
+    @arch("medium")
+    def _medium_t2u() -> UnitYT2UConfig:
+        return UnitYT2UConfig(
+            model_dim=1024,
+            unit_max_seq_len=2048,
+            target_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=4,
+            num_decoder_layers=4,
+            nar_decoder_frontend_config=None,
+            nar_decoder_config=None,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=1024 * 8,
+            dropout_p=0.1,
+            use_gelu=False,
+            char_pad_idx=1,
+            use_prosody_proj=False,
+            prosody_encoder_dim=0,
+        )
 
 
-@unity_t2u_arch("medium")
-def _medium_t2u() -> UnitYT2UConfig:
-    return UnitYT2UConfig(
-        model_dim=1024,
-        unit_max_seq_len=2048,
-        target_vocab_info=VocabularyInfo(
-            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        num_encoder_layers=4,
-        num_decoder_layers=4,
-        nar_decoder_frontend_config=None,
-        nar_decoder_config=None,
-        num_encoder_attn_heads=16,
-        num_decoder_attn_heads=16,
-        ffn_inner_dim=1024 * 8,
-        dropout_p=0.1,
-        use_gelu=False,
-        char_pad_idx=1,
-        use_prosody_proj=False,
-        prosody_encoder_dim=0,
-    )
+    @arch("base_nar")
+    def _base_nar() -> UnitYT2UConfig:
+        duration_predictor_config = VariancePredictorConfig(
+            var_pred_hidden_dim=256,
+            var_pred_kernel_size=3,
+            var_pred_dropout=0.5,
+            use_film=False,
+            film_cond_dim=0,
+        )
+
+        nar_decoder_frontend_config = NARDecoderFrontendConfig(
+            subword_to_unit_upsampling_type="hard",
+            duration_predictor_config=duration_predictor_config,
+            pitch_predictor_config=None,
+            energy_predictor_config=None,
+        )
+
+        nar_decoder_config = NARDecoderConfig(
+            model_name_or_card="seamlessM4T_v2_large",
+            char_vocabulary_size=10943,
+            char_max_seq_len=4096,
+            conv1d_kernel_size=7,
+            conv1d_inner_dim=1024,
+            conv1d_dropout_p=0.1,
+            use_film=False,
+            film_cond_dim=0,
+        )
+
+        return UnitYT2UConfig(
+            model_dim=1024,
+            unit_max_seq_len=4096,
+            target_vocab_info=VocabularyInfo(
+                size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+            nar_decoder_frontend_config=nar_decoder_frontend_config,
+            nar_decoder_config=nar_decoder_config,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=1024 * 8,
+            dropout_p=0.0,
+            use_gelu=False,
+            char_pad_idx=1,
+            use_prosody_proj=False,
+            prosody_encoder_dim=0,
+        )
+
+    
+    @arch("expressivity_nar")
+    def _expressivity_nar() -> UnitYT2UConfig:
+        duration_predictor_config = VariancePredictorConfig(
+            var_pred_hidden_dim=256,
+            var_pred_kernel_size=3,
+            var_pred_dropout=0.5,
+            use_film=True,
+            film_cond_dim=512,
+        )
+
+        nar_decoder_frontend_config = NARDecoderFrontendConfig(
+            subword_to_unit_upsampling_type="hard",
+            duration_predictor_config=duration_predictor_config,
+            pitch_predictor_config=None,
+            energy_predictor_config=None,
+        )
+
+        nar_decoder_config = NARDecoderConfig(
+            model_name_or_card="seamless_expressivity",
+            char_vocabulary_size=10904,
+            char_max_seq_len=10000,
+            conv1d_kernel_size=7,
+            conv1d_inner_dim=1024,
+            conv1d_dropout_p=0.1,
+            use_film=True,
+            film_cond_dim=512,
+        )
+
+        return UnitYT2UConfig(
+            model_dim=1024,
+            unit_max_seq_len=10000,
+            target_vocab_info=VocabularyInfo(
+                size=10005, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
+            ),
+            num_encoder_layers=4,
+            num_decoder_layers=4,
+            nar_decoder_frontend_config=nar_decoder_frontend_config,
+            nar_decoder_config=nar_decoder_config,
+            num_encoder_attn_heads=16,
+            num_decoder_attn_heads=16,
+            ffn_inner_dim=1024 * 8,
+            dropout_p=0.0,
+            use_gelu=True,
+            char_pad_idx=1,
+            use_prosody_proj=True,
+            prosody_encoder_dim=512,
+        )
 
 
-@unity_t2u_arch("base_nar")
-def _base_nar() -> UnitYT2UConfig:
-    duration_predictor_config = VariancePredictorConfig(
-        var_pred_hidden_dim=256,
-        var_pred_kernel_size=3,
-        var_pred_dropout=0.5,
-        use_film=False,
-        film_cond_dim=0,
-    )
-
-    nar_decoder_frontend_config = NARDecoderFrontendConfig(
-        subword_to_unit_upsampling_type="hard",
-        duration_predictor_config=duration_predictor_config,
-        pitch_predictor_config=None,
-        energy_predictor_config=None,
-    )
-
-    nar_decoder_config = NARDecoderConfig(
-        model_name_or_card="seamlessM4T_v2_large",
-        char_vocabulary_size=10943,
-        char_max_seq_len=4096,
-        conv1d_kernel_size=7,
-        conv1d_inner_dim=1024,
-        conv1d_dropout_p=0.1,
-        use_film=False,
-        film_cond_dim=0,
-    )
-
-    return UnitYT2UConfig(
-        model_dim=1024,
-        unit_max_seq_len=4096,
-        target_vocab_info=VocabularyInfo(
-            size=10082, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        nar_decoder_frontend_config=nar_decoder_frontend_config,
-        nar_decoder_config=nar_decoder_config,
-        num_encoder_attn_heads=16,
-        num_decoder_attn_heads=16,
-        ffn_inner_dim=1024 * 8,
-        dropout_p=0.0,
-        use_gelu=False,
-        char_pad_idx=1,
-        use_prosody_proj=False,
-        prosody_encoder_dim=0,
-    )
-
-
-@unity_t2u_arch("expressivity_nar")
-def _expressivity_nar() -> UnitYT2UConfig:
-    duration_predictor_config = VariancePredictorConfig(
-        var_pred_hidden_dim=256,
-        var_pred_kernel_size=3,
-        var_pred_dropout=0.5,
-        use_film=True,
-        film_cond_dim=512,
-    )
-
-    nar_decoder_frontend_config = NARDecoderFrontendConfig(
-        subword_to_unit_upsampling_type="hard",
-        duration_predictor_config=duration_predictor_config,
-        pitch_predictor_config=None,
-        energy_predictor_config=None,
-    )
-
-    nar_decoder_config = NARDecoderConfig(
-        model_name_or_card="seamless_expressivity",
-        char_vocabulary_size=10904,
-        char_max_seq_len=10000,
-        conv1d_kernel_size=7,
-        conv1d_inner_dim=1024,
-        conv1d_dropout_p=0.1,
-        use_film=True,
-        film_cond_dim=512,
-    )
-
-    return UnitYT2UConfig(
-        model_dim=1024,
-        unit_max_seq_len=10000,
-        target_vocab_info=VocabularyInfo(
-            size=10005, unk_idx=3, bos_idx=0, eos_idx=2, pad_idx=1
-        ),
-        num_encoder_layers=4,
-        num_decoder_layers=4,
-        nar_decoder_frontend_config=nar_decoder_frontend_config,
-        nar_decoder_config=nar_decoder_config,
-        num_encoder_attn_heads=16,
-        num_decoder_attn_heads=16,
-        ffn_inner_dim=1024 * 8,
-        dropout_p=0.0,
-        use_gelu=True,
-        char_pad_idx=1,
-        use_prosody_proj=True,
-        prosody_encoder_dim=512,
-    )
-
-
-class UnitYT2UBuilder:
+class UnitYT2UFactory:
     """Builds modules of an autoregressive UnitY T2U model.
 
     To tweak the architecture, you can derive from this class and override the
@@ -355,9 +363,9 @@ class UnitYT2UBuilder:
 
         return StandardTransformerEncoder(
             layers,
-            norm_order=TransformerNormOrder.PRE,
-            device=self.device,
-            dtype=self.dtype,
+            # norm_order=TransformerNormOrder.PRE,
+            # device=self.device,
+            # dtype=self.dtype,
         )
 
     def build_encoder_layer(self) -> TransformerEncoderLayer:
@@ -452,7 +460,7 @@ class UnitYT2UBuilder:
         )
 
 
-class UnitYNART2UBuilder:
+class UnitYNART2UFactory:
     """Builds modules of an NAR UnitY T2U model.
 
     To tweak the architecture, you can derive from this class and override the
@@ -511,7 +519,7 @@ class UnitYNART2UBuilder:
 
         return StandardEmbedding(
             num_embeddings=self.config.target_vocab_info.size,
-            embedding_dim=self.config.model_dim,
+            embed_dim=self.config.model_dim,
             pad_idx=self.config.target_vocab_info.pad_idx,
             init_fn=init_scaled_embedding,
             device=self.device,
@@ -529,9 +537,10 @@ class UnitYNART2UBuilder:
 
         return StandardTransformerEncoder(
             layers,
-            norm_order=TransformerNormOrder.PRE,
-            device=self.device,
-            dtype=self.dtype,
+            StandardLayerNorm(self.config.model_dim, bias=True, device=self.device, dtype=self.dtype)
+            # norm_order=TransformerNormOrder.PRE,
+            # device=self.device,
+            # dtype=self.dtype,
         )
 
     def build_encoder_layer(self) -> TransformerEncoderLayer:
@@ -541,9 +550,14 @@ class UnitYNART2UBuilder:
 
         ffn = self.build_ffn()
 
+        self_attn_layer_norm = StandardLayerNorm(self.config.model_dim, bias=True)
+        ffn_layer_norm = StandardLayerNorm(self.config.model_dim, bias=True)
+
         return StandardTransformerEncoderLayer(
             self_attn,
+            self_attn_layer_norm,
             ffn,
+            ffn_layer_norm,
             dropout_p=self.config.dropout_p,
             norm_order=TransformerNormOrder.PRE,
             device=self.device,
@@ -597,11 +611,13 @@ class UnitYNART2UBuilder:
         variance_adaptor = self.build_variance_adaptor(
             self.config.nar_decoder_frontend_config
         )
-
-        nllb_tokenizer = NllbTokenizerLoader(asset_store, download_manager)(
+        # nllb_tokenizer = NllbTokenizerLoader(asset_store, download_manager)(
+        #     self.config.nar_decoder_config.model_name_or_card
+        # )
+        # nllb_tokenizer = load_nllb_tokenizer(get_asset_store(), self.config.nar_decoder_config.model_name_or_card)
+        nllb_tokenizer = get_nllb_tokenizer_hub().load_tokenizer(
             self.config.nar_decoder_config.model_name_or_card
         )
-
         # The legacy pad idx should be the same as that of the unit_pos_encoder,
         # since in fairseq1 the pos encoder is shared between both char, units.
         char_pos_encoder = SinusoidalPositionEncoder(
@@ -613,7 +629,7 @@ class UnitYNART2UBuilder:
 
         embed_char = StandardEmbedding(
             num_embeddings=self.config.nar_decoder_config.char_vocabulary_size,
-            embedding_dim=self.config.model_dim,
+            embed_dim=self.config.model_dim,
             pad_idx=self.config.char_pad_idx,
             init_fn=init_scaled_embedding,
             device=self.device,
@@ -672,12 +688,13 @@ class UnitYNART2UBuilder:
             film_cond_dim=self.config.nar_decoder_config.film_cond_dim,
             device=self.device,
             dtype=self.dtype,
+            model_dim=self.config.model_dim
         )
 
     def build_attention(self, num_heads: int) -> MultiheadAttention:
         """Build a Transformer multi-head attention layer."""
 
-        sdpa = create_default_sdpa(attn_dropout_p=self.config.dropout_p)
+        sdpa = create_default_sdpa(IdentityBias(), dropout_p=self.config.dropout_p)
 
         return StandardMultiheadAttention(
             self.config.model_dim,
@@ -695,7 +712,7 @@ class UnitYNART2UBuilder:
             self.config.ffn_inner_dim,
             bias=True,
             inner_activation=GELU() if self.config.use_gelu else ReLU(),
-            norm_order=TransformerNormOrder.PRE,
+            # norm_order=TransformerNormOrder.PRE,
             device=self.device,
             dtype=self.dtype,
         )
@@ -719,7 +736,7 @@ def create_unity_t2u_model(
     config: UnitYT2UConfig,
     device: Optional[Device] = None,
     dtype: Optional[DataType] = None,
-) -> Union[UnitYT2UModel, UnitYNART2UModel]:
+):
     """Create a UnitY T2U model.
 
     :param config:
@@ -730,6 +747,47 @@ def create_unity_t2u_model(
         The data type of module parameters and buffers.
     """
     if config.nar_decoder_config is None:
-        return UnitYT2UBuilder(config, device=device, dtype=dtype).build_model()
+        return UnitYT2UFactory(config, device=device, dtype=dtype).build_model()
     else:
-        return UnitYNART2UBuilder(config, device=device, dtype=dtype).build_model()
+        raise UnitYNART2UFactory(config, device=device, dtype=dtype).build_model()
+
+
+# def get_unity_t2u_hub():
+
+# def create_unity_t2u_model(
+#     config: UnitYT2UConfig,
+#     device: Optional[Device] = None,
+#     dtype: Optional[DataType] = None,
+# ) -> Union[UnitYT2UModel, UnitYNART2UModel]:
+#     """Create a UnitY T2U model.
+
+#     :param config:
+#         The configuration to use.
+#     :param device:
+#         The device on which to initialize modules.
+#     :param dtype:
+#         The data type of module parameters and buffers.
+#     """
+#     if config.nar_decoder_config is None:
+#         return UnitYT2UFactory(config, device=device, dtype=dtype).build_model()
+#     else:
+#         raise Exception("config.nar_decoder_config not None")
+
+# def create_unity_nart2u_model(
+#     config: UnitYT2UConfig,
+#     device: Optional[Device] = None,
+#     dtype: Optional[DataType] = None,
+# ) -> Union[UnitYT2UModel, UnitYNART2UModel]:
+#     """Create a UnitY T2U model.
+
+#     :param config:
+#         The configuration to use.
+#     :param device:
+#         The device on which to initialize modules.
+#     :param dtype:
+#         The data type of module parameters and buffers.
+#     """
+#     if config.nar_decoder_config is None:
+#         raise Exception("config.nar_decoder_config is None")
+#     else:
+#         return UnitYNART2UFactory(config, device=device, dtype=dtype).build_model()

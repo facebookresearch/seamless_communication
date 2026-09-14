@@ -6,9 +6,11 @@
 
 from dataclasses import dataclass
 from typing import List, Optional
-
-from fairseq2.models.utils.arch_registry import ArchitectureRegistry
-from fairseq2.typing import DataType, Device
+from fairseq2.runtime.config_registry import ConfigRegistrar
+# from fairseq2.models.utils.arch_registry import ArchitectureRegistry
+# from fairseq2.typing import DataType, Device
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 from seamless_communication.models.generator.ecapa_tdnn import ECAPA_TDNN
 
@@ -27,28 +29,29 @@ class EcapaTDNNConfig:
     input_dim: int
 
 
-ecapa_tdnn_archs = ArchitectureRegistry[EcapaTDNNConfig]("ecapa_tdnn")
+# ecapa_tdnn_archs = ArchitectureRegistry[EcapaTDNNConfig]("ecapa_tdnn")
 
-ecapa_tdnn_arch = ecapa_tdnn_archs.decorator
+# ecapa_tdnn_arch = ecapa_tdnn_archs.decorator
+
+def load_ecapa_tdnn(container):
+    arch = ConfigRegistrar(container, EcapaTDNNConfig)
+    @arch("base")
+    def _base_ecapa_tdnn() -> EcapaTDNNConfig:
+        return EcapaTDNNConfig(
+            channels=[512, 512, 512, 512, 1536],
+            kernel_sizes=[5, 3, 3, 3, 1],
+            dilations=[1, 2, 3, 4, 1],
+            attention_channels=128,
+            res2net_scale=8,
+            se_channels=128,
+            global_context=True,
+            groups=[1, 1, 1, 1, 1],
+            embed_dim=512,
+            input_dim=80,
+        )
 
 
-@ecapa_tdnn_arch("base")
-def _base_ecapa_tdnn() -> EcapaTDNNConfig:
-    return EcapaTDNNConfig(
-        channels=[512, 512, 512, 512, 1536],
-        kernel_sizes=[5, 3, 3, 3, 1],
-        dilations=[1, 2, 3, 4, 1],
-        attention_channels=128,
-        res2net_scale=8,
-        se_channels=128,
-        global_context=True,
-        groups=[1, 1, 1, 1, 1],
-        embed_dim=512,
-        input_dim=80,
-    )
-
-
-class EcapaTDNNBuilder:
+class EcapaTDNNFactory:
     """
     Builder module for ECAPA_TDNN model
     """
@@ -109,4 +112,15 @@ def create_ecapa_tdnn_model(
         The data type of module parameters and buffers.
     """
 
-    return EcapaTDNNBuilder(config, device=device, dtype=dtype).build_model()
+    return EcapaTDNNFactory(config, device=device, dtype=dtype).build_model()
+
+# get_ecapa_tdnn_model_hub = ModelHubAccessor("ecapa_tdnn", EcapaTDNNFactory, EcapaTDNNConfig)
+from fairseq2.models.hub import ModelHub
+from fairseq2.models.family import ModelFamily
+from fairseq2.runtime.dependency import get_dependency_resolver
+from fairseq2.assets import get_asset_store
+_FAMILY_2 = "ecapa_tdnn"
+def get_ecapa_tdnn_model_hub() :
+    resolver = get_dependency_resolver()
+    family = resolver.resolve(ModelFamily, key=_FAMILY_2)
+    return ModelHub(family, get_asset_store())

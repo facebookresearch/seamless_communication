@@ -38,6 +38,7 @@ class DetokenizerAgent(NoUpdateTargetMixin, TextToTextAgent):  # type: ignore
         )
 
     def policy(self, states: AgentStates) -> Action:
+        import time
         possible_full_words = self.decode(" ".join([x for x in states.source]))
 
         if self.detokenize_only and len(states.source) > 0:

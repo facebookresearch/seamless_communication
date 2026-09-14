@@ -4,15 +4,18 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 import torch
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
+from fairseq2.assets import get_asset_store, download_manager
+# from fairseq2.models.utils import ModelLoader 
+from seamless_communication.checkpoint import convert_fairseq_checkpoint
+from fairseq2.models.wav2vec2 import Wav2Vec2Config, get_wav2vec2_model_hub
+from fairseq2.model_checkpoint import DelegatingModelCheckpointLoader
 
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ModelLoader
-from fairseq2.models.utils.checkpoint import convert_fairseq_checkpoint
-from fairseq2.models.wav2vec2.builder import Wav2Vec2Config
-from fairseq2.models.wav2vec2.loader import load_wav2vec2_config
+from fairseq2.models.wav2vec2 import get_wav2vec2_model_hub
 from fairseq2.models.wav2vec2.model import Wav2Vec2Model
 
 from seamless_communication.models.conformer_shaw.builder import (
@@ -73,10 +76,53 @@ def convert_conformer_shaw_checkpoint(
     return convert_fairseq_checkpoint(checkpoint, key_map)
 
 
-load_conformer_shaw_model = ModelLoader[Wav2Vec2Model, Wav2Vec2Config](
-    asset_store,
-    download_manager,
-    load_wav2vec2_config,
-    create_conformer_shaw_model,
-    convert_conformer_shaw_checkpoint,
-)
+# load_conformer_shaw_model = ModelLoader[Wav2Vec2Model, Wav2Vec2Config](
+#     asset_store,
+#     download_manager,
+#     load_wav2vec2_config,
+#     create_conformer_shaw_model,
+#     convert_conformer_shaw_checkpoint,
+# )
+
+def load_wav2vec2_config(name: str) -> Wav2Vec2Config:
+    hub = get_wav2vec2_model_hub()
+    return hub.get_model_config(name)
+
+def load_conformer_shaw_model(
+    name: str,
+    *,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> Wav2Vec2Model:
+    # 1) Config via Hub (comme ConfigLoader)
+    hub = get_wav2vec2_model_hub()
+    cfg = hub.get_model_config(name)
+
+    # 2) Création du modèle via ta fabrique dédiée (respecte create_conformer_shaw_model)
+    model = create_conformer_shaw_model(cfg, device=device, dtype=dtype)
+
+    # 3) Résoudre l’URI du checkpoint depuis la card (équivalent ModelLoader + asset_store)
+    card = get_asset_store().retrieve_card(name)
+    resources = card.field("resources").as_(list)
+    ckpt_uri = None
+    for res in resources:
+        if isinstance(res, dict) and res.get("name") in ("checkpoint", "model", "weights"):
+            ckpt_uri = res.get("uri")
+            if ckpt_uri:
+                break
+    if ckpt_uri is None:
+        raise ValueError(f"Card '{card.name}' has no checkpoint resource.")
+
+    # 4) Charger + CONVERTIR l’état (respecte convert_conformer_shaw_checkpoint)
+    loader = DelegatingModelCheckpointLoader()
+    state = {
+        k: t
+        for k, t in loader.lazy_load(
+            ckpt_uri,
+            state_dict_converter=lambda s: convert_conformer_shaw_checkpoint(s, cfg),
+        )
+    }
+
+    # 5) Injecter les poids (comme le faisait ModelLoader)
+    model.load_state_dict(state, strict=False)
+    return model

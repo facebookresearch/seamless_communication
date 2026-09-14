@@ -45,6 +45,7 @@ class VocoderAgent(TextToSpeechAgent):  # type: ignore
         """
         The policy is always write if there are units
         """
+        import time
         units = states.source
 
         if len(units) == 0 or len(units[0]) == 0:

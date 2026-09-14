@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
+import time
 from typing import Any, List, Optional
 
 import torch
@@ -14,6 +15,7 @@ from seamless_communication.models.unity.unit_tokenizer import UnitTokenizer
 from seamless_communication.streaming.agents.online_text_decoder import (
     UnitYTextDecoderOutput,
 )
+from fairseq2.nn.batch_layout import BatchLayout
 from seamless_communication.streaming.agents.common import AgentStates
 from simuleval.agents import GenericAgent
 from simuleval.agents.actions import Action, ReadAction, WriteAction
@@ -104,7 +106,7 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
         model_output, _, durations = self.model(
             text_decoder_output=states.source,
-            text_decoder_padding_mask=None,
+            text_decoder_padding_mask=BatchLayout.of(states.source),
             text_seqs=states.source_indices,
             duration_factor=self.d_factor,
         )
@@ -136,7 +138,6 @@ class NARUnitYUnitDecoderAgent(GenericAgent):  # type: ignore
 
         # minus one because we add a ending_token on each s2t output phrase
         states.duration_start_index = len(durations) - 1
-
         return WriteAction(
             TextSegment(
                 content=units,

@@ -6,26 +6,28 @@
 
 from typing import Iterable, Optional, Tuple, final
 
+from seamless_communication.attention_mask import AttentionMask
+from seamless_communication.layer_norm import LayerNormFactory, create_standard_layer_norm
+from seamless_communication.padding import PaddingMask
 import torch
 from fairseq2.models.conformer import ConformerBlock
-from fairseq2.nn.module_list import ModuleList
+from torch.nn import ModuleList
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
 from fairseq2.nn.projection import Linear
-from fairseq2.nn.transformer import (
-    AttentionMask,
+from fairseq2.models.transformer import (
     FeedForwardNetwork,
-    LayerNormFactory,
     MultiheadAttention,
     TransformerEncoder,
     TransformerEncoderLayer,
-    create_standard_layer_norm,
+    AttentionBiasCache
 )
-from fairseq2.typing import DataType, Device
+
+
 from overrides import final as finaloverride
 from torch import Tensor
 from torch.nn import GLU, Conv1d, Dropout, ReLU
-
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 @final
 class UnitYEncoderAdaptor(TransformerEncoder):
@@ -49,6 +51,7 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         layer_norm_factory: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
+        model_dim: None
     ) -> None:
         """
         :param inner:
@@ -60,9 +63,9 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         :param layer_norm_factory:
             The factory to use to construct the Layer Normalization modules.
         """
-        model_dim = inner.model_dim
+        # model_dim = inner.model_dim
 
-        super().__init__(model_dim)
+        super().__init__()
 
         if layer_norm_factory is None:
             layer_norm_factory = create_standard_layer_norm
@@ -100,7 +103,8 @@ class UnitYEncoderAdaptor(TransformerEncoder):
         seqs: Tensor,
         padding_mask: Optional[PaddingMask],
     ) -> Tuple[Tensor, Optional[PaddingMask]]:
-        seqs, padding_mask = self.inner(seqs, padding_mask)
+        from fairseq2.nn.batch_layout import BatchLayout
+        seqs = self.inner(seqs, BatchLayout.of(seqs))
 
         if self.inner_layer_norm is not None:
             seqs = self.inner_layer_norm(seqs)
@@ -159,6 +163,7 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         layer_norm_factory: Optional[LayerNormFactory] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
+        model_dim = None
     ) -> None:
         """
         :param self_attn:
@@ -175,9 +180,9 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         :param layer_norm_factory:
             The factory to use to construct the Layer Normalization modules.
         """
-        model_dim = self_attn.model_dim
+        # model_dim = self_attn.model_dim
 
-        super().__init__(model_dim)
+        super().__init__()
 
         if layer_norm_factory is None:
             layer_norm_factory = create_standard_layer_norm
@@ -282,16 +287,17 @@ class UnitYTransformerAdaptorLayer(TransformerEncoderLayer):
         padding_mask = _compute_new_padding_mask(
             seqs, padding_mask, self.kernel_size, self.stride
         )
-
+        from fairseq2.nn.batch_layout import BatchLayout
         # The rest of the computation is identical to a vanilla Transformer
         # encoder layer.
         seqs = self.self_attn(
             seqs,
-            padding_mask,
+            BatchLayout.of(seqs),
             keys=seqs,
-            key_padding_mask=padding_mask,
+            keys_layout=BatchLayout.of(seqs),
             values=seqs,
-            attn_mask=self_attn_mask,
+            bias_cache=AttentionBiasCache()
+            # attn_mask=self_attn_mask,
         )
 
         if self.self_attn_dropout is not None:

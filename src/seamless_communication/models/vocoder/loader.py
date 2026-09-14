@@ -4,15 +4,16 @@
 # This source code is licensed under the license found in the
 # MIT_LICENSE file in the root directory of this source tree.
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
-from fairseq2.assets import asset_store, download_manager
-from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.assets import get_asset_store, download_manager
+# from fairseq2.models.utils import ConfigLoader, ModelLoader
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
 
 from seamless_communication.models.vocoder.builder import (
     VocoderConfig,
     create_vocoder_model,
-    vocoder_archs,
 )
 from seamless_communication.models.vocoder.vocoder import Vocoder
 
@@ -36,13 +37,38 @@ def convert_vocoder_checkpoint(
     return checkpoint
 
 
-load_vocoder_config = ConfigLoader[VocoderConfig](asset_store, vocoder_archs)
+# load_vocoder_config = ConfigLoader[VocoderConfig](asset_store, vocoder_archs)
 
 
-load_vocoder_model = ModelLoader[Vocoder, VocoderConfig](
-    asset_store,
-    download_manager,
-    load_vocoder_config,
-    create_vocoder_model,
-    convert_vocoder_checkpoint,
-)
+# load_vocoder_model = ModelLoader[Vocoder, VocoderConfig](
+#     asset_store,
+#     download_manager,
+#     load_vocoder_config,
+#     create_vocoder_model,
+#     convert_vocoder_checkpoint,
+# )
+
+from fairseq2.models.hub import ModelHub
+from fairseq2.models.family import ModelFamily
+from fairseq2.runtime.dependency import get_dependency_resolver
+from fairseq2.assets import get_asset_store
+
+_FAMILY = "vocoder_code_hifigan"
+
+def get_vocoder_model_hub() -> ModelHub[Vocoder, VocoderConfig]:
+    resolver = get_dependency_resolver()
+    family = resolver.resolve(ModelFamily, key=_FAMILY)
+    return ModelHub(family, get_asset_store())
+
+def load_vocoder_config(name: str) -> VocoderConfig:
+    hub = get_vocoder_model_hub()
+    return hub.get_model_config(name)
+
+
+def load_vocoder_model(
+    name: str,
+    *,
+    device: Optional[Device] = None,
+    dtype: Optional[DataType] = None,
+) -> Vocoder:
+    return get_vocoder_model_hub().load_model(name, device=device, dtype=dtype)

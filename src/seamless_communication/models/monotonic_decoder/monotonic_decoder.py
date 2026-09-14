@@ -6,31 +6,37 @@
 
 from typing import Iterable, List, Optional, Tuple, final
 
+# from seamless_communication.attention_mask import AttentionMaskFactory, CausalAttentionMaskFactory
 import torch
 from fairseq2.nn.incremental_state import IncrementalStateBag
-from fairseq2.nn.module_list import ModuleList
+from torch.nn import ModuleList
 from fairseq2.nn.normalization import LayerNorm
-from fairseq2.nn.padding import PaddingMask
-from fairseq2.nn.transformer import (
-    AttentionMaskFactory,
-    CausalAttentionMaskFactory,
-    create_standard_layer_norm,
-)
-from fairseq2.typing import DataType, Device, finaloverride
+# from fairseq2.nn.padding import PaddingMask
+from fairseq2.nn.normalization import StandardLayerNorm
+
 from torch import Tensor
 from torch.nn import Module
 
 from seamless_communication.models.monotonic_decoder.monotonic_decoder_layer import (
     MonotonicTransformerDecoderLayer,
 )
+from overrides import final
+finaloverride = final
 
+from fairseq2.device import Device
+from fairseq2.data_type import DataType
+
+# from fairseq2.nn import BatchLayout
+# from fairseq2.nn.attention import create_default_sdpa, IdentityBias
+# from fairseq2.models.transformer.attention_bias import CausalAttentionBias
+import torch
 
 @final
 class MonotonicTransformerDecoder(Module):
     """Represents a Monotonic Transformer decoder."""
 
     model_dim: int
-    self_attn_mask_factory: AttentionMaskFactory
+    # self_attn_mask_factory: AttentionMaskFactory
     layers: ModuleList
     layer_norm: LayerNorm
 
@@ -54,35 +60,40 @@ class MonotonicTransformerDecoder(Module):
 
         self.model_dim = layer_list[0].model_dim
 
-        self.self_attn_mask_factory = CausalAttentionMaskFactory()
+        # self.self_attn_mask_factory = CausalAttentionMaskFactory()
 
         self.layers = layer_list
 
-        self.layer_norm = create_standard_layer_norm(
-            self.model_dim, device=device, dtype=dtype
+        self.layer_norm = StandardLayerNorm(
+            self.model_dim, bias=True, device=device, dtype=dtype
         )
 
     @finaloverride
     def forward(
         self,
         seqs: Tensor,
-        padding_mask: Optional[PaddingMask],
+        padding_mask,
         encoder_output: Optional[Tensor] = None,
-        encoder_padding_mask: Optional[PaddingMask] = None,
+        encoder_padding_mask = None,
         *,
         state_bag: Optional[IncrementalStateBag] = None,
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
-        self_attn_mask = self.self_attn_mask_factory(
-            seqs, keys=seqs, training=self.training, state_bag=state_bag
-        )
+    ):
+        # self_attn_mask = self.self_attn_mask_factory(
+        #     seqs, keys=seqs, training=self.training, state_bag=state_bag
+        # )
+        # seqs_layout = ensure_layout(seqs, padding_mask)
+        # enc_layout  = None if encoder_output is None else ensure_layout(encoder_output, encoder_padding_mask)
+
 
         p_choose_list: List[Tensor] = []
 
-        for layer in self.layers.drop_iter():
+        for layer in self.layers:
             seqs, padding_mask, p_choose = layer(
                 seqs,
                 padding_mask,
-                self_attn_mask,
+                # self_attn_mask,
+                # self.self_attn_bias_cache,
+                # self.cross_attn_bias_cache,
                 encoder_output,
                 encoder_padding_mask,
                 state_bag=state_bag,
