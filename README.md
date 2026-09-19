@@ -1,3 +1,7 @@
+<p align="center">
+  <b>English</b> · <a href="README.zh.md">简体中文</a>
+</p>
+
 ![](23-11_SEAMLESS_BlogHero_11.17.jpg)
 # Seamless Intro
 
