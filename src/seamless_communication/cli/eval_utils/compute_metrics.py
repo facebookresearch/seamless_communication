@@ -206,7 +206,7 @@ def compute_asr_error_rate(
 
     tokenizer_name = get_tokenizer(lang, metric="error_rate")
     metric_name = wer if tokenizer_name == "word" else cer
-    metric_score = metric_name(hyp_text_series.to_list(), ref_text_series.to_list())
+    metric_score = metric_name(ref_text_series.to_list(), hyp_text_series.to_list())
     return metric_score, f"{metric_name.__name__} is {metric_score}"
 
 
